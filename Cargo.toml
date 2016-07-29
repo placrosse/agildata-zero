@@ -1,0 +1,24 @@
+[workspace]
+members = ["mysql-protocol"]
+
+[package]
+authors = ["paul.lacrosse@gmail.com"]
+publish = false
+name = "babel"
+version = "0.0.1"
+
+[dependencies]
+lazy_static = "0.2.1"
+libc = "0.2.11"
+url = "0.5.9"
+rust-crypto = "0.2.36"
+rand = "0.3.14"
+chrono = { version = "0.2.22", features = ["serde"] }
+lmdb-rs = "0.7.0"
+argparse = "0.2.1"
+log = "0.3.6"
+log4rs = { version = "0.4.8", features = ["toml"] }
+resolve = "0.1.1"
+notify = "2.5.5"
+regex = "0.1.71"
+parking_lot = {version = "0.2.6", features = ["nightly"]}
