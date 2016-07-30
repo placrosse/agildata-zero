@@ -2,7 +2,7 @@
 members = ["mysql-protocol"]
 
 [package]
-authors = ["paul.lacrosse@gmail.com"]
+authors = ["Paul LaCrosse <paul.lacrosse@gmail.com>"]
 publish = false
 name = "babel"
 version = "0.0.1"
