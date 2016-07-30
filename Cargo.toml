@@ -14,7 +14,7 @@ libc = "0.2.11"
 url = "0.5.9"
 rust-crypto = "0.2.36"
 rand = "0.3.14"
-chrono = { version = "0.2.22", features = ["serde"] }
+chrono = { version = "0.2.22" }
 lmdb-rs = "0.7.0"
 argparse = "0.2.1"
 log = "0.3.6"
