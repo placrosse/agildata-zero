@@ -1,8 +1,8 @@
 [package]
-name = "pingpong"
+name = "mysql-proxy"
 version = "0.1.0"
 authors = ["Carl Lerche <me@carllerche.com>"]
 
 [dependencies]
 bytes = "0.2.10"
-mio = "0.4.1"
+mio = "0.4.4"
