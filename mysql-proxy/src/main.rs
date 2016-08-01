@@ -209,10 +209,11 @@ impl Connection {
 
                             println!("login packet len = {}", i);
 
-                            self.authenticating = false;
                         }
 
                         self.mysql_send(&buf[0 .. (packet_len+4) as usize]);
+
+                        self.authenticating = false;
 
                     } else {
                         println!("do not have full packet!");
@@ -243,7 +244,7 @@ impl Connection {
 
         println!("Reading from MySQL...");
         let mut rBuf: Vec<u8> = Vec::new();
-        //loop {
+        loop {
             println!("Entering remote read loop..");
             let mut h = [0_u8; 3];
             assert!(3 == self.remote.read(&mut h).unwrap());
@@ -260,13 +261,15 @@ impl Connection {
             let bytes_read = self.remote.read(&mut p).unwrap();
             assert!((h_len+1) as usize == bytes_read);
 
-            println!("First of payload is {}", p[0]);
+            let packet_type = p[1];
+
+            println!("sequence_no={}, packet_type={}", p[0], packet_type);
             rBuf.extend_from_slice(&h);
             rBuf.extend_from_slice(p);
-        //     if p[0] == 0x00 || p[0] == 0xfe || p[0] == 0xff {
-        //         break;
-        //     }
-        // }
+            if self.authenticating || packet_type == 0x00 || packet_type == 0xfe || packet_type == 0xff {
+                break;
+            }
+        }
 
         println!("Setting state to writing..");
         // let s = self.remote.read_to_end(&mut rBuf).unwrap();
