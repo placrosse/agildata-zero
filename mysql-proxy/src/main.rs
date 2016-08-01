@@ -3,6 +3,7 @@ extern crate bytes;
 
 use mio::{TryRead, TryWrite};
 use mio::tcp::*;
+use std::io::{Read, Write};
 use mio::util::Slab;
 use bytes::{Buf, Take};
 use std::mem;
@@ -85,21 +86,38 @@ struct Connection {
     socket: TcpStream,
     token: mio::Token,
     state: State,
-    remote: TcpStream,
+    remote: std::net::TcpStream,
 }
 
 impl Connection {
     fn new(socket: TcpStream, token: mio::Token) -> Connection {
         println!("Creating remote connection...");
-        let ip  = std::net::Ipv4Addr::new(127,0,0,1);
-        let saddr = std::net::SocketAddr::new(std::net::IpAddr::V4(ip), 3306);
-        let tcps = TcpStream::connect(&saddr).unwrap();
-        
+        // let ip  = std::net::Ipv4Addr::new(127,0,0,1);
+        // let saddr = std::net::SocketAddr::new(std::net::IpAddr::V4(ip), 3306);
+        // let mut tcps = TcpStream::connect(&saddr).unwrap();
+
+        let mut header = [0_u8; 3];
+        let mut realtcps = std::net::TcpStream::connect("127.0.0.1:3306").unwrap();
+        realtcps.read(&mut header).unwrap();
+        println!("Header read is {:?}", header);
+
+        let packet_len: u32 =
+            ((header[2] as u32) << 16) |
+            ((header[1] as u32) << 8) |
+            header[0] as u32;
+
+        let mut vec = vec![0_u8; (packet_len + 1) as usize ];
+        let mut payload = vec.as_mut_slice();
+        realtcps.read(&mut payload);
+
+        socket.write(&header);
+        socket.write(payload);
+
         Connection {
             socket: socket,
             token: token,
             state: State::Reading(Vec::with_capacity(MAX_LINE)),
-            remote: tcps,
+            remote: realtcps,
         }
     }
 
