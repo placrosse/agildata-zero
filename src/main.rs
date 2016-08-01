@@ -47,7 +47,7 @@ fn main() {
     env::set_var("RUST_BACKTRACE", "1");
     let _ = log4rs::init_file("babel.toml", Default::default());
 
-    let app_ver = &format!("{} v. {}", APP_NAME, VERSION);
+    let app_ver: &str = &format!("{} v. {}", APP_NAME, VERSION);
 
     let mut opt = Opts {
         host: String::from(""),
