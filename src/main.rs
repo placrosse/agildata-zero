@@ -11,7 +11,7 @@ extern crate log4rs;
 extern crate argparse;
 use argparse::{ArgumentParser, Store, StoreTrue};
 
-extern crate rand;
+// extern crate rand;
 
 extern crate chrono;
 use chrono::*;
