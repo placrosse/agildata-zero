@@ -1,7 +1,7 @@
 extern crate mio;
 extern crate bytes;
-extern crate byteorder;
-use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian, LittleEndian};
+// extern crate byteorder;
+// use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian, LittleEndian};
 
 use mio::{TryRead, TryWrite};
 use mio::tcp::*;
@@ -13,6 +13,12 @@ use std::io::Cursor;
 
 const SERVER: mio::Token = mio::Token(0);
 const MAX_LINE: usize = 128;
+
+fn read_packet_length(header: &[u8]) -> usize {
+    (((header[2] as u32) << 16) |
+    ((header[1] as u32) << 8) |
+    header[0] as u32) as usize
+}
 
 struct Pong {
     server: TcpListener,
@@ -106,12 +112,9 @@ impl Connection {
         realtcps.read(&mut header).unwrap();
         println!("Header read is {:?}", header);
 
-        let packet_len: u32 =
-            ((header[2] as u32) << 16) |
-            ((header[1] as u32) << 8) |
-            header[0] as u32;
+        let packet_len = read_packet_length(&header);
 
-        let mut vec = vec![0_u8; (packet_len + 1) as usize ];
+        let mut vec = vec![0_u8; packet_len + 1];
         let mut payload = vec.as_mut_slice();
         realtcps.read(&mut payload);
 
@@ -172,15 +175,12 @@ impl Connection {
                 // do we have the complete request packet yet?
                 if buf.len() > 3 {
 
-                    let packet_len: u32 =
-                        ((buf[2] as u32) << 16) |
-                        ((buf[1] as u32) << 8) |
-                        buf[0] as u32;
+                    let packet_len = read_packet_length(&buf);
 
                     println!("incoming packet_len = {}", packet_len);
                     println!("Buf len {}", buf.len());
 
-                    if buf.len() >= (packet_len+4) as usize {
+                    if buf.len() >= packet_len+4 {
 
                         // //NOTE: this wasn't really needed after all
                         // if self.authenticating {
@@ -211,7 +211,7 @@ impl Connection {
                         //
                         // }
 
-                        self.mysql_send(&buf[0 .. (packet_len+4) as usize]);
+                        self.mysql_send(&buf[0 .. packet_len+4]);
 
                         //self.authenticating = false;
 
@@ -249,10 +249,7 @@ impl Connection {
             let mut h = [0_u8; 3];
             assert!(3 == self.remote.read(&mut h).unwrap());
 
-            let h_len: u32 =
-                ((h[2] as u32) << 16) |
-                ((h[1] as u32) << 8) |
-                h[0] as u32;
+            let h_len = read_packet_length(&h);
 
             let mut pVec: Vec<u8> = vec![0_u8; (h_len + 1) as usize];
             let mut p = pVec.as_mut_slice();
