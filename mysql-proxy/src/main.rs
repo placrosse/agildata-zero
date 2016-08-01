@@ -20,30 +20,30 @@ fn read_packet_length(header: &[u8]) -> usize {
     header[0] as u32) as usize
 }
 
-struct Pong {
+struct Proxy {
     server: TcpListener,
     connections: Slab<Connection>,
 }
 
-impl Pong {
-    fn new(server: TcpListener) -> Pong {
+impl Proxy {
+    fn new(server: TcpListener) -> Proxy {
         // Token `0` is reserved for the server socket. Tokens 1+ are used for
         // client connections. The slab is initialized to return Tokens
         // starting at 1.
         let slab = Slab::new_starting_at(mio::Token(1), 1024);
 
-        Pong {
+        Proxy {
             server: server,
             connections: slab,
         }
     }
 }
 
-impl mio::Handler for Pong {
+impl mio::Handler for Proxy {
     type Timeout = ();
     type Message = ();
 
-    fn ready(&mut self, event_loop: &mut mio::EventLoop<Pong>, token: mio::Token, events: mio::EventSet) {
+    fn ready(&mut self, event_loop: &mut mio::EventLoop<Proxy>, token: mio::Token, events: mio::EventSet) {
         match token {
             SERVER => {
                 // Only receive readable events
@@ -135,7 +135,7 @@ impl Connection {
         }
     }
 
-    fn ready(&mut self, event_loop: &mut mio::EventLoop<Pong>, events: mio::EventSet) {
+    fn ready(&mut self, event_loop: &mut mio::EventLoop<Proxy>, events: mio::EventSet) {
         match self.state {
             State::Reading(..) => {
                 assert!(events.is_readable(), "unexpected events; events={:?}", events);
@@ -149,7 +149,7 @@ impl Connection {
         }
     }
 
-    fn read(&mut self, event_loop: &mut mio::EventLoop<Pong>) {
+    fn read(&mut self, event_loop: &mut mio::EventLoop<Proxy>) {
 
         println!("Reading from client");
 
@@ -251,7 +251,7 @@ impl Connection {
 
             let h_len = read_packet_length(&h);
 
-            let mut pVec: Vec<u8> = vec![0_u8; (h_len + 1) as usize];
+            let mut pVec: Vec<u8> = vec![0_u8; h_len + 1];
             let mut p = pVec.as_mut_slice();
 
             println!("DEBUG hlen={:?}, pLen = {:?}",h_len, p.len());
@@ -287,7 +287,7 @@ impl Connection {
         //self.state.try_transition_to_writing();
     }
 
-    fn write(&mut self, event_loop: &mut mio::EventLoop<Pong>) {
+    fn write(&mut self, event_loop: &mut mio::EventLoop<Proxy>) {
 
         println!("Writing to client");
 
@@ -312,7 +312,7 @@ impl Connection {
         }
     }
 
-    fn reregister(&self, event_loop: &mut mio::EventLoop<Pong>) {
+    fn reregister(&self, event_loop: &mut mio::EventLoop<Proxy>) {
         event_loop.reregister(&self.socket, self.token, self.state.event_set(), mio::PollOpt::oneshot())
             .unwrap();
     }
@@ -433,10 +433,10 @@ fn main() {
     let mut event_loop = mio::EventLoop::new().unwrap();
     event_loop.register(&server, SERVER).unwrap();
 
-    let mut pong = Pong::new(server);
+    let mut Proxy = Proxy::new(server);
 
-    println!("running pingpong server; port=6567");
-    event_loop.run(&mut pong).unwrap();
+    println!("running MySQLProxy server; port=6567");
+    event_loop.run(&mut Proxy).unwrap();
 }
 
 fn drain_to(vec: &mut Vec<u8>, count: usize) {
