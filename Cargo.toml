@@ -1,5 +1,5 @@
 [workspace]
-members = ["mysql-protocol"]
+members = ["mysql-protocol", "sql-parser"]
 
 [package]
 authors = ["Paul LaCrosse <paul.lacrosse@gmail.com>"]
