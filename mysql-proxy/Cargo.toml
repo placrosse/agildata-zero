@@ -6,3 +6,4 @@ authors = ["Carl Lerche <me@carllerche.com>"]
 [dependencies]
 bytes = "0.2.10"
 mio = "0.4.4"
+byteorder = "*"
