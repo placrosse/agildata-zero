@@ -5,7 +5,7 @@ members = ["mysql-protocol", "sql-parser"]
 authors = ["Paul LaCrosse <paul.lacrosse@gmail.com>"]
 publish = false
 name = "babel"
-version = "0.0.1"
+version = "0.0.3"
 
 [dependencies]
 argparse = "0.2.1"
