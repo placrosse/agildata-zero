@@ -162,59 +162,64 @@ impl Connection {
                     print!("{} ",buf[i] as char);
                 }
                 println!("]");
-                //println!("bytes read {:#04x}", buf);
 
-                if self.authenticating {
+                println!("Bytes read:");
+                for i in 0..buf.len() {
+                    if i%8==0 { println!(""); }
+                    print!("{:#04x} ",buf[i]);
+                }
 
-                    let mut i: usize = 32;
-                    // skip these 32 bytes
-                    // 2 bytes: client mask. Example: 8d a2
-    	            // 2 bytes: extended client capabilities. Example: 00 00
-    	            // 4 bytes: Max packet size (4 byte int).
-                    // 1 byte: Character set e.g. 08
-                    // 23 bytes: Empty 23 null bytes
+                // do we have the complete request packet yet?
+                if buf.len() > 3 {
 
-                    // username (null-terminated)
-                    while buf[i] != 0x00 {
-                        i += 1;
-                    }
-                    i += 1;
-                    //println!("username = {}", &buf[32..i]);
+                    let packet_len: u32 =
+                        ((buf[2] as u32) << 16) |
+                        ((buf[1] as u32) << 8) |
+                        buf[0] as u32;
 
-                    let password_len = buf[i] as usize;
-                    i += password_len;
+                    println!("incoming packet_len = {}", packet_len);
+                    println!("Buf len {}", buf.len());
 
-                    // let mut rdr = Cursor::new(buf[packet_len .. packet_len+]
-                    // let username_len = rdr.read_u16::<BigEndian>().unwrap()
+                    if buf.len() >= (packet_len+4) as usize {
 
-                    println!("login packet len = {}", i);
+                        //NOTE: this wasn't really needed after all
+                        if self.authenticating {
 
-                    self.mysql_send(&buf[0..i]);
+                            // skip first 36 bytes
+                            // 3 bytes: packet number
+                            // 2 bytes: client mask. Example: 8d a2
+                            // 2 bytes: extended client capabilities. Example: 00 00
+                            // 4 bytes: Max packet size (4 byte int).
+                            // 1 byte: Character set e.g. 08
+                            // 23 bytes: Empty 23 null bytes
+                            let mut i: usize = 37;
 
-                    self.authenticating = false;
+                            // username (null-terminated)
+                            while buf[i] != 0x00 {
+                                i += 1;
+                            }
+                            i += 1;
+                            println!("username = {:?}", &buf[36..i-1]);
 
-                } else {
+                            let password_len = buf[i] as usize;
+                            i += password_len;
 
-                    // do we have the complete request packet yet?
-                    if buf.len() > 3 {
+                            // let mut rdr = Cursor::new(buf[packet_len .. packet_len+]
+                            // let username_len = rdr.read_u16::<BigEndian>().unwrap()
 
-                        let packet_len: u32 =
-                            ((buf[2] as u32) << 16) |
-                            ((buf[1] as u32) << 8) |
-                            buf[0] as u32;
-                        println!("incoming command packet_len = {}", packet_len);
-                        println!("Buf len {}", buf.len());
+                            println!("login packet len = {}", i);
 
-                        if buf.len() >= (packet_len+4) as usize {
-                            self.mysql_send(&buf[0 .. (packet_len+4) as usize]);
-
-                        } else {
-                            println!("do not have full packet!");
+                            self.authenticating = false;
                         }
 
+                        self.mysql_send(&buf[0 .. (packet_len+4) as usize]);
+
                     } else {
-                        println!("do not have full header!");
+                        println!("do not have full packet!");
                     }
+
+                } else {
+                    println!("do not have full header!");
                 }
 
                 // Re-register the socket with the event loop. The current
@@ -238,11 +243,10 @@ impl Connection {
 
         println!("Reading from MySQL...");
         let mut rBuf: Vec<u8> = Vec::new();
-        let mut pLen: usize = 0;
-        loop {
+        //loop {
             println!("Entering remote read loop..");
             let mut h = [0_u8; 3];
-            self.remote.read(&mut h).unwrap();
+            assert!(3 == self.remote.read(&mut h).unwrap());
 
             let h_len: u32 =
                 ((h[2] as u32) << 16) |
@@ -253,19 +257,21 @@ impl Connection {
             let mut p = pVec.as_mut_slice();
 
             println!("DEBUG hlen={:?}, pLen = {:?}",h_len, p.len());
-            pLen += self.remote.read(&mut p).unwrap();
+            let bytes_read = self.remote.read(&mut p).unwrap();
+            assert!((h_len+1) as usize == bytes_read);
 
             println!("First of payload is {}", p[0]);
             rBuf.extend_from_slice(&h);
             rBuf.extend_from_slice(p);
-            if p[0] == 0x00 || p[0] == 0xfe || p[0] == 0xff {
-                break;
-            }
-        }
+        //     if p[0] == 0x00 || p[0] == 0xfe || p[0] == 0xff {
+        //         break;
+        //     }
+        // }
 
         println!("Setting state to writing..");
         // let s = self.remote.read_to_end(&mut rBuf).unwrap();
 
+        let pLen = rBuf.len();
         let curs = Cursor::new(rBuf);
 
         // Transition the state to `Writing`, limiting the buffer to the
