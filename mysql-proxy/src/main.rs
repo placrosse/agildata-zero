@@ -91,7 +91,7 @@ struct Connection {
     token: mio::Token,
     state: State,
     remote: std::net::TcpStream,
-    authenticating: bool
+    //authenticating: bool
 }
 
 impl Connection {
@@ -128,7 +128,7 @@ impl Connection {
             token: token,
             state: State::Writing(Take::new(buf, (packet_len+4) as usize)),
             remote: realtcps,
-            authenticating: true
+            // authenticating: true
         }
     }
 
@@ -182,38 +182,38 @@ impl Connection {
 
                     if buf.len() >= (packet_len+4) as usize {
 
-                        //NOTE: this wasn't really needed after all
-                        if self.authenticating {
-
-                            // skip first 36 bytes
-                            // 3 bytes: packet number
-                            // 2 bytes: client mask. Example: 8d a2
-                            // 2 bytes: extended client capabilities. Example: 00 00
-                            // 4 bytes: Max packet size (4 byte int).
-                            // 1 byte: Character set e.g. 08
-                            // 23 bytes: Empty 23 null bytes
-                            let mut i: usize = 37;
-
-                            // username (null-terminated)
-                            while buf[i] != 0x00 {
-                                i += 1;
-                            }
-                            i += 1;
-                            println!("username = {:?}", &buf[36..i-1]);
-
-                            let password_len = buf[i] as usize;
-                            i += password_len;
-
-                            // let mut rdr = Cursor::new(buf[packet_len .. packet_len+]
-                            // let username_len = rdr.read_u16::<BigEndian>().unwrap()
-
-                            println!("login packet len = {}", i);
-
-                        }
+                        // //NOTE: this wasn't really needed after all
+                        // if self.authenticating {
+                        //
+                        //     // skip first 36 bytes
+                        //     // 3 bytes: packet number
+                        //     // 2 bytes: client mask. Example: 8d a2
+                        //     // 2 bytes: extended client capabilities. Example: 00 00
+                        //     // 4 bytes: Max packet size (4 byte int).
+                        //     // 1 byte: Character set e.g. 08
+                        //     // 23 bytes: Empty 23 null bytes
+                        //     let mut i: usize = 37;
+                        //
+                        //     // username (null-terminated)
+                        //     while buf[i] != 0x00 {
+                        //         i += 1;
+                        //     }
+                        //     i += 1;
+                        //     println!("username = {:?}", &buf[36..i-1]);
+                        //
+                        //     let password_len = buf[i] as usize;
+                        //     i += password_len;
+                        //
+                        //     // let mut rdr = Cursor::new(buf[packet_len .. packet_len+]
+                        //     // let username_len = rdr.read_u16::<BigEndian>().unwrap()
+                        //
+                        //     println!("login packet len = {}", i);
+                        //
+                        // }
 
                         self.mysql_send(&buf[0 .. (packet_len+4) as usize]);
 
-                        self.authenticating = false;
+                        //self.authenticating = false;
 
                     } else {
                         println!("do not have full packet!");
@@ -266,7 +266,8 @@ impl Connection {
             println!("sequence_no={}, packet_type={}", p[0], packet_type);
             rBuf.extend_from_slice(&h);
             rBuf.extend_from_slice(p);
-            if self.authenticating || packet_type == 0x00 || packet_type == 0xfe || packet_type == 0xff {
+
+            if packet_type == 0x00 || packet_type == 0xfe || packet_type == 0xff {
                 break;
             }
         }
