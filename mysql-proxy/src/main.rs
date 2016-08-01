@@ -146,14 +146,20 @@ impl Connection {
 
         println!("Reading from client");
 
-        match self.socket.try_read_buf(self.state.mut_read_buf()) {
+        let mut buf = Vec::with_capacity(1024);
+        match self.socket.try_read_buf(&mut buf) {
             Ok(Some(0)) => {
                 self.state = State::Closed;
             }
             Ok(Some(n)) => {
                 println!("read {} bytes", n);
+                print!("Bytes read [");
+                for i in 0..buf.len() {
+                    print!("{} ",buf[i] as char);
+                }
+                println!("]");
+                //println!("bytes read {:#04x}", buf);
 
-                    /*
                 // do we have the complete request packet yet?
                 if buf.len() > 3 {
 
@@ -162,15 +168,56 @@ impl Connection {
                         ((buf[1] as u32) << 8) |
                         buf[0] as u32;
                     println!("incoming packet_len = {}", packet_len);
+                    println!("Buf len {}", buf.len());
 
                     if buf.len() >= (packet_len+4) as usize {
 
+                        println!("Have full packet");
                         self.remote.write(&buf[0 .. (packet_len+4) as usize]);
+                        self.remote.flush();
+
+                        println!("Reading from MySQL...");
+                        let mut rBuf: Vec<u8> = Vec::new();
+                        let mut pLen: usize = 0;
+                        loop {
+                            println!("Entering remote read loop..");
+                            let mut h = [0_u8; 3];
+                            self.remote.read(&mut h).unwrap();
+
+                            let h_len: u32 =
+                                ((h[2] as u32) << 16) |
+                                ((h[1] as u32) << 8) |
+                                h[0] as u32;
+
+                            let mut pVec: Vec<u8> = vec![0_u8; (h_len + 1) as usize];
+                            let mut p = pVec.as_mut_slice();
+
+                            println!("DEBUG hlen={:?}, pLen = {:?}",h_len, p.len());
+                            pLen += self.remote.read(&mut p).unwrap();
+
+                            println!("First of payload is {}", p[0]);
+                            rBuf.extend_from_slice(&h);
+                            rBuf.extend_from_slice(p);
+                            if p[0] == 0x00 || p[0] == 0xfe || p[0] == 0xff {
+                                break;
+                            }
+                        }
+
+                        println!("Setting state to writing..");
+                        // let s = self.remote.read_to_end(&mut rBuf).unwrap();
+
+                        let curs = Cursor::new(rBuf);
+
+                        // Transition the state to `Writing`, limiting the buffer to the
+                        // new line (inclusive).
+                        self.state = State::Writing(Take::new(curs, pLen));
+
+                        println!("Set state to Writing");
                         //TODO: remove bytes from buffer
                         //TODO: do blocking read of mysql response packets
 
                         // state is transitioned from `Reading` to `Writing`.
-                        self.state.try_transition_to_writing();
+                        //self.state.try_transition_to_writing();
                     } else {
                         println!("do not have full packet!");
                     }
@@ -178,7 +225,7 @@ impl Connection {
                 } else {
                     println!("do not have full header!");
                 }
-                */
+
 
                 // Re-register the socket with the event loop. The current
                 // state is used to determine whether we are currently reading
