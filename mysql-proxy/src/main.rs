@@ -85,14 +85,21 @@ struct Connection {
     socket: TcpStream,
     token: mio::Token,
     state: State,
+    remote: TcpStream,
 }
 
 impl Connection {
     fn new(socket: TcpStream, token: mio::Token) -> Connection {
+        println!("Creating remote connection...");
+        let ip  = std::net::Ipv4Addr::new(127,0,0,1);
+        let saddr = std::net::SocketAddr::new(std::net::IpAddr::V4(ip), 3306);
+        let tcps = TcpStream::connect(&saddr).unwrap();
+        println!("Finished creating remote connnection {:?}", tcps);
         Connection {
             socket: socket,
             token: token,
             state: State::Reading(Vec::with_capacity(MAX_LINE)),
+            remote: tcps,
         }
     }
 
