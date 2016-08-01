@@ -55,8 +55,10 @@ impl mio::Handler for Pong {
                         event_loop.register_opt(
                             &self.connections[token].socket,
                             token,
-                            mio::EventSet::readable(),
-                            mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
+                            mio::EventSet::readable() | mio::EventSet::writable(),
+                            //mio::PollOpt::edge() | mio::PollOpt::oneshot()
+                            mio::PollOpt::level()
+                        ).unwrap();
                     }
                     Ok(None) => {
                         println!("the server socket wasn't actually ready");
@@ -96,7 +98,7 @@ impl Connection {
         // let saddr = std::net::SocketAddr::new(std::net::IpAddr::V4(ip), 3306);
         // let mut tcps = TcpStream::connect(&saddr).unwrap();
 
-        let mut header = [0_u8; 3];
+        let mut header = vec![0_u8; 3];
         let mut realtcps = std::net::TcpStream::connect("127.0.0.1:3306").unwrap();
         realtcps.read(&mut header).unwrap();
         println!("Header read is {:?}", header);
@@ -110,13 +112,18 @@ impl Connection {
         let mut payload = vec.as_mut_slice();
         realtcps.read(&mut payload);
 
-        socket.write(&header);
-        socket.write(payload);
+        let mut response: Vec<u8> = Vec::new();
+        response.extend_from_slice(&header);
+        response.extend_from_slice(&payload);
+
+        let buf = Cursor::new(response);
+
+        println!("Created new connection in Writing state");
 
         Connection {
             socket: socket,
             token: token,
-            state: State::Reading(Vec::with_capacity(MAX_LINE)),
+            state: State::Writing(Take::new(buf, (packet_len+4) as usize)),
             remote: realtcps,
         }
     }
@@ -136,6 +143,9 @@ impl Connection {
     }
 
     fn read(&mut self, event_loop: &mut mio::EventLoop<Pong>) {
+
+        println!("Reading from client");
+
         match self.socket.try_read_buf(self.state.mut_read_buf()) {
             Ok(Some(0)) => {
                 self.state = State::Closed;
@@ -143,9 +153,32 @@ impl Connection {
             Ok(Some(n)) => {
                 println!("read {} bytes", n);
 
-                // Look for a new line. If a new line is received, then the
-                // state is transitioned from `Reading` to `Writing`.
-                self.state.try_transition_to_writing();
+                    /*
+                // do we have the complete request packet yet?
+                if buf.len() > 3 {
+
+                    let packet_len: u32 =
+                        ((buf[2] as u32) << 16) |
+                        ((buf[1] as u32) << 8) |
+                        buf[0] as u32;
+                    println!("incoming packet_len = {}", packet_len);
+
+                    if buf.len() >= (packet_len+4) as usize {
+
+                        self.remote.write(&buf[0 .. (packet_len+4) as usize]);
+                        //TODO: remove bytes from buffer
+                        //TODO: do blocking read of mysql response packets
+
+                        // state is transitioned from `Reading` to `Writing`.
+                        self.state.try_transition_to_writing();
+                    } else {
+                        println!("do not have full packet!");
+                    }
+
+                } else {
+                    println!("do not have full header!");
+                }
+                */
 
                 // Re-register the socket with the event loop. The current
                 // state is used to determine whether we are currently reading
@@ -162,6 +195,9 @@ impl Connection {
     }
 
     fn write(&mut self, event_loop: &mut mio::EventLoop<Pong>) {
+
+        println!("Writing to client");
+
         // TODO: handle error
         match self.socket.try_write_buf(self.state.mut_write_buf()) {
             Ok(Some(_)) => {
