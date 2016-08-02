@@ -12,7 +12,6 @@ use std::mem;
 use std::io::Cursor;
 
 const SERVER: mio::Token = mio::Token(0);
-const MAX_LINE: usize = 128;
 
 #[derive(Debug)]
 struct MySQLPacket {
@@ -127,6 +126,7 @@ impl MySQLConnection for std::net::TcpStream {
         match self.read(&mut header_vec) {
             Ok(0) => Ok(MySQLPacket { header: vec![], payload: vec![] }),
             Ok(n) => {
+                assert!(n==4);
 
                 let payload_len = read_packet_length(&header_vec);
 
@@ -138,7 +138,7 @@ impl MySQLConnection for std::net::TcpStream {
 
                 Ok(MySQLPacket { header: header_vec, payload: payload_vec })
             },
-            Err(e) => Err("oops")
+            Err(_) => Err("oops")
         }
     }
 }
@@ -257,23 +257,24 @@ impl Connection {
 
     fn mysql_send(&mut self, request: &[u8]) {
         println!("Sending packet to mysql");
-        self.remote.write(request);
-        self.remote.flush();
+        self.remote.write(request).unwrap();
+        self.remote.flush().unwrap();
 
         println!("Reading from MySQL...");
-        let mut rBuf: Vec<u8> = Vec::new();
+        let mut write_buf: Vec<u8> = Vec::new();
         loop {
             println!("Top of remote read loop..");
 
             let packet = self.remote.read_packet().unwrap();
 
-            rBuf.extend_from_slice(&packet.header);
-            rBuf.extend_from_slice(&packet.payload);
+            write_buf.extend_from_slice(&packet.header);
+            write_buf.extend_from_slice(&packet.payload);
 
             let packet_type = packet.packet_type();
 
             println!("response packet type: {}", packet_type);
 
+            // break on receiving OK_Packet, Err_Packet, or EOF_Packet
             if packet_type == 0x00 || packet_type == 0xfe || packet_type == 0xff {
                 println!("breaking out of read loop");
                 break;
@@ -283,12 +284,12 @@ impl Connection {
         println!("Setting state to writing..");
         // let s = self.remote.read_to_end(&mut rBuf).unwrap();
 
-        let pLen = rBuf.len();
-        let curs = Cursor::new(rBuf);
+        let buf_len = write_buf.len();
+        let curs = Cursor::new(write_buf);
 
         // Transition the state to `Writing`, limiting the buffer to the
         // new line (inclusive).
-        self.state = State::Writing(Take::new(curs, pLen));
+        self.state = State::Writing(Take::new(curs, buf_len));
 
         println!("Set state to Writing");
         //TODO: remove bytes from buffer
@@ -444,10 +445,10 @@ fn main() {
     let mut event_loop = mio::EventLoop::new().unwrap();
     event_loop.register(&server, SERVER).unwrap();
 
-    let mut Proxy = Proxy::new(server);
+    let mut proxy = Proxy::new(server);
 
     println!("running MySQLProxy server; port=6567");
-    event_loop.run(&mut Proxy).unwrap();
+    event_loop.run(&mut proxy).unwrap();
 }
 
 fn drain_to(vec: &mut Vec<u8>, count: usize) {
