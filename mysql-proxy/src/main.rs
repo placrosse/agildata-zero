@@ -27,7 +27,10 @@ impl MySQLPacket {
     }
 
     fn packet_type(&self) -> u8 {
-        self.payload[0]
+        match self.payload.len() {
+            0 => 0,
+            _ => self.payload[0]
+        }
     }
 
 }
@@ -121,16 +124,22 @@ impl MySQLConnection for std::net::TcpStream {
 
         // read header
         let mut header_vec = vec![0_u8; 4];
-        assert!(4 == self.read(&mut header_vec).unwrap());
-        let payload_len = read_packet_length(&header_vec);
+        match self.read(&mut header_vec) {
+            Ok(0) => Ok(MySQLPacket { header: vec![], payload: vec![] }),
+            Ok(n) => {
 
-        // read payload
-        let mut payload_vec = vec![0_u8; payload_len];
-        assert!(payload_len == self.read(&mut payload_vec).unwrap());
+                let payload_len = read_packet_length(&header_vec);
 
-        println!("read_packet() END");
+                // read payload
+                let mut payload_vec = vec![0_u8; payload_len];
+                assert!(payload_len == self.read(&mut payload_vec).unwrap());
 
-        Ok(MySQLPacket { header: header_vec, payload: payload_vec })
+                println!("read_packet() END");
+
+                Ok(MySQLPacket { header: header_vec, payload: payload_vec })
+            },
+            Err(e) => Err("oops")
+        }
     }
 }
 
@@ -220,36 +229,6 @@ impl Connection {
                     println!("Buf len {}", buf.len());
 
                     if buf.len() >= packet_len+4 {
-
-                        // //NOTE: this wasn't really needed after all
-                        // if self.authenticating {
-                        //
-                        //     // skip first 36 bytes
-                        //     // 3 bytes: packet number
-                        //     // 2 bytes: client mask. Example: 8d a2
-                        //     // 2 bytes: extended client capabilities. Example: 00 00
-                        //     // 4 bytes: Max packet size (4 byte int).
-                        //     // 1 byte: Character set e.g. 08
-                        //     // 23 bytes: Empty 23 null bytes
-                        //     let mut i: usize = 37;
-                        //
-                        //     // username (null-terminated)
-                        //     while buf[i] != 0x00 {
-                        //         i += 1;
-                        //     }
-                        //     i += 1;
-                        //     println!("username = {:?}", &buf[36..i-1]);
-                        //
-                        //     let password_len = buf[i] as usize;
-                        //     i += password_len;
-                        //
-                        //     // let mut rdr = Cursor::new(buf[packet_len .. packet_len+]
-                        //     // let username_len = rdr.read_u16::<BigEndian>().unwrap()
-                        //
-                        //     println!("login packet len = {}", i);
-                        //
-                        // }
-
                         self.mysql_send(&buf[0 .. packet_len+4]);
 
                         //self.authenticating = false;
@@ -293,7 +272,7 @@ impl Connection {
 
             let packet_type = packet.packet_type();
 
-            println!("read packet type {}", packet_type);
+            println!("response packet type: {}", packet_type);
 
             if packet_type == 0x00 || packet_type == 0xfe || packet_type == 0xff {
                 println!("breaking out of read loop");
