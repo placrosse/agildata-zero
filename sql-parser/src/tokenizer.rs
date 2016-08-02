@@ -1,5 +1,7 @@
+#[macro_use(lazy_static)]
 use std::iter::Peekable;
 use std::str::Chars;
+use std::collections::HashSet;
 
 #[derive(Debug,PartialEq)]
 pub enum Token {
@@ -11,6 +13,11 @@ pub enum Token {
     Operator(String),
     Comma
 }
+static KEYWORDS: &'static [&'static str] = &["SELECT", "FROM"];
+
+// lazy_static! {
+//     static ref KEYWORDS: HashSet<String> = vec!("SELECT", "FROM").into_iter().collect();
+// }
 
 fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
 
@@ -20,10 +27,31 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                 it.next(); // consumer the char
                 Ok(Some(Token::Whitespace))
             },
+            '+' | '-' | '/' | '*' | '%' => {
+                Ok(Some(Token::Operator(it.next().unwrap().to_string())))
+            },
+            '0'...'9' => {
+                Ok(Some(Token::LiteralLong(it
+                    .take_while(|ch| ch.is_numeric())
+                    .map(|ch| ch.to_string())
+                    .collect()
+                )))
+            },
+            'a'...'z' | 'A'...'Z' => {
+                let text = it
+                    .take_while(|ch| ch.is_alphabetic())
+                    .map(|ch| ch.to_string())
+                    .collect::<String>()
+                    .to_uppercase();
+                if KEYWORDS.iter().position(|&r| r == text).is_none() {
+                    Ok(Some(Token::Identifier(text)))
+                } else {
+                    Ok(Some(Token::Keyword(text)))
+                }
+            }
             // just playing around ...
             _ => {
-                it.next();
-                Ok(Some(Token::Operator(ch.to_string())))
+                panic!("Unsupported char {:?}", ch)
             }
         },
         None => Ok(None),
@@ -38,11 +66,21 @@ impl Tokenizer for String {
 
     fn tokenize(&self) -> Result<Vec<Token>, &'static str> {
 
-        let it = self.chars().peekable();
+        let mut it = self.chars().peekable();
+        let mut stream: Vec<Token> = Vec::new();
 
-        //next_token(&mut it);
-
-        Ok(vec![Token::Keyword("TEST".to_string())])
+        loop {
+            match next_token(&mut it) {
+                Ok(Some(token)) => stream.push(token),
+                Ok(None) =>
+                    return Ok(stream
+                    .into_iter()
+                    .filter(|t| match t { &Token::Whitespace => false, _ => true })
+                    .collect::<Vec<_>>()
+                ),
+                Err(e) => return Err(e),
+            }
+        }
     }
 
 }
