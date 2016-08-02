@@ -72,19 +72,33 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
             },
             'a'...'z' | 'A'...'Z' => {
                 let mut text = String::new();
-                loop {
-                    //write!(&mut text, "{}", it.next().unwrap().to_string()).unwrap();
-                    match it.peek() {
-                        Some(&c) => {
-                            if c.is_alphabetic() {
-                                write!(&mut text, "{}", it.next().unwrap().to_string()).unwrap();
-                            } else {
-                                break;
-                            }
-                        }
-                        None => break
+                // Old loop:
+                // loop {
+                //     //write!(&mut text, "{}", it.next().unwrap().to_string()).unwrap();
+                //     match it.peek() {
+                //         Some(&c) => {
+                //             if c.is_alphabetic() {
+                //                 write!(&mut text, "{}", it.next().unwrap().to_string()).unwrap();
+                //             } else {
+                //                 break;
+                //             }
+                //         }
+                //         None => break
+                //     }
+                // }
+
+                // New loop:
+                while let Some(&c) = it.peek() { // will break when it.peek() => None
+
+                    if c.is_alphabetic() {
+                        text.push(c);
+                    } else {
+                        break; // leave the loop early
                     }
+
+                    it.next(); // consume one
                 }
+
                 // let text: String = it
                 //     .take_while(|ch| {
                 //         println!("Taking {:?}", ch);
