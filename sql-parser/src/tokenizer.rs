@@ -1,3 +1,5 @@
+use std::iter::Peekable;
+use std::str::Chars;
 
 #[derive(Debug,PartialEq)]
 pub enum Token {
@@ -10,6 +12,24 @@ pub enum Token {
     Comma
 }
 
+fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
+
+    match it.peek() {
+        Some(&ch) => match ch {
+            ' ' | '\t' | '\n' => {
+                it.next(); // consumer the char
+                Ok(Some(Token::Whitespace))
+            },
+            // just playing around ...
+            _ => {
+                it.next();
+                Ok(Some(Token::Operator(ch.to_string())))
+            }
+        },
+        None => Ok(None),
+    }
+}
+
 pub trait Tokenizer {
     fn tokenize(&self) -> Result<Vec<Token>, &'static str>;
 }
@@ -17,6 +37,11 @@ pub trait Tokenizer {
 impl Tokenizer for String {
 
     fn tokenize(&self) -> Result<Vec<Token>, &'static str> {
+
+        let it = self.chars().peekable();
+
+        //next_token(&mut it);
+
         Ok(vec![Token::Keyword("TEST".to_string())])
     }
 
