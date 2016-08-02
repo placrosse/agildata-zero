@@ -1,7 +1,7 @@
-#[macro_use(lazy_static)]
 use std::iter::Peekable;
 use std::str::Chars;
-use std::collections::HashSet;
+
+use helper::DoesContain;
 
 #[derive(Debug,PartialEq)]
 pub enum Token {
@@ -13,11 +13,8 @@ pub enum Token {
     Operator(String),
     Comma
 }
-static KEYWORDS: &'static [&'static str] = &["SELECT", "FROM"];
 
-// lazy_static! {
-//     static ref KEYWORDS: HashSet<String> = vec!("SELECT", "FROM").into_iter().collect();
-// }
+static KEYWORDS: &'static [&'static str] = &["SELECT", "FROM"];
 
 fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
 
@@ -43,7 +40,7 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                     .map(|ch| ch.to_string())
                     .collect::<String>()
                     .to_uppercase();
-                if KEYWORDS.iter().position(|&r| r == text).is_none() {
+                if KEYWORDS.does_contain(&text) {
                     Ok(Some(Token::Identifier(text)))
                 } else {
                     Ok(Some(Token::Keyword(text)))
@@ -89,9 +86,13 @@ impl Tokenizer for String {
 mod tests {
     use super::{Token, Tokenizer};
     use super::Token::*;
+    use helper::DoesContain;
 
     #[test]
     fn simple_tokenize() {
+
+        println!("Contains? {:?}", ["hello","world"].does_contain("world".to_string()));
+
         assert_eq!(
             vec![Keyword("SELECT".to_string()),
                 LiteralLong("1".to_string()),
