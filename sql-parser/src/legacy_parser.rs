@@ -207,7 +207,7 @@ pub fn parse(tokens: &Vec<Token>, offset: usize) -> Result<(usize, SQLExpr), Str
 #[cfg(test)]
 mod tests {
     use super::{Token, Tokenizer, parse};
-    use Token::*;
+    use super::Token::*;
 
     #[test]
     fn simple_tokenize() {
