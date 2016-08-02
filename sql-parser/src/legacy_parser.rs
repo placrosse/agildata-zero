@@ -1,3 +1,8 @@
+// Remove these when we are done
+#[allow(dead_code)]      // silence unused code in this file
+#[allow(non_snake_case)] // silence naming convention warnings
+// End remove these
+
 use std::ops::BitAnd;
 
 use std::vec;
