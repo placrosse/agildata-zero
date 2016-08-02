@@ -6,8 +6,6 @@ use std::str::Chars;
 
 use std::convert::AsRef;
 
-mod legacy_sql_parser {
-
 #[derive(Debug,PartialEq)]
 pub enum Token {
     Whitespace,
@@ -234,7 +232,5 @@ mod tests {
         // what is foo?
         // put assert here to compare ast with expected
     }
-
-}
 
 }
