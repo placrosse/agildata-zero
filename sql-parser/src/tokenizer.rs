@@ -107,13 +107,11 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                     match it.peek() {
                         Some(&c) => match c {
                             '\\' => {
-                                it.next();
-                                write!(&mut s, "{}", c).unwrap();
+                                write!(&mut s, "{}", it.next().unwrap()).unwrap();
                                 match it.peek() {
                                     Some(&n) => match n {
                                         '\'' => {
-                                            it.next();
-                                            write!(&mut s, "{}", n).unwrap();
+                                            write!(&mut s, "{}", it.next().unwrap()).unwrap();
                                         },
                                         _ => continue,
                                     },
@@ -125,8 +123,7 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                                 break;
                             },
                             _ => {
-                                it.next();
-                                write!(&mut s, "{}", c).unwrap();
+                                write!(&mut s, "{}", it.next().unwrap()).unwrap();
                             }
                         },
                         None => panic!("Unexpected end of string")
@@ -134,7 +131,7 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                 }
                 Ok(Some(Token::LiteralString(s)))
             },
-            ',' => Ok(Some(Token::Punctuator(it.next().unwrap().to_string()))),
+            ',' | '(' | ')' => Ok(Some(Token::Punctuator(it.next().unwrap().to_string()))),
             // just playing around ...
             _ => {
                 panic!("Unsupported char {:?}", ch)
