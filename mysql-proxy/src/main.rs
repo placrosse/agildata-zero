@@ -27,20 +27,10 @@ impl MySQLPacket {
     }
 
     fn packet_type(&self) -> u8 {
-        self.payload[1]
+        self.payload[0]
     }
 
 }
-// enum MySQLPacket {
-//     COM_Quit,
-//     COM_InitDB { payload: [u8] },
-//     COM_Query,
-//     COM_Ping,
-//     OK_Packet,
-//     Err_Packet,
-//     EOF_Packet
-// }
-
 
 fn read_packet_length(header: &[u8]) -> usize {
     (((header[2] as u32) << 16) |
@@ -127,6 +117,8 @@ impl MySQLConnection for std::net::TcpStream {
 
     fn read_packet(&mut self) -> Result<MySQLPacket, &'static str> {
 
+        println!("read_packet() BEGIN");
+
         // read header
         let mut header_vec = vec![0_u8; 4];
         assert!(4 == self.read(&mut header_vec).unwrap());
@@ -134,8 +126,9 @@ impl MySQLConnection for std::net::TcpStream {
 
         // read payload
         let mut payload_vec = vec![0_u8; payload_len];
-        //let mut payload_bytes = packet_vec.as_mut_slice();
         assert!(payload_len == self.read(&mut payload_vec).unwrap());
+
+        println!("read_packet() END");
 
         Ok(MySQLPacket { header: header_vec, payload: payload_vec })
     }
@@ -291,12 +284,19 @@ impl Connection {
         println!("Reading from MySQL...");
         let mut rBuf: Vec<u8> = Vec::new();
         loop {
-            println!("Entering remote read loop..");
+            println!("Top of remote read loop..");
 
             let packet = self.remote.read_packet().unwrap();
+
+            rBuf.extend_from_slice(&packet.header);
+            rBuf.extend_from_slice(&packet.payload);
+
             let packet_type = packet.packet_type();
 
+            println!("read packet type {}", packet_type);
+
             if packet_type == 0x00 || packet_type == 0xfe || packet_type == 0xff {
+                println!("breaking out of read loop");
                 break;
             }
         }
