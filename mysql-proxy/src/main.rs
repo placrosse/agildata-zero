@@ -14,6 +14,34 @@ use std::io::Cursor;
 const SERVER: mio::Token = mio::Token(0);
 const MAX_LINE: usize = 128;
 
+#[derive(Debug)]
+struct MySQLPacket {
+    header: Vec<u8>,
+    payload: Vec<u8>
+}
+
+impl MySQLPacket {
+
+    fn sequence_id(&self) -> u8 {
+        self.header[3]
+    }
+
+    fn packet_type(&self) -> u8 {
+        self.payload[1]
+    }
+
+}
+// enum MySQLPacket {
+//     COM_Quit,
+//     COM_InitDB { payload: [u8] },
+//     COM_Query,
+//     COM_Ping,
+//     OK_Packet,
+//     Err_Packet,
+//     EOF_Packet
+// }
+
+
 fn read_packet_length(header: &[u8]) -> usize {
     (((header[2] as u32) << 16) |
     ((header[1] as u32) << 8) |
@@ -91,6 +119,29 @@ impl mio::Handler for Proxy {
     }
 }
 
+trait MySQLConnection {
+    fn read_packet(&mut self) -> Result<MySQLPacket, &'static str>;
+}
+
+impl MySQLConnection for std::net::TcpStream {
+
+    fn read_packet(&mut self) -> Result<MySQLPacket, &'static str> {
+
+        // read header
+        let mut header_vec = vec![0_u8; 4];
+        assert!(4 == self.read(&mut header_vec).unwrap());
+        let payload_len = read_packet_length(&header_vec);
+
+        // read payload
+        let mut payload_vec = vec![0_u8; payload_len];
+        //let mut payload_bytes = packet_vec.as_mut_slice();
+        assert!(payload_len == self.read(&mut payload_vec).unwrap());
+
+        Ok(MySQLPacket { header: header_vec, payload: payload_vec })
+    }
+}
+
+
 #[derive(Debug)]
 struct Connection {
     socket: TcpStream,
@@ -107,20 +158,15 @@ impl Connection {
         // let saddr = std::net::SocketAddr::new(std::net::IpAddr::V4(ip), 3306);
         // let mut tcps = TcpStream::connect(&saddr).unwrap();
 
-        let mut header = vec![0_u8; 3];
+        // connect to real MySQL
         let mut realtcps = std::net::TcpStream::connect("127.0.0.1:3306").unwrap();
-        realtcps.read(&mut header).unwrap();
-        println!("Header read is {:?}", header);
 
-        let packet_len = read_packet_length(&header);
-
-        let mut vec = vec![0_u8; packet_len + 1];
-        let mut payload = vec.as_mut_slice();
-        realtcps.read(&mut payload);
+        // read header
+        let auth_packet = realtcps.read_packet().unwrap();
 
         let mut response: Vec<u8> = Vec::new();
-        response.extend_from_slice(&header);
-        response.extend_from_slice(&payload);
+        response.extend_from_slice(&auth_packet.header);
+        response.extend_from_slice(&auth_packet.payload);
 
         let buf = Cursor::new(response);
 
@@ -129,7 +175,7 @@ impl Connection {
         Connection {
             socket: socket,
             token: token,
-            state: State::Writing(Take::new(buf, (packet_len+4) as usize)),
+            state: State::Writing(Take::new(buf, auth_packet.payload.len()+4)),
             remote: realtcps,
             // authenticating: true
         }
@@ -246,23 +292,9 @@ impl Connection {
         let mut rBuf: Vec<u8> = Vec::new();
         loop {
             println!("Entering remote read loop..");
-            let mut h = [0_u8; 3];
-            assert!(3 == self.remote.read(&mut h).unwrap());
 
-            let h_len = read_packet_length(&h);
-
-            let mut pVec: Vec<u8> = vec![0_u8; h_len + 1];
-            let mut p = pVec.as_mut_slice();
-
-            println!("DEBUG hlen={:?}, pLen = {:?}",h_len, p.len());
-            let bytes_read = self.remote.read(&mut p).unwrap();
-            assert!((h_len+1) as usize == bytes_read);
-
-            let packet_type = p[1];
-
-            println!("sequence_no={}, packet_type={}", p[0], packet_type);
-            rBuf.extend_from_slice(&h);
-            rBuf.extend_from_slice(p);
+            let packet = self.remote.read_packet().unwrap();
+            let packet_type = packet.packet_type();
 
             if packet_type == 0x00 || packet_type == 0xfe || packet_type == 0xff {
                 break;
