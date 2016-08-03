@@ -29,15 +29,23 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                 Ok(Some(Token::Whitespace))
             },
             '+' | '-' | '/' | '*' | '%' => {
-                Ok(Some(Token::Operator(it.next().unwrap().to_string())))
+                it.next(); // consume one
+                Ok(Some(Token::Operator(ch.to_string()))) // after consume because return val
             },
             '>' | '<' | '!' => {
+
+            // !: possibly unsafe. We are mutating a string may not be copied from the Iterator
+            // Better to do something else. Possibly let op = String::new().push(c);
+
                 let mut op = it.next().unwrap().to_string();
+
                 match it.peek() {
                     Some(&c) => match c {
                         '=' => {
-                            let tail = it.next().unwrap().to_string();
-                            op.push_str(&tail);
+                            //let tail = it.next().unwrap().to_string();
+                            //op.push_str(&tail);
+                            op.push(c);
+                            it.next(); // consume one
                         }
                         _ => {}
                     },
@@ -47,23 +55,39 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
             },
             '0'...'9' | '.' => {
                 let mut text = String::new();
-                loop {
-                    //write!(&mut text, "{}", it.next().unwrap().to_string()).unwrap();
-                    match it.peek() {
-                        Some(&c) => {
-                            if c.is_numeric() || '.'.eq(&c) {
-                                write!(&mut text, "{}", it.next().unwrap().to_string()).unwrap();
-                            } else {
-                                break;
-                            }
-                        }
-                        None => break
+
+                // Old loop
+                // loop {
+                //     //write!(&mut text, "{}", it.next().unwrap().to_string()).unwrap();
+                //     match it.peek() {
+                //         Some(&c) => {
+                //             if c.is_numeric() || '.'.eq(&c) {
+                //                 write!(&mut text, "{}", it.next().unwrap().to_string()).unwrap();
+                //             } else {
+                //                 break;
+                //             }
+                //         }
+                //         None => break
+                //     }
+                // }
+
+                // New loop:
+                while let Some(&c) = it.peek() { // will break when it.peek() => None
+
+                    if c.is_numeric() || '.' == c  {
+                        text.push(c);
+                    } else {
+                        break; // leave the loop early
                     }
+
+                    it.next(); // consume one
                 }
+
                 // let text: String = it
                 //     .take_while(|ch| ch.is_numeric() || '.'.eq(ch))
                 //     .map(|ch| ch.to_string())
                 //     .collect();
+
                 if text.as_str().contains('.') {
                     Ok(Some(Token::LiteralDouble(text)))
                 } else {
@@ -123,11 +147,15 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                     match it.peek() {
                         Some(&c) => match c {
                             '\\' => {
-                                write!(&mut s, "{}", it.next().unwrap()).unwrap();
+                                //write!(&mut s, "{}", it.next().unwrap()).unwrap();
+                                s.push(c); // No need to unwrap again! value already unwrapped
+                                it.next();
                                 match it.peek() {
                                     Some(&n) => match n {
                                         '\'' => {
-                                            write!(&mut s, "{}", it.next().unwrap()).unwrap();
+                                            //write!(&mut s, "{}", it.next().unwrap()).unwrap();
+                                            s.push(n);
+                                            it.next();
                                         },
                                         _ => continue,
                                     },
@@ -139,7 +167,9 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                                 break;
                             },
                             _ => {
-                                write!(&mut s, "{}", it.next().unwrap()).unwrap();
+                                //write!(&mut s, "{}", it.next().unwrap()).unwrap();
+                                s.push(c);
+                                it.next();
                             }
                         },
                         None => panic!("Unexpected end of string")
@@ -147,7 +177,10 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                 }
                 Ok(Some(Token::LiteralString(s)))
             },
-            ',' | '(' | ')' => Ok(Some(Token::Punctuator(it.next().unwrap().to_string()))),
+            ',' | '(' | ')' => {
+                it.next();
+                Ok(Some(Token::Punctuator(ch.to_string())))
+            },
             // just playing around ...
             _ => {
                 panic!("Unsupported char {:?}", ch)
