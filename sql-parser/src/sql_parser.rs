@@ -13,9 +13,10 @@ impl ParserProvider for AnsiSQLProvider {
 	}
 
 	fn parse_prefix(&self, tokens: &mut Peekable<Tokens>) -> Option<ASTNode>{
-		match tokens.peek() {
+		// TODO need a better solution than cloned()
+		match tokens.peek().cloned() {
 			Some(t) => match t {
-				&Token::Keyword(ref v) => match &v as &str {
+				Token::Keyword(ref v) => match &v as &str {
 					"SELECT" => Some(self.parse_select(tokens)),
 					_ => panic!("Unsupported prefix {}", v)
 				},
