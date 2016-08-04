@@ -30,6 +30,12 @@ impl ParserProvider for AnsiSQLProvider {
 					_ => panic!("Literals")
 				},
 				Token::Identifier(v) => Some(self.parse_identifier(tokens)),
+				Token::Punctuator(v) => match &v as &str {
+					"(" => {
+						Some(self.parse_nested(tokens))
+					},
+					_ => panic!("Unsupported prefix for punctuator {:?}", v)
+				},
 				_ => panic!("parse_prefix() {:?}", t)
 			},
 			None => None
@@ -138,6 +144,10 @@ impl AnsiSQLProvider {
 		let operator = match tokens.next().unwrap() {
 			Token::Operator(t) => match &t as &str {
 				"+" => SQLOperator::ADD,
+				"-" => SQLOperator::SUB,
+				"*" => SQLOperator::MULT,
+				"/" => SQLOperator::DIV,
+				"%" => SQLOperator::MOD,
 				_ => panic!("Unsupported operator {}", t)
 			},
 			_ => panic!("Expected operator, received something else")
@@ -166,6 +176,16 @@ impl AnsiSQLProvider {
 		}
 		ident
 	}
+
+	fn parse_nested(&self, tokens: &mut Peekable<Tokens>) -> ASTNode {
+		//consume (
+		tokens.next();
+		let nested = self.parse_expr(tokens, 0);
+		// consume )
+		tokens.next(); // TODO not really correct, wish there was a consume expected
+
+		Box::new(SQLAST::SQLNested(nested))
+	}
 }
 
 
@@ -177,7 +197,7 @@ enum SQLAST {
 	SQLLiteral(LiteralExpr),
 	SQLIdentifier(String),
 	SQLAlias{expr: ASTNode, alias: ASTNode},
-
+	SQLNested(ASTNode),
 	SQLSelect{expr_list: ASTNode, relation: Option<ASTNode>},
 
 }
@@ -192,7 +212,11 @@ impl Node for LiteralExpr {}
 
 #[derive(Debug)]
 enum SQLOperator {
-	ADD
+	ADD,
+	SUB,
+	MULT,
+	DIV,
+	MOD
 }
 
 #[cfg(test)]
@@ -207,6 +231,6 @@ mod tests {
 		// 	SQLAST::SQLLiteral(LiteralExpr::LiteralLong(0_u64)),
 		// 	parser.parse("SELECT 1 + 1, a")
 		// );
-		println!("{:?}", parser.parse("SELECT 1 + 1, a AS alias FROM t1"));
+		println!("{:?}", parser.parse("SELECT 1 + 1, a, (3 * (1 + 2)) AS alias FROM t1"));
 	}
 }
