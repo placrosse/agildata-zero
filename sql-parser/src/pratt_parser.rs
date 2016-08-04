@@ -18,17 +18,30 @@ impl PrattParser {
 	pub fn parse(provider: &ParserProvider, stream: &mut Peekable<Tokens>, precedence: u32) -> ASTNode {
 		match provider.parse_prefix(stream) {
 			Some(node) => {
-				let mut ret: ASTNode = node;
-				while precedence < provider.get_precedence(stream) {
-					let p = provider.get_precedence(stream);
-					match provider.parse_infix(ret,stream, p) {
-						Some(n) => ret = n,
-						None => break
-					}
-				}
+				let mut ret: ASTNode = get_infix(provider, stream, precedence, node);
+				// while precedence < provider.get_precedence(stream) {
+				// 	let p = provider.get_precedence(stream);
+				// 	match provider.parse_infix(ret,stream, p) {
+				// 		Some(n) => ret = n,
+				// 		None => break
+				// 	}
+				// }
 				return ret
 			}
 			None => panic!("TBD")
 		}
+	}
+}
+
+pub fn get_infix(provider: &ParserProvider, stream: &mut Peekable<Tokens>, precedence: u32, left: ASTNode) -> ASTNode {
+	if precedence < provider.get_precedence(stream) {
+		left
+	} else {
+		let p = provider.get_precedence(stream);
+		let ret = {
+			let r = provider.parse_infix(left, stream, p).unwrap();
+			get_infix(provider, stream, precedence, r)
+		};
+		ret
 	}
 }
