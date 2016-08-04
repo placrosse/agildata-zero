@@ -27,7 +27,7 @@ impl ParserProvider for AnsiSQLProvider {
 					}
 					_ => panic!("Literals")
 				},
-				_ => panic!("Not implemented")
+				_ => panic!("parse_prefix()")
 			},
 			None => None
 		}
@@ -74,7 +74,7 @@ impl AnsiSQLProvider {
 		// consume the SELECT
 		tokens.next();
 		let proj = self.parse_expr_list(tokens);
-		panic!("Not implemented")
+		panic!("parse_select()")
 	}
 
 	fn parse_expr_list(&self, tokens: &mut Peekable<Tokens>) -> ASTNode {
@@ -89,7 +89,7 @@ impl AnsiSQLProvider {
 				break;
 			}
 		}
-		panic!("There")
+		panic!("parse_expr()")
 	}
 
 	fn parse_expr(&self, tokens: &mut Peekable<Tokens>, precedence: u32) -> ASTNode {
@@ -122,7 +122,7 @@ mod tests {
 	use pratt_parser::ParserProvider;
 
 	#[test]
-	fn test() {
+	fn sqlparser() {
 		let parser = AnsiSQLProvider {};
 		parser.parse("SELECT 1 + 1");
 	}
