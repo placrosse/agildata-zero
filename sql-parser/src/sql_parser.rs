@@ -1,6 +1,7 @@
 use super::pratt_parser::*;
 use super::tokenizer::*;
 use std::iter::Peekable;
+use std::str::FromStr;
 
 struct AnsiSQLProvider {}
 
@@ -19,6 +20,12 @@ impl ParserProvider for AnsiSQLProvider {
 				Token::Keyword(ref v) => match &v as &str {
 					"SELECT" => Some(self.parse_select(tokens)),
 					_ => panic!("Unsupported prefix {}", v)
+				},
+				Token::Literal(v) => match v {
+					LiteralToken::LiteralLong(value) => {
+						Some(Box::new(SQLAST::SQLLiteral(LiteralExpr::LiteralLong(u64::from_str(&value).unwrap()))))
+					}
+					_ => panic!("Literals")
 				},
 				_ => panic!("Not implemented")
 			},
@@ -67,9 +74,16 @@ impl AnsiSQLProvider {
 enum SQLAST {
 	SQLExprList(Vec<ASTNode>),
 	SQLLiteralLing(u64),
-	SQLBinary{left: ASTNode, op: SQLOperator, right: ASTNode}
+	SQLBinary{left: ASTNode, op: SQLOperator, right: ASTNode},
+	SQLLiteral(LiteralExpr)
+
 }
 impl Node for SQLAST {}
+
+enum LiteralExpr {
+	LiteralLong(u64)
+}
+impl Node for LiteralExpr {}
 
 enum SQLOperator {
 	ADD
