@@ -91,6 +91,13 @@ impl AnsiSQLProvider {
 		tokens.next();
 		let proj = self.parse_expr_list(tokens);
 
+		// let select = Box::new(SQLAST::SQLSelect{expr_list: proj});
+		// match tokens.peek().cloned() {
+		// 	Some(Token::Keyword(t)) => match &t as &str {
+		// 		"UNION" => return Box::new(self.parse_infix(select, tokens, 99).unwrap()),
+		// 		_ => {}
+		// 	}
+		// }
 		Box::new(SQLAST::SQLSelect{expr_list: proj})
 	}
 
