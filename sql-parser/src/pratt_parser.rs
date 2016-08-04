@@ -1,28 +1,33 @@
 use super::tokenizer::Token;
 
-trait PrefixParser {
-	fn parse(stream: Vec<Token>) -> ASTNode;
-}
+type ASTNode = Box<Node>;
+trait Node {}
 
-trait InfixParser {
-	fn parse(left: ASTNode, stream: Vec<Token>);
-	fn get_precedence();
-}
-
-trait ASTNode {}
-
-trait ParserProvider {
-	fn parse(sql: str) -> Box<ASTNode>;
-	fn parse_prefix(tokens: Vec<Token>) -> Box<PrefixParser>;
-	fn parse_infix(left: ASTNode, stream: Vec<Token>, precedence: u32) -> Box<InfixParser>;
+pub trait ParserProvider {
+	fn parse(&self, sql: str) -> ASTNode;
+	fn parse_prefix(&self, tokens: &mut Vec<Token>) -> Option<ASTNode>;
+	fn parse_infix(&self, left: &ASTNode, stream: &mut Vec<Token>, precedence: u32) -> Option<ASTNode>;
+	fn get_precedence(&self, stream: &mut Vec<Token>) -> u32;
 }
 
 struct PrattParser {}
 
 impl PrattParser {
-	fn parse(provider: ParserProvider, stream: Vec<Token>, precedence: u32) -> ASTNode {
-		match provider.parse_prefix(stream) {
-			_ => panic!("Not implemented")
+	fn parse(provider: &ParserProvider, mut stream: Vec<Token>, precedence: u32) -> ASTNode {
+		match provider.parse_prefix(&mut stream) {
+			Some(node) => {
+				let mut ret: ASTNode = node;
+				while precedence < provider.get_precedence(&mut stream) {
+					let p = provider.get_precedence(&mut stream);
+					match provider.parse_infix(&ret, &mut stream, p) {
+						Some(n) => ret = n,
+						None => break
+					}
+				}
+				return ret
+			}
+			None => panic!("TBD")
 		}
+		panic!("Not implemented")
 	}
 }
