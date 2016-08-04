@@ -51,6 +51,13 @@ impl ParserProvider for AnsiSQLProvider {
 		match stream.peek().cloned() {
 			Some(token) => match token {
 				Token::Operator(t) => Some(self.parse_binary(left, stream)),
+				Token::Keyword(t) => match &t as &str {
+					"UNION" => Some(self.parse_union(left, stream)),
+					_ => {
+						println!("Returning no infix for keyword {:?}", t);
+						None
+					}
+				},
 				_ => {
 					println!("Returning no infix for token {:?}", token);
 					None
@@ -86,6 +93,10 @@ impl ParserProvider for AnsiSQLProvider {
 					"=" => 5,
 					_ => panic!("Unsupported operator {}", t)
 				},
+				Token::Keyword(t) => match &t as &str {
+					"UNION" => 60,
+					_ => 0
+				},
 				_ => 0
 			},
 			None => 0
@@ -105,20 +116,12 @@ impl AnsiSQLProvider {
 			Some(Token::Keyword(t)) => match &t as &str {
 				"FROM" => {
 					tokens.next();
-					Some(self.parse_expr(tokens, 0))
+					Some(self.parse_identifier(tokens)) // TODO real parse_relation
 				},
 				_ => None
 			},
 			_ => panic!("unexpected token {:?}", tokens.peek())
 		};
-
-		// let select = Box::new(SQLAST::SQLSelect{expr_list: proj});
-		// match tokens.peek().cloned() {
-		// 	Some(Token::Keyword(t)) => match &t as &str {
-		// 		"UNION" => return Box::new(self.parse_infix(select, tokens, 99).unwrap()),
-		// 		_ => {}
-		// 	}
-		// }
 		Box::new(SQLAST::SQLSelect{expr_list: proj, relation: from})
 	}
 
@@ -186,7 +189,14 @@ impl AnsiSQLProvider {
 		tokens.next();
 		let nested = self.parse_expr(tokens, 0);
 		// consume )
-		tokens.next(); // TODO not really correct, wish there was a consume expected
+		match tokens.peek().cloned() {
+			Some(Token::Punctuator(v)) => match &v as &str {
+				")" => {tokens.next();},
+				_ => panic!("Expected , punctuator, received {}", v)
+			},
+			_ => panic!("Illegal state, expected , received {:?}", tokens.peek())
+		}
+		//tokens.next(); // TODO not really correct, wish there was a consume expected
 
 		Box::new(SQLAST::SQLNested(nested))
 	}
@@ -203,6 +213,25 @@ impl AnsiSQLProvider {
 		Box::new(SQLAST::SQLUnary{operator: op, expr: self.parse_expr(tokens, 0)})
 
 	}
+
+	fn parse_union(&self, left: ASTNode, tokens: &mut Peekable<Tokens>) -> ASTNode {
+		// consume the UNION
+		tokens.next();
+
+		let union_type = match tokens.peek().cloned() {
+			Some(Token::Keyword(t)) => match &t as &str {
+				"ALL" => SQLUnionType::ALL,
+				"DISTINCT" => SQLUnionType::DISTINCT,
+				_ => SQLUnionType::UNION
+			},
+			_ => SQLUnionType::UNION
+		};
+
+		let right = self.parse_expr(tokens, 0);
+
+		Box::new(SQLAST::SQLUnion{left: left, union_type: union_type, right: right})
+
+	}
 }
 
 
@@ -217,6 +246,7 @@ enum SQLAST {
 	SQLNested(ASTNode),
 	SQLUnary{operator: SQLOperator, expr: ASTNode},
 	SQLSelect{expr_list: ASTNode, relation: Option<ASTNode>},
+	SQLUnion{left: ASTNode, union_type: SQLUnionType, right: ASTNode}
 
 }
 impl Node for SQLAST {}
@@ -237,6 +267,13 @@ enum SQLOperator {
 	MOD
 }
 
+#[derive(Debug)]
+enum SQLUnionType {
+	UNION,
+	ALL,
+	DISTINCT
+}
+
 #[cfg(test)]
 mod tests {
 	use super::{AnsiSQLProvider, SQLAST, LiteralExpr};
@@ -250,5 +287,11 @@ mod tests {
 		// 	parser.parse("SELECT 1 + 1, a")
 		// );
 		println!("{:?}", parser.parse("SELECT 1 + 1, a AS alias, (3 * (1 + 2)), -1  FROM t1"));
+	}
+
+	#[test]
+	fn nasty() {
+		let parser = AnsiSQLProvider {};
+		println!("{:?}", parser.parse("((((SELECT a, b, c FROM tOne UNION (SELECT a, b, c FROM tTwo))))) UNION (((SELECT a, b, c FROM tThree) UNION ((SELECT a, b, c FROM tFour))))"))
 	}
 }
