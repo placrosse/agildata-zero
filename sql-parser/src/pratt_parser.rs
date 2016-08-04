@@ -1,9 +1,10 @@
 use super::tokenizer::{Token, Tokens};
 use std::iter::Peekable;
+use std::fmt::Debug;
 
 pub type ASTNode = Box<Node>;
 
-pub trait Node {}
+pub trait Node: Debug {}
 
 pub trait ParserProvider {
 	fn parse(&self, sql: &str) -> ASTNode;
@@ -34,9 +35,12 @@ impl PrattParser {
 }
 
 pub fn get_infix(provider: &ParserProvider, stream: &mut Peekable<Tokens>, precedence: u32, left: ASTNode) -> ASTNode {
-	if precedence < provider.get_precedence(stream) {
+	println!("get_infix()");
+	if precedence >= provider.get_precedence(stream) {
+		println!("return");
 		left
 	} else {
+		println!("recurse");
 		let p = provider.get_precedence(stream);
 		let ret = {
 			let r = provider.parse_infix(left, stream, p).unwrap();

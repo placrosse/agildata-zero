@@ -14,6 +14,7 @@ impl ParserProvider for AnsiSQLProvider {
 	}
 
 	fn parse_prefix(&self, tokens: &mut Peekable<Tokens>) -> Option<ASTNode>{
+		println!("parse_prefix()");
 		// TODO need a better solution than cloned()
 		match tokens.peek().cloned() {
 			Some(t) => match t {
@@ -28,13 +29,15 @@ impl ParserProvider for AnsiSQLProvider {
 					}
 					_ => panic!("Literals")
 				},
-				_ => panic!("parse_prefix()")
+				Token::Identifier(v) => Some(Box::new(SQLAST::SQLIdentifier(v))),
+				_ => panic!("parse_prefix() {:?}", t)
 			},
 			None => None
 		}
 	}
 
 	fn parse_infix(&self, left: ASTNode, stream: &mut Peekable<Tokens>, precedence: u32) -> Option<ASTNode>{
+		println!("parse_infix()");
 		match stream.peek().cloned() {
 			Some(token) => match token {
 				Token::Operator(t) => Some(self.parse_binary(left, stream)),
@@ -83,6 +86,7 @@ impl ParserProvider for AnsiSQLProvider {
 
 impl AnsiSQLProvider {
 	fn parse_select(&self, tokens: &mut Peekable<Tokens>) -> ASTNode {
+		println!("parse_select()");
 		// consume the SELECT
 		tokens.next();
 		let proj = self.parse_expr_list(tokens);
@@ -91,11 +95,13 @@ impl AnsiSQLProvider {
 	}
 
 	fn parse_expr_list(&self, tokens: &mut Peekable<Tokens>) -> ASTNode {
+		println!("parse_expr_list()");
 		let first = self.parse_expr(tokens, 0_u32);
 		let mut v: Vec<ASTNode> = Vec::new();
 		v.push(first);
 		while let Some(Token::Punctuator(p)) = tokens.peek().cloned() {
 			if p == "," {
+				println!("HERE");
 				tokens.next();
 				v.push(self.parse_expr(tokens, 0_u32));
 			} else {
@@ -110,6 +116,7 @@ impl AnsiSQLProvider {
 	}
 
 	fn parse_binary(&self, left: ASTNode, tokens: &mut Peekable<Tokens>) -> ASTNode {
+		println!("parse_binary()");
 		// determine operator
 		let operator = match tokens.next().unwrap() {
 			Token::Operator(t) => match &t as &str {
@@ -120,16 +127,18 @@ impl AnsiSQLProvider {
 		};
 
 		// TODO real precedence
-		Box::new(SQLAST::SQLBinary {left: left, op: operator, right: self.parse_expr(tokens, 20)})
+		Box::new(SQLAST::SQLBinary {left: left, op: operator, right: self.parse_expr(tokens, 0)})
 	}
 }
 
 
+#[derive(Debug)]
 enum SQLAST {
 	SQLExprList(Vec<ASTNode>),
 	SQLLiteralLing(u64),
 	SQLBinary{left: ASTNode, op: SQLOperator, right: ASTNode},
 	SQLLiteral(LiteralExpr),
+	SQLIdentifier(String),
 
 	SQLSelect{expr_list: ASTNode}
 
@@ -137,23 +146,29 @@ enum SQLAST {
 impl Node for SQLAST {}
 
 
+#[derive(Debug)]
 enum LiteralExpr {
 	LiteralLong(u64)
 }
 impl Node for LiteralExpr {}
 
+#[derive(Debug)]
 enum SQLOperator {
 	ADD
 }
 
 #[cfg(test)]
 mod tests {
-	use super::AnsiSQLProvider;
+	use super::{AnsiSQLProvider, SQLAST, LiteralExpr};
 	use pratt_parser::ParserProvider;
 
 	#[test]
 	fn sqlparser() {
 		let parser = AnsiSQLProvider {};
-		parser.parse("SELECT 1 + 1");
+		// assert_eq!(
+		// 	SQLAST::SQLLiteral(LiteralExpr::LiteralLong(0_u64)),
+		// 	parser.parse("SELECT 1 + 1, a")
+		// );
+		println!("{:?}", parser.parse("SELECT 1 + 1, a"));
 	}
 }
