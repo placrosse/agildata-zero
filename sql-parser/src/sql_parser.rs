@@ -86,7 +86,8 @@ impl AnsiSQLProvider {
 		// consume the SELECT
 		tokens.next();
 		let proj = self.parse_expr_list(tokens);
-		panic!("parse_select()")
+
+		Box::new(SQLAST::SQLSelect{expr_list: proj})
 	}
 
 	fn parse_expr_list(&self, tokens: &mut Peekable<Tokens>) -> ASTNode {
@@ -101,7 +102,7 @@ impl AnsiSQLProvider {
 				break;
 			}
 		}
-		panic!("parse_expr_list()")
+		Box::new(SQLAST::SQLExprList(v))
 	}
 
 	fn parse_expr(&self, tokens: &mut Peekable<Tokens>, precedence: u32) -> ASTNode {
@@ -128,7 +129,9 @@ enum SQLAST {
 	SQLExprList(Vec<ASTNode>),
 	SQLLiteralLing(u64),
 	SQLBinary{left: ASTNode, op: SQLOperator, right: ASTNode},
-	SQLLiteral(LiteralExpr)
+	SQLLiteral(LiteralExpr),
+
+	SQLSelect{expr_list: ASTNode}
 
 }
 impl Node for SQLAST {}
