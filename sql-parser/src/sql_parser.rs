@@ -36,6 +36,10 @@ impl ParserProvider for AnsiSQLProvider {
 					},
 					_ => panic!("Unsupported prefix for punctuator {:?}", v)
 				},
+				Token::Operator(v) => match &v as &str {
+					"+" | "-" => Some(self.parse_unary(tokens)),
+					_ => panic!("Unsupported operator as prefix {:?}", v)
+				},
 				_ => panic!("parse_prefix() {:?}", t)
 			},
 			None => None
@@ -186,6 +190,19 @@ impl AnsiSQLProvider {
 
 		Box::new(SQLAST::SQLNested(nested))
 	}
+
+	fn parse_unary(&self, tokens: & mut Peekable<Tokens>) -> ASTNode {
+		let op = match tokens.next() {
+			Some(Token::Operator(o)) => match &o as &str {
+				"+" => SQLOperator::ADD,
+				"-" => SQLOperator::SUB,
+				_ => panic!("Illegal operator for unary {}", o)
+			},
+			_ => panic!("Illegal state")
+		};
+		Box::new(SQLAST::SQLUnary{operator: op, expr: self.parse_expr(tokens, 0)})
+
+	}
 }
 
 
@@ -198,6 +215,7 @@ enum SQLAST {
 	SQLIdentifier(String),
 	SQLAlias{expr: ASTNode, alias: ASTNode},
 	SQLNested(ASTNode),
+	SQLUnary{operator: SQLOperator, expr: ASTNode},
 	SQLSelect{expr_list: ASTNode, relation: Option<ASTNode>},
 
 }
@@ -231,6 +249,6 @@ mod tests {
 		// 	SQLAST::SQLLiteral(LiteralExpr::LiteralLong(0_u64)),
 		// 	parser.parse("SELECT 1 + 1, a")
 		// );
-		println!("{:?}", parser.parse("SELECT 1 + 1, a, (3 * (1 + 2)) AS alias FROM t1"));
+		println!("{:?}", parser.parse("SELECT 1 + 1, a AS alias, (3 * (1 + 2)), -1  FROM t1"));
 	}
 }
