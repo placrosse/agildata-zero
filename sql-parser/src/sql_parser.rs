@@ -23,6 +23,7 @@ impl ParserProvider for AnsiSQLProvider {
 				},
 				Token::Literal(v) => match v {
 					LiteralToken::LiteralLong(value) => {
+						tokens.next();
 						Some(Box::new(SQLAST::SQLLiteral(LiteralExpr::LiteralLong(u64::from_str(&value).unwrap()))))
 					}
 					_ => panic!("Literals")
@@ -33,8 +34,19 @@ impl ParserProvider for AnsiSQLProvider {
 		}
 	}
 
-	fn parse_infix(&self, left: &ASTNode, stream: &mut Peekable<Tokens>, precedence: u32) -> Option<ASTNode>{
-		panic!("parse_infix() Not implemented")
+	fn parse_infix(&self, left: ASTNode, stream: &mut Peekable<Tokens>, precedence: u32) -> Option<ASTNode>{
+		match stream.peek().cloned() {
+			Some(token) => match token {
+				Token::Operator(t) => Some(self.parse_binary(left, stream)),
+				_ => {
+					println!("Returning no infix for token {:?}", token);
+					None
+				}
+
+			},
+			None => None
+		}
+		//panic!("parse_infix() Not implemented")
 	}
 
 	fn get_precedence(&self, stream: &mut Peekable<Tokens>) -> u32{
@@ -89,13 +101,28 @@ impl AnsiSQLProvider {
 				break;
 			}
 		}
-		panic!("parse_expr()")
+		panic!("parse_expr_list()")
 	}
 
 	fn parse_expr(&self, tokens: &mut Peekable<Tokens>, precedence: u32) -> ASTNode {
 		PrattParser::parse(self, tokens, precedence)
 	}
+
+	fn parse_binary(&self, left: ASTNode, tokens: &mut Peekable<Tokens>) -> ASTNode {
+		// determine operator
+		let operator = match tokens.next().unwrap() {
+			Token::Operator(t) => match &t as &str {
+				"+" => SQLOperator::ADD,
+				_ => panic!("Unsupported operator {}", t)
+			},
+			_ => panic!("Expected operator, received something else")
+		};
+
+		// TODO real precedence
+		Box::new(SQLAST::SQLBinary {left: left, op: operator, right: self.parse_expr(tokens, 20)})
+	}
 }
+
 
 enum SQLAST {
 	SQLExprList(Vec<ASTNode>),
@@ -106,6 +133,7 @@ enum SQLAST {
 }
 impl Node for SQLAST {}
 
+
 enum LiteralExpr {
 	LiteralLong(u64)
 }
@@ -114,7 +142,6 @@ impl Node for LiteralExpr {}
 enum SQLOperator {
 	ADD
 }
-
 
 #[cfg(test)]
 mod tests {
