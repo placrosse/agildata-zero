@@ -23,7 +23,8 @@ pub enum LiteralToken {
     LiteralBool(String),
 }
 
-static KEYWORDS: &'static [&'static str] = &["SELECT", "FROM", "WHERE", "AND", "OR", "UNION", "FROM", "AS"];
+static KEYWORDS: &'static [&'static str] = &["SELECT", "FROM", "WHERE", "AND", "OR", "UNION", "FROM", "AS",
+    "WHERE", "ORDER", "BY", "HAVING", "GROUP"];
 
 fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
 
@@ -33,7 +34,7 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                 it.next(); // consumer the char
                 Ok(Some(Token::Whitespace))
             },
-            '+' | '-' | '/' | '*' | '%' => {
+            '+' | '-' | '/' | '*' | '%' | '=' => {
                 it.next(); // consume one
                 Ok(Some(Token::Operator(ch.to_string()))) // after consume because return val
             },
@@ -92,6 +93,8 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                     Ok(Some(Token::Literal(LiteralToken::LiteralBool(text))))
                 } else if KEYWORDS.iter().position(|&r| r.eq_ignore_ascii_case(&text)).is_none() {
                     Ok(Some(Token::Identifier(text)))
+                } else if "AND".eq_ignore_ascii_case(&text) || "OR".eq_ignore_ascii_case(&text) {
+                    Ok(Some(Token::Operator(text)))
                 } else {
                     Ok(Some(Token::Keyword(text)))
                 }

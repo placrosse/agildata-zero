@@ -26,7 +26,11 @@ impl ParserProvider for AnsiSQLProvider {
 					LiteralToken::LiteralLong(value) => {
 						tokens.next();
 						Some(Box::new(SQLAST::SQLLiteral(LiteralExpr::LiteralLong(u64::from_str(&value).unwrap()))))
-					}
+					},
+					LiteralToken::LiteralBool(value) => {
+						tokens.next();
+						Some(Box::new(SQLAST::SQLLiteral(LiteralExpr::LiteralBool(bool::from_str(&value).unwrap()))))
+					},
 					_ => panic!("Literals")
 				},
 				Token::Identifier(v) => Some(self.parse_identifier(tokens)),
@@ -90,7 +94,10 @@ impl ParserProvider for AnsiSQLProvider {
 					"<" | "<=" | ">" | ">=" | "<>" | "!=" => 20,
 					"-" | "+" => 33,
 					"*" | "/" => 40,
-					"=" => 5,
+					"=" => 11,
+					"AND" => 9,
+					"OR" => 7,
+
 					_ => panic!("Unsupported operator {}", t)
 				},
 				Token::Keyword(t) => match &t as &str {
@@ -122,7 +129,19 @@ impl AnsiSQLProvider {
 			},
 			_ => panic!("unexpected token {:?}", tokens.peek())
 		};
-		Box::new(SQLAST::SQLSelect{expr_list: proj, relation: from})
+
+		let whr = match tokens.peek().cloned() {
+			Some(Token::Keyword(t)) => match &t as &str {
+				"WHERE" => {
+					tokens.next();
+					Some(self.parse_expr(tokens, 0))
+				},
+				_ => None
+			},
+			_ => None
+		};
+
+		Box::new(SQLAST::SQLSelect{expr_list: proj, relation: from, selection: whr})
 	}
 
 	fn parse_expr_list(&self, tokens: &mut Peekable<Tokens>) -> ASTNode {
@@ -147,6 +166,7 @@ impl AnsiSQLProvider {
 
 	fn parse_binary(&self, left: ASTNode, tokens: &mut Peekable<Tokens>) -> ASTNode {
 		println!("parse_binary()");
+		let precedence = self.get_precedence(tokens);
 		// determine operator
 		let operator = match tokens.next().unwrap() {
 			Token::Operator(t) => match &t as &str {
@@ -155,13 +175,17 @@ impl AnsiSQLProvider {
 				"*" => SQLOperator::MULT,
 				"/" => SQLOperator::DIV,
 				"%" => SQLOperator::MOD,
+				">" => SQLOperator::GT,
+				"<" => SQLOperator::LT,
+				"=" => SQLOperator::EQ,
+				"AND" => SQLOperator::AND,
+				"OR" => SQLOperator::OR,
 				_ => panic!("Unsupported operator {}", t)
 			},
 			_ => panic!("Expected operator, received something else")
 		};
 
-		// TODO real precedence
-		Box::new(SQLAST::SQLBinary {left: left, op: operator, right: self.parse_expr(tokens, 0)})
+		Box::new(SQLAST::SQLBinary {left: left, op: operator, right: self.parse_expr(tokens, precedence)})
 	}
 
 	fn parse_identifier(&self, tokens: &mut Peekable<Tokens>) -> ASTNode {
@@ -245,7 +269,7 @@ enum SQLAST {
 	SQLAlias{expr: ASTNode, alias: ASTNode},
 	SQLNested(ASTNode),
 	SQLUnary{operator: SQLOperator, expr: ASTNode},
-	SQLSelect{expr_list: ASTNode, relation: Option<ASTNode>},
+	SQLSelect{expr_list: ASTNode, relation: Option<ASTNode>, selection: Option<ASTNode>},
 	SQLUnion{left: ASTNode, union_type: SQLUnionType, right: ASTNode}
 
 }
@@ -254,7 +278,8 @@ impl Node for SQLAST {}
 
 #[derive(Debug)]
 enum LiteralExpr {
-	LiteralLong(u64)
+	LiteralLong(u64),
+	LiteralBool(bool)
 }
 impl Node for LiteralExpr {}
 
@@ -264,7 +289,15 @@ enum SQLOperator {
 	SUB,
 	MULT,
 	DIV,
-	MOD
+	MOD,
+	GT,
+	LT,
+	GTEQ,
+	LTEQ,
+	EQ,
+	NEQ,
+	OR,
+	AND
 }
 
 #[derive(Debug)]
@@ -286,7 +319,7 @@ mod tests {
 		// 	SQLAST::SQLLiteral(LiteralExpr::LiteralLong(0_u64)),
 		// 	parser.parse("SELECT 1 + 1, a")
 		// );
-		println!("{:?}", parser.parse("SELECT 1 + 1, a AS alias, (3 * (1 + 2)), -1  FROM t1"));
+		println!("{:?}", parser.parse("SELECT 1 + 1, a AS alias, (3 * (1 + 2)), -1  FROM tOne WHERE a > 10 AND b = true"));
 	}
 
 	#[test]
