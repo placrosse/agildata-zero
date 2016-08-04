@@ -16,7 +16,7 @@ impl ParserProvider for AnsiSQLProvider {
 		match tokens.peek() {
 			Some(t) => match t {
 				&Token::Keyword(ref v) => match &v as &str {
-					"SELECT" => panic!("HERE"),
+					"SELECT" => Some(self.parse_select(tokens)),
 					_ => panic!("Unsupported prefix {}", v)
 				},
 				_ => panic!("Not implemented")
@@ -35,7 +35,13 @@ impl ParserProvider for AnsiSQLProvider {
 
 }
 
-// fn parse_select()
+impl AnsiSQLProvider {
+	fn parse_select(&self, tokens: &mut Peekable<Tokens>) -> ASTNode {
+		panic!("Not implemented")
+	}
+}
+
+
 
 #[cfg(test)]
 mod tests {
