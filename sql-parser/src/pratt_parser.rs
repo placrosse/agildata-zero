@@ -1,16 +1,16 @@
 use super::tokenizer::Token;
 
-type ASTNode = Box<Node>;
-trait Node {}
+pub type ASTNode = Box<Node>;
+pub trait Node {}
 
 pub trait ParserProvider {
-	fn parse(&self, sql: str) -> ASTNode;
+	fn parse(&self, sql: &str) -> ASTNode;
 	fn parse_prefix(&self, tokens: &mut Vec<Token>) -> Option<ASTNode>;
 	fn parse_infix(&self, left: &ASTNode, stream: &mut Vec<Token>, precedence: u32) -> Option<ASTNode>;
 	fn get_precedence(&self, stream: &mut Vec<Token>) -> u32;
 }
 
-struct PrattParser {}
+pub struct PrattParser {}
 
 impl PrattParser {
 	fn parse(provider: &ParserProvider, mut stream: Vec<Token>, precedence: u32) -> ASTNode {
