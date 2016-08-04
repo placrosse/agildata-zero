@@ -42,8 +42,6 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                 match it.peek() {
                     Some(&c) => match c {
                         '=' => {
-                            //let tail = it.next().unwrap().to_string();
-                            //op.push_str(&tail);
                             op.push(c);
                             it.next(); // consume one
                         }
@@ -55,23 +53,6 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
             },
             '0'...'9' | '.' => {
                 let mut text = String::new();
-
-                // Old loop
-                // loop {
-                //     //write!(&mut text, "{}", it.next().unwrap().to_string()).unwrap();
-                //     match it.peek() {
-                //         Some(&c) => {
-                //             if c.is_numeric() || '.'.eq(&c) {
-                //                 write!(&mut text, "{}", it.next().unwrap().to_string()).unwrap();
-                //             } else {
-                //                 break;
-                //             }
-                //         }
-                //         None => break
-                //     }
-                // }
-
-                // New loop:
                 while let Some(&c) = it.peek() { // will break when it.peek() => None
 
                     if c.is_numeric() || '.' == c  {
@@ -83,11 +64,6 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                     it.next(); // consume one
                 }
 
-                // let text: String = it
-                //     .take_while(|ch| ch.is_numeric() || '.'.eq(ch))
-                //     .map(|ch| ch.to_string())
-                //     .collect();
-
                 if text.as_str().contains('.') {
                     Ok(Some(Token::LiteralDouble(text)))
                 } else {
@@ -96,22 +72,6 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
             },
             'a'...'z' | 'A'...'Z' => {
                 let mut text = String::new();
-                // Old loop:
-                // loop {
-                //     //write!(&mut text, "{}", it.next().unwrap().to_string()).unwrap();
-                //     match it.peek() {
-                //         Some(&c) => {
-                //             if c.is_alphabetic() {
-                //                 write!(&mut text, "{}", it.next().unwrap().to_string()).unwrap();
-                //             } else {
-                //                 break;
-                //             }
-                //         }
-                //         None => break
-                //     }
-                // }
-
-                // New loop:
                 while let Some(&c) = it.peek() { // will break when it.peek() => None
 
                     if c.is_alphabetic() {
@@ -122,15 +82,6 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
 
                     it.next(); // consume one
                 }
-
-                // let text: String = it
-                //     .take_while(|ch| {
-                //         println!("Taking {:?}", ch);
-                //         println!("is alphabetic? {:?}", ch.is_alphabetic());
-                //         ch.is_alphabetic()
-                //     })
-                //     .map(|ch| ch.to_string())
-                //     .collect();
 
                 if "true".eq_ignore_ascii_case(&text) || "false".eq_ignore_ascii_case(&text) {
                     Ok(Some(Token::LiteralBool(text)))
@@ -147,13 +98,11 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                     match it.peek() {
                         Some(&c) => match c {
                             '\\' => {
-                                //write!(&mut s, "{}", it.next().unwrap()).unwrap();
-                                s.push(c); // No need to unwrap again! value already unwrapped
+                                s.push(c);
                                 it.next();
                                 match it.peek() {
                                     Some(&n) => match n {
                                         '\'' => {
-                                            //write!(&mut s, "{}", it.next().unwrap()).unwrap();
                                             s.push(n);
                                             it.next();
                                         },
@@ -167,7 +116,6 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                                 break;
                             },
                             _ => {
-                                //write!(&mut s, "{}", it.next().unwrap()).unwrap();
                                 s.push(c);
                                 it.next();
                             }
@@ -218,8 +166,8 @@ impl Tokenizer for String {
 }
 
 pub struct Tokens {
-    tokens: Vec<Token>,
-    index: usize,
+    pub tokens: Vec<Token>,
+    pub index: usize,
 }
 
 impl Iterator for Tokens {

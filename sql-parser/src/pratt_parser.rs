@@ -14,7 +14,7 @@ pub trait ParserProvider {
 pub struct PrattParser {}
 
 impl PrattParser {
-	fn parse(provider: &ParserProvider, mut stream: Peekable<Tokens>, precedence: u32) -> ASTNode {
+	pub fn parse(provider: &ParserProvider, mut stream: Peekable<Tokens>, precedence: u32) -> ASTNode {
 		match provider.parse_prefix(&mut stream) {
 			Some(node) => {
 				let mut ret: ASTNode = node;
