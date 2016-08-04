@@ -29,7 +29,7 @@ impl ParserProvider for AnsiSQLProvider {
 					}
 					_ => panic!("Literals")
 				},
-				Token::Identifier(v) => Some(Box::new(SQLAST::SQLIdentifier(v))),
+				Token::Identifier(v) => Some(self.parse_identifier(tokens)),
 				_ => panic!("parse_prefix() {:?}", t)
 			},
 			None => None
@@ -91,6 +91,17 @@ impl AnsiSQLProvider {
 		tokens.next();
 		let proj = self.parse_expr_list(tokens);
 
+		let from = match tokens.peek().cloned() {
+			Some(Token::Keyword(t)) => match &t as &str {
+				"FROM" => {
+					tokens.next();
+					Some(self.parse_expr(tokens, 0))
+				},
+				_ => None
+			},
+			_ => panic!("unexpected token {:?}", tokens.peek())
+		};
+
 		// let select = Box::new(SQLAST::SQLSelect{expr_list: proj});
 		// match tokens.peek().cloned() {
 		// 	Some(Token::Keyword(t)) => match &t as &str {
@@ -98,7 +109,7 @@ impl AnsiSQLProvider {
 		// 		_ => {}
 		// 	}
 		// }
-		Box::new(SQLAST::SQLSelect{expr_list: proj})
+		Box::new(SQLAST::SQLSelect{expr_list: proj, relation: from})
 	}
 
 	fn parse_expr_list(&self, tokens: &mut Peekable<Tokens>) -> ASTNode {
@@ -108,7 +119,6 @@ impl AnsiSQLProvider {
 		v.push(first);
 		while let Some(Token::Punctuator(p)) = tokens.peek().cloned() {
 			if p == "," {
-				println!("HERE");
 				tokens.next();
 				v.push(self.parse_expr(tokens, 0_u32));
 			} else {
@@ -136,6 +146,26 @@ impl AnsiSQLProvider {
 		// TODO real precedence
 		Box::new(SQLAST::SQLBinary {left: left, op: operator, right: self.parse_expr(tokens, 0)})
 	}
+
+	fn parse_identifier(&self, tokens: &mut Peekable<Tokens>) -> ASTNode {
+		println!("parse_identifier()");
+		let ident = match tokens.next().unwrap() {
+			Token::Identifier(v) => Box::new(SQLAST::SQLIdentifier(v)),
+			_ => panic!("Illegal state")
+		};
+
+		match tokens.peek().cloned() {
+			Some(Token::Keyword(k)) => match &k as &str {
+				"AS" => {
+					tokens.next();
+					return Box::new(SQLAST::SQLAlias{expr: ident, alias: self.parse_identifier(tokens)})
+				},
+				_ => {}
+			},
+			_ => {}
+		}
+		ident
+	}
 }
 
 
@@ -146,8 +176,9 @@ enum SQLAST {
 	SQLBinary{left: ASTNode, op: SQLOperator, right: ASTNode},
 	SQLLiteral(LiteralExpr),
 	SQLIdentifier(String),
+	SQLAlias{expr: ASTNode, alias: ASTNode},
 
-	SQLSelect{expr_list: ASTNode}
+	SQLSelect{expr_list: ASTNode, relation: Option<ASTNode>},
 
 }
 impl Node for SQLAST {}
@@ -176,6 +207,6 @@ mod tests {
 		// 	SQLAST::SQLLiteral(LiteralExpr::LiteralLong(0_u64)),
 		// 	parser.parse("SELECT 1 + 1, a")
 		// );
-		println!("{:?}", parser.parse("SELECT 1 + 1, a"));
+		println!("{:?}", parser.parse("SELECT 1 + 1, a AS alias FROM t1"));
 	}
 }

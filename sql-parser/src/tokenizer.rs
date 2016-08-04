@@ -23,7 +23,7 @@ pub enum LiteralToken {
     LiteralBool(String),
 }
 
-static KEYWORDS: &'static [&'static str] = &["SELECT", "FROM", "WHERE", "AND", "OR", "UNION"];
+static KEYWORDS: &'static [&'static str] = &["SELECT", "FROM", "WHERE", "AND", "OR", "UNION", "FROM", "AS"];
 
 fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
 
