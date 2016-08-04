@@ -8,8 +8,8 @@ impl ParserProvider for AnsiSQLProvider {
 
 	fn parse(&self, sql: &str) -> ASTNode {
 		let tvec = String::from(sql).tokenize().unwrap();
-		let stream = (Tokens {tokens: tvec, index: 0}).peekable();
-		PrattParser::parse(self, stream, 0u32)
+		let mut stream = (Tokens {tokens: tvec, index: 0}).peekable();
+		PrattParser::parse(self, &mut stream, 0u32)
 	}
 
 	fn parse_prefix(&self, tokens: &mut Peekable<Tokens>) -> Option<ASTNode>{
@@ -38,10 +38,42 @@ impl ParserProvider for AnsiSQLProvider {
 
 impl AnsiSQLProvider {
 	fn parse_select(&self, tokens: &mut Peekable<Tokens>) -> ASTNode {
+		// consume the SELECT
+		tokens.next();
+		let proj = self.parse_expr_list(tokens);
 		panic!("Not implemented")
+	}
+
+	fn parse_expr_list(&self, tokens: &mut Peekable<Tokens>) -> ASTNode {
+		let first = self.parse_expr(tokens, 0_u32);
+		let mut v: Vec<ASTNode> = Vec::new();
+		v.push(first);
+		while let Some(Token::Punctuator(p)) = tokens.peek().cloned() {
+			if p == "," {
+				tokens.next();
+				v.push(self.parse_expr(tokens, 0_u32));
+			} else {
+				break;
+			}
+		}
+		panic!("There")
+	}
+
+	fn parse_expr(&self, tokens: &mut Peekable<Tokens>, precedence: u32) -> ASTNode {
+		PrattParser::parse(self, tokens, precedence)
 	}
 }
 
+enum SQLAST {
+	SQLExprList(Vec<ASTNode>),
+	SQLLiteralLing(u64),
+	SQLBinary{left: ASTNode, op: SQLOperator, right: ASTNode}
+}
+impl Node for SQLAST {}
+
+enum SQLOperator {
+	ADD
+}
 
 
 #[cfg(test)]

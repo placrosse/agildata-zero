@@ -14,13 +14,13 @@ pub trait ParserProvider {
 pub struct PrattParser {}
 
 impl PrattParser {
-	pub fn parse(provider: &ParserProvider, mut stream: Peekable<Tokens>, precedence: u32) -> ASTNode {
-		match provider.parse_prefix(&mut stream) {
+	pub fn parse(provider: &ParserProvider, stream: &mut Peekable<Tokens>, precedence: u32) -> ASTNode {
+		match provider.parse_prefix(stream) {
 			Some(node) => {
 				let mut ret: ASTNode = node;
-				while precedence < provider.get_precedence(&mut stream) {
-					let p = provider.get_precedence(&mut stream);
-					match provider.parse_infix(&ret, &mut stream, p) {
+				while precedence < provider.get_precedence(stream) {
+					let p = provider.get_precedence(stream);
+					match provider.parse_infix(&ret,stream, p) {
 						Some(n) => ret = n,
 						None => break
 					}

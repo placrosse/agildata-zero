@@ -11,13 +11,18 @@ pub enum Token {
     Whitespace,
     Keyword(String),
     Identifier(String),
+    Literal(LiteralToken),
+    Operator(String),
+    Punctuator(String)
+}
+#[derive(Debug,PartialEq,Clone)]
+pub enum LiteralToken {
     LiteralString(String),
     LiteralLong(String),
     LiteralDouble(String),
     LiteralBool(String),
-    Operator(String),
-    Punctuator(String)
 }
+
 static KEYWORDS: &'static [&'static str] = &["SELECT", "FROM", "WHERE", "AND", "OR"];
 
 fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
@@ -65,9 +70,9 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                 }
 
                 if text.as_str().contains('.') {
-                    Ok(Some(Token::LiteralDouble(text)))
+                    Ok(Some(Token::Literal(LiteralToken::LiteralDouble(text))))
                 } else {
-                    Ok(Some(Token::LiteralLong(text)))
+                    Ok(Some(Token::Literal(LiteralToken::LiteralLong(text))))
                 }
             },
             'a'...'z' | 'A'...'Z' => {
@@ -84,7 +89,7 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                 }
 
                 if "true".eq_ignore_ascii_case(&text) || "false".eq_ignore_ascii_case(&text) {
-                    Ok(Some(Token::LiteralBool(text)))
+                    Ok(Some(Token::Literal(LiteralToken::LiteralBool(text))))
                 } else if KEYWORDS.iter().position(|&r| r.eq_ignore_ascii_case(&text)).is_none() {
                     Ok(Some(Token::Identifier(text)))
                 } else {
@@ -123,7 +128,7 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                         None => panic!("Unexpected end of string")
                     }
                 }
-                Ok(Some(Token::LiteralString(s)))
+                Ok(Some(Token::Literal(LiteralToken::LiteralString(s))))
             },
             ',' | '(' | ')' => {
                 it.next();
@@ -191,14 +196,15 @@ impl Iterator for Tokens {
 mod tests {
     use super::{Token, Tokenizer};
     use super::Token::*;
+    use super::LiteralToken;
 
     #[test]
     fn simple_tokenize() {
         assert_eq!(
             vec![Keyword("SELECT".to_string()),
-                LiteralLong("1".to_string()),
+                Literal(LiteralToken::LiteralLong("1".to_string())),
                 Operator("+".to_string()),
-                LiteralLong("1".to_string())],
+                Literal(LiteralToken::LiteralLong("1".to_string()))],
             String::from("SELECT 1 + 1").tokenize().unwrap()
         );
     }
@@ -209,17 +215,17 @@ mod tests {
             vec![Keyword("SELECT".to_string()),
                 Identifier("a".to_string()),
                 Punctuator(",".to_string()),
-                LiteralString("hello".to_string()),
+                Literal(LiteralToken::LiteralString("hello".to_string())),
                 Keyword("FROM".to_string()),
                 Identifier("tOne".to_string()),
                 Keyword("WHERE".to_string()),
                 Identifier("b".to_string()),
                 Operator(">".to_string()),
-                LiteralDouble("2.22".to_string()),
+                Literal(LiteralToken::LiteralDouble("2.22".to_string())),
                 Keyword("AND".to_string()),
                 Identifier("c".to_string()),
                 Operator("!=".to_string()),
-                LiteralBool("true".to_string())],
+                Literal(LiteralToken::LiteralBool("true".to_string()))],
             String::from("SELECT a, 'hello' FROM tOne WHERE b > 2.22 AND c != true").tokenize().unwrap()
         );
     }
