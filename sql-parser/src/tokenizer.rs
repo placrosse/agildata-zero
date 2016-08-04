@@ -6,7 +6,7 @@ use std::ascii::AsciiExt;
 
 use helper::DoesContain;
 
-#[derive(Debug,PartialEq)]
+#[derive(Debug,PartialEq,Clone)]
 pub enum Token {
     Whitespace,
     Keyword(String),
@@ -215,6 +215,28 @@ impl Tokenizer for String {
         }
     }
 
+}
+
+pub struct Tokens {
+    tokens: Vec<Token>,
+    index: usize,
+}
+
+impl Iterator for Tokens {
+    type Item = Token;
+
+    fn next(&mut self) -> Option<Token> {
+        // TODO clone?
+        if self.tokens.len() > self.index {
+            let result = self.tokens[self.index].clone();
+            self.index += 1;
+            Some(result)
+
+        } else {
+            None
+        }
+
+    }
 }
 
 #[cfg(test)]
