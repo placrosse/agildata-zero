@@ -34,11 +34,37 @@ impl ParserProvider for AnsiSQLProvider {
 	}
 
 	fn parse_infix(&self, left: &ASTNode, stream: &mut Peekable<Tokens>, precedence: u32) -> Option<ASTNode>{
-		panic!("Not implemented")
+		panic!("parse_infix() Not implemented")
 	}
 
 	fn get_precedence(&self, stream: &mut Peekable<Tokens>) -> u32{
-		panic!("Not implemented")
+		println!("get_precedence() token={:?}", stream.peek());
+	    // match &tokens[offset] {
+	    //     &Token::Operator(ref op) => match op.as_ref() {
+	    //         "=" => 5,
+	    //         "OR" => 7,
+	    //         "AND" => 9,
+	    //         "NOT" => 10,
+	    //         "<" | "<=" | ">" | ">=" | "<>" | "!=" => 20,
+	    //         "-" | "+" => 33,
+	    //         "*" | "/" => 40,
+	    //         _ => 0
+	    //     },
+	    //     _ => 0
+	    // }
+		match stream.peek().cloned() {
+			Some(token) => match token {
+				Token::Operator(t) => match &t as &str {
+					"<" | "<=" | ">" | ">=" | "<>" | "!=" => 20,
+					"-" | "+" => 33,
+					"*" | "/" => 40,
+					"=" => 5,
+					_ => panic!("Unsupported operator {}", t)
+				},
+				_ => 0
+			},
+			None => 0
+		}
 	}
 
 }

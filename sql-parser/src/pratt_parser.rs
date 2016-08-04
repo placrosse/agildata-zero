@@ -29,6 +29,5 @@ impl PrattParser {
 			}
 			None => panic!("TBD")
 		}
-		panic!("Not implemented")
 	}
 }
