@@ -24,7 +24,8 @@ pub enum LiteralToken {
 }
 
 static KEYWORDS: &'static [&'static str] = &["SELECT", "FROM", "WHERE", "AND", "OR", "UNION", "FROM", "AS",
-    "WHERE", "ORDER", "BY", "HAVING", "GROUP", "ASC", "DESC"];
+    "WHERE", "ORDER", "BY", "HAVING", "GROUP", "ASC", "DESC", "JOIN", "INNER", "LEFT", "RIGHT", "CROSS",
+    "FULL", "ON"];
 
 fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
 
@@ -80,7 +81,7 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                 let mut text = String::new();
                 while let Some(&c) = it.peek() { // will break when it.peek() => None
 
-                    if c.is_alphabetic() {
+                    if c.is_alphabetic() || c == '.' {
                         text.push(c);
                     } else {
                         break; // leave the loop early

@@ -21,7 +21,8 @@ enum SQLAST {
 		selection: Option<Box<SQLAST>>,
 		order: Option<Box<SQLAST>>
 	},
-	SQLUnion{left: Box<SQLAST>, union_type: SQLUnionType, right: Box<SQLAST>}
+	SQLUnion{left: Box<SQLAST>, union_type: SQLUnionType, right: Box<SQLAST>},
+	SQLJoin{left: Box<SQLAST>, join_type: SQLJoinType, right: Box<SQLAST>, on_expr: Option<Box<SQLAST>>}
 
 }
 
@@ -54,6 +55,15 @@ enum SQLUnionType {
 	UNION,
 	ALL,
 	DISTINCT
+}
+
+#[derive(Debug, PartialEq)]
+enum SQLJoinType {
+	INNER,
+	LEFT,
+	RIGHT,
+	FULL,
+	CROSS
 }
 
 struct AnsiSQLParser{}
@@ -133,6 +143,7 @@ impl AnsiSQLParser {
 				Token::Operator(t) => Some(self.parse_binary(left, stream)),
 				Token::Keyword(t) => match &t as &str {
 					"UNION" => Some(self.parse_union(left, stream)),
+					"JOIN" | "INNER" | "RIGHT" | "LEFT" | "CROSS" | "FULL" => Some(self.parse_join(left, stream)),
 					"AS" => Some(self.parse_alias(left, stream)),
 					_ => {
 						println!("Returning no infix for keyword {:?}", t);
@@ -166,6 +177,7 @@ impl AnsiSQLParser {
 				},
 				Token::Keyword(t) => match &t as &str {
 					"UNION" => 60,
+					"JOIN" | "INNER" | "RIGHT" | "LEFT" | "CROSS" | "FULL" => 50,
 					"AS" => 4,
 					_ => 0
 				},
@@ -220,7 +232,8 @@ impl AnsiSQLParser {
 
 	// TODO real parse_relation
 	fn parse_relation(&self, tokens: &mut Peekable<Tokens>) -> SQLAST {
-		self.parse_identifier(tokens)
+		self.parse_expr(tokens, 0)
+		//self.parse_identifier(tokens)
 	}
 
 	fn parse_expr_list(&self, tokens: &mut Peekable<Tokens>) -> SQLAST {
@@ -350,6 +363,46 @@ impl AnsiSQLParser {
 
 	}
 
+	fn parse_join(&self, left: SQLAST, tokens: &mut Peekable<Tokens>) -> SQLAST {
+		let join_type = {
+			if self.consume_keyword("JOIN", tokens) || self.consume_keyword("INNER", tokens) {
+				self.consume_keyword("JOIN", tokens);
+				SQLJoinType::INNER
+			} else if self.consume_keyword("LEFT", tokens) {
+				self.consume_keyword("OUTER", tokens);
+				self.consume_keyword("JOIN", tokens);
+				SQLJoinType::LEFT
+			} else if self.consume_keyword("RIGHT", tokens) {
+				self.consume_keyword("OUTER", tokens);
+				self.consume_keyword("JOIN", tokens);
+				SQLJoinType::RIGHT
+			} else if self.consume_keyword("FULL", tokens) {
+				self.consume_keyword("OUTER", tokens);
+				self.consume_keyword("JOIN", tokens);
+				SQLJoinType::FULL
+			} else if self.consume_keyword("CROSS", tokens) {
+				self.consume_keyword("JOIN", tokens);
+				SQLJoinType::LEFT
+			} else {
+				panic!("Unsupported join keyword {:?}", tokens.peek())
+			}
+		};
+
+		let right = Box::new(self.parse_expr(tokens, 0));
+
+		let on = {
+			if self.consume_keyword("ON", tokens) {
+				Some(Box::new(self.parse_expr(tokens, 0)))
+			} else if join_type != SQLJoinType::CROSS {
+				panic!("Expected ON, received token {:?}", tokens.peek())
+			} else {
+				None
+			}
+		};
+
+		SQLAST::SQLJoin {left: Box::new(left), join_type: join_type, right: right, on_expr: on}
+	}
+
 	fn parse_alias(&self, left: SQLAST, tokens: &mut Peekable<Tokens>) -> SQLAST {
 		if self.consume_keyword(&"AS", tokens) {
 			SQLAST::SQLAlias{expr: Box::new(left), alias: Box::new(self.parse_identifier(tokens))}
@@ -386,7 +439,27 @@ mod tests {
 		// 	SQLAST::SQLLiteral(LiteralExpr::LiteralLong(0_u64)),
 		// 	parser.parse("SELECT 1 + 1, a")
 		// );
-		println!("{:?}", parser.parse("SELECT 1 + 1 + 1, a AS alias, (3 * (1 + 2)), -1 AS unary  FROM tOne WHERE a > 10 AND b = true ORDER BY a DESC, (a + b) ASC, c"));
+		let sql = "SELECT 1 + 1 + 1,
+			a AS alias,
+			(3 * (1 + 2)),
+			-1 AS unary,
+			(SELECT a, b, c FROM tTwo WHERE c = a) AS subselect
+			FROM (SELECT a, b, c FROM tThree) AS l
+			WHERE a > 10 AND b = true
+			ORDER BY a DESC, (a + b) ASC, c";
+		println!("{:?}", parser.parse(sql));
+
+	}
+
+	#[test]
+	fn sql_join() {
+		let parser = AnsiSQLParser {};
+		// assert_eq!(
+		// 	SQLAST::SQLLiteral(LiteralExpr::LiteralLong(0_u64)),
+		// 	parser.parse("SELECT 1 + 1, a")
+		// );
+		let sql = "SELECT l.a, r.b, l.c FROM tOne AS l JOIN tTwo AS r ON l.a = r.a WHERE l.b > r.b ORDER BY r.c DESC";
+		println!("{:?}", parser.parse(sql));
 	}
 
 	#[test]
