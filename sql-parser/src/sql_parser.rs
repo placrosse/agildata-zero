@@ -468,12 +468,26 @@ mod tests {
 			ON l.a = r.a
 			WHERE l.b > r.b
 			ORDER BY r.c DESC";
-		println!("{:?}", parser.parse(sql));
+		let parsed = parser.parse(sql);
+
+		println!("{:#?}", parser.parse(sql));
+
+		let rewritten = sql_writer::write(parsed);
+
+		println!("Rewritten: {:?}", rewritten);
 	}
 
 	#[test]
 	fn nasty() {
 		let parser = AnsiSQLParser {};
-		println!("{:?}", parser.parse("((((SELECT a, b, c FROM tOne UNION (SELECT a, b, c FROM tTwo))))) UNION (((SELECT a, b, c FROM tThree) UNION ((SELECT a, b, c FROM tFour))))"))
+		let sql = "((((SELECT a, b, c FROM tOne UNION (SELECT a, b, c FROM tTwo))))) UNION (((SELECT a, b, c FROM tThree) UNION ((SELECT a, b, c FROM tFour))))";
+
+		let parsed = parser.parse(sql);
+
+		println!("{:#?}", parser.parse(sql));
+
+		let rewritten = sql_writer::write(parsed);
+
+		println!("Rewritten: {:?}", rewritten);
 	}
 }
