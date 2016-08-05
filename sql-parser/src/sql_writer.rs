@@ -11,18 +11,18 @@ pub fn write(node:SQLExpr) -> String {
 fn _write(builder: &mut String, node: SQLExpr) {
 	match node {
 		SQLExpr::SQLSelect{expr_list, relation, selection, order} => {
-			write!(builder, "{}", "SELECT");
+			write!(builder, "{}", "SELECT").unwrap();
 			_write(builder, *expr_list);
 			if !relation.is_none() {
-				write!(builder, " {}", "FROM");
+				write!(builder, " {}", "FROM").unwrap();
 				_write(builder, *relation.unwrap())
 			}
 			if !selection.is_none() {
-				write!(builder, " {}", "WHERE");
+				write!(builder, " {}", "WHERE").unwrap();
 				_write(builder, *selection.unwrap())
 			}
 			if !order.is_none() {
-				write!(builder, " {}", "ORDER BY");
+				write!(builder, " {}", "ORDER BY").unwrap();
 				_write(builder, *order.unwrap())
 			}
 
@@ -30,7 +30,7 @@ fn _write(builder: &mut String, node: SQLExpr) {
 		SQLExpr::SQLExprList(vector) => {
 			let mut sep = "";
 			for e in vector {
-				write!(builder, "{}", sep);
+				write!(builder, "{}", sep).unwrap();
 				_write(builder, e);
 				sep = ",";
 			}
@@ -43,25 +43,25 @@ fn _write(builder: &mut String, node: SQLExpr) {
 		},
 		SQLExpr::SQLLiteral(lit) => match lit {
 			LiteralExpr::LiteralLong(i, l) => {
-				write!(builder, " {}", l);
+				write!(builder, " {}", l).unwrap();
 			},
 			LiteralExpr::LiteralBool(i, b) => {
-				write!(builder, " {}", b);
+				write!(builder, " {}", b).unwrap();
 			},
 			//_ => panic!("Unsupported literal for writing {:?}", lit)
 		},
 		SQLExpr::SQLAlias{expr, alias} => {
 			_write(builder, *expr);
-			write!(builder, " {}", "AS");
+			write!(builder, " {}", "AS").unwrap();
 			_write(builder, *alias);
 		},
 		SQLExpr::SQLIdentifier(id) => {
-			write!(builder, " {}", id);
+			write!(builder, " {}", id).unwrap();
 		},
 		SQLExpr::SQLNested(expr) => {
-			write!(builder, " {}", "(");
+			write!(builder, " {}", "(").unwrap();
 			_write(builder, *expr);
-			write!(builder, "{}", ")");
+			write!(builder, "{}", ")").unwrap();
 		},
 		SQLExpr::SQLUnary{operator, expr} => {
 			_write_operator(builder, operator);
@@ -70,7 +70,7 @@ fn _write(builder: &mut String, node: SQLExpr) {
 		SQLExpr::SQLOrderBy{expr, is_asc} => {
 			_write(builder, *expr);
 			if !is_asc {
-				write!(builder, " {}", "DESC");
+				write!(builder, " {}", "DESC").unwrap();
 			}
 		},
 		SQLExpr::SQLJoin{left, join_type, right, on_expr} => {
@@ -78,7 +78,7 @@ fn _write(builder: &mut String, node: SQLExpr) {
 			_write_join_type(builder, join_type);
 			_write(builder, *right);
 			if !on_expr.is_none() {
-				write!(builder, " {}", "ON");
+				write!(builder, " {}", "ON").unwrap();
 				_write(builder, *on_expr.unwrap());
 			}
 		},
@@ -106,7 +106,7 @@ fn _write(builder: &mut String, node: SQLExpr) {
 			SQLOperator::OR => "OR",
 			SQLOperator::AND  => "AND"
 		};
-		write!(builder, " {}", op_text);
+		write!(builder, " {}", op_text).unwrap();
 	}
 
 	fn _write_join_type(builder: &mut String, join_type: SQLJoinType) {
@@ -117,7 +117,7 @@ fn _write(builder: &mut String, node: SQLExpr) {
 			SQLJoinType::FULL => "FULL OUTER JOIN",
 			SQLJoinType::CROSS => "CROSS JOIN"
 		};
-		write!(builder, " {}", text);
+		write!(builder, " {}", text).unwrap();
 	}
 
 	fn _write_union_type(builder: &mut String, union_type: SQLUnionType) {
@@ -126,6 +126,6 @@ fn _write(builder: &mut String, node: SQLExpr) {
 			SQLUnionType::ALL => "UNION ALL",
 			SQLUnionType::DISTINCT => "UNION DISTINCT"
 		};
-		write!(builder, " {}", text);
+		write!(builder, " {}", text).unwrap();
 	}
 }
