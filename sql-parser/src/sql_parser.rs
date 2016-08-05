@@ -458,7 +458,11 @@ mod tests {
 		// 	SQLAST::SQLLiteral(LiteralExpr::LiteralLong(0_u64)),
 		// 	parser.parse("SELECT 1 + 1, a")
 		// );
-		let sql = "SELECT l.a, r.b, l.c FROM tOne AS l JOIN tTwo AS r ON l.a = r.a WHERE l.b > r.b ORDER BY r.c DESC";
+		let sql = "SELECT l.a, r.b, l.c FROM tOne AS l
+			JOIN (SELECT a, b, c FROM tTwo WHERE a > 0) AS r 
+			ON l.a = r.a
+			WHERE l.b > r.b
+			ORDER BY r.c DESC";
 		println!("{:?}", parser.parse(sql));
 	}
 
