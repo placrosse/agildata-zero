@@ -223,7 +223,7 @@ mod tests {
                 Identifier("b".to_string()),
                 Operator(">".to_string()),
                 Literal(LiteralToken::LiteralDouble("2.22".to_string())),
-                Keyword("AND".to_string()),
+                Operator("AND".to_string()),
                 Identifier("c".to_string()),
                 Operator("!=".to_string()),
                 Literal(LiteralToken::LiteralBool("true".to_string()))],
