@@ -187,11 +187,9 @@ impl Iterator for Tokens {
             let result = self.tokens[self.index].clone();
             self.index += 1;
             Some(result)
-
         } else {
             None
         }
-
     }
 }
 

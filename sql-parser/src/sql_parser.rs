@@ -2,6 +2,7 @@ use super::pratt_parser::*;
 use super::tokenizer::*;
 use std::iter::Peekable;
 use std::str::FromStr;
+use std::ascii::AsciiExt;
 
 struct AnsiSQLProvider {}
 
@@ -141,7 +142,27 @@ impl AnsiSQLProvider {
 			_ => None
 		};
 
-		Box::new(SQLAST::SQLSelect{expr_list: proj, relation: from, selection: whr})
+		let ob: Option<ASTNode> = {
+			if self.consume_keyword(&"ORDER", tokens) {
+				if self.consume_keyword(&"BY", tokens) {
+					Some(self.parse_order_by_list(tokens))
+				} else {
+					panic!("Expected ORDER BY, found ORDER {:?}", tokens.peek());
+				}
+			} else {
+				None
+			}
+		};
+
+		// let ob = match tokens.peek().cloned() {
+		// 	Some(Token::Keyword(t)) => match &t as &str {
+		// 		"ORDER" => {
+		// 			Some(self)
+		// 		}
+		// 	}
+		// }
+
+		Box::new(SQLAST::SQLSelect{expr_list: proj, relation: from, selection: whr, order: ob})
 	}
 
 	fn parse_expr_list(&self, tokens: &mut Peekable<Tokens>) -> ASTNode {
@@ -158,6 +179,37 @@ impl AnsiSQLProvider {
 			}
 		}
 		Box::new(SQLAST::SQLExprList(v))
+	}
+
+	fn parse_order_by_list(&self, tokens: &mut Peekable<Tokens>) -> ASTNode {
+		println!("parse_order_by_list()");
+		let first = self.parse_order_by_expr(tokens);
+		let mut v: Vec<ASTNode> = Vec::new();
+		v.push(first);
+		while let Some(Token::Punctuator(p)) = tokens.peek().cloned() {
+			println!("HERERE {}", p);
+			if p == "," {
+				tokens.next();
+				v.push(self.parse_order_by_expr(tokens));
+			} else {
+				break;
+			}
+		}
+		Box::new(SQLAST::SQLExprList(v))
+	}
+
+	fn parse_order_by_expr(&self, tokens: &mut Peekable<Tokens>) -> ASTNode {
+		let e = self.parse_expr(tokens, 0_u32);
+		Box::new(SQLAST::SQLOrderBy {expr: e, is_asc: self.is_asc(tokens)})
+	}
+
+	fn is_asc(&self, tokens: &mut Peekable<Tokens>) -> bool {
+		if self.consume_keyword(&"DESC", tokens) {
+			false
+		} else {
+			self.consume_keyword(&"ASC", tokens);
+			false
+		}
 	}
 
 	fn parse_expr(&self, tokens: &mut Peekable<Tokens>, precedence: u32) -> ASTNode {
@@ -256,6 +308,20 @@ impl AnsiSQLProvider {
 		Box::new(SQLAST::SQLUnion{left: left, union_type: union_type, right: right})
 
 	}
+
+	fn consume_keyword(&self, text: &str, tokens: &mut Peekable<Tokens>) -> bool {
+		match tokens.peek().cloned() {
+			Some(Token::Keyword(v)) => {
+				if text.eq_ignore_ascii_case(&v) {
+					tokens.next();
+					true
+				} else {
+					false
+				}
+			},
+			_ => false
+		}
+	}
 }
 
 
@@ -269,7 +335,13 @@ enum SQLAST {
 	SQLAlias{expr: ASTNode, alias: ASTNode},
 	SQLNested(ASTNode),
 	SQLUnary{operator: SQLOperator, expr: ASTNode},
-	SQLSelect{expr_list: ASTNode, relation: Option<ASTNode>, selection: Option<ASTNode>},
+	SQLOrderBy{expr: ASTNode, is_asc: bool},
+	SQLSelect{
+		expr_list: ASTNode,
+		relation: Option<ASTNode>,
+		selection: Option<ASTNode>,
+		order: Option<ASTNode>
+	},
 	SQLUnion{left: ASTNode, union_type: SQLUnionType, right: ASTNode}
 
 }
@@ -319,7 +391,7 @@ mod tests {
 		// 	SQLAST::SQLLiteral(LiteralExpr::LiteralLong(0_u64)),
 		// 	parser.parse("SELECT 1 + 1, a")
 		// );
-		println!("{:?}", parser.parse("SELECT 1 + 1, a AS alias, (3 * (1 + 2)), -1  FROM tOne WHERE a > 10 AND b = true"));
+		println!("{:?}", parser.parse("SELECT 1 + 1, a AS alias, (3 * (1 + 2)), -1  FROM tOne WHERE a > 10 AND b = true ORDER BY a DESC, (a + b) ASC, c"));
 	}
 
 	#[test]
