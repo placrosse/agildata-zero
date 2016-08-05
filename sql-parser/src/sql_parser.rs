@@ -5,25 +5,24 @@ use std::str::FromStr;
 use std::ascii::AsciiExt;
 
 #[derive(Debug)]
-enum SQLAST {
-	SQLExprList(Vec<SQLAST>),
+enum SQLExpr {
+	SQLExprList(Vec<SQLExpr>),
 	SQLLiteralLing(u64),
-	SQLBinary{left: Box<SQLAST>, op: SQLOperator, right: Box<SQLAST>},
+	SQLBinary{left: Box<SQLExpr>, op: SQLOperator, right: Box<SQLExpr>},
 	SQLLiteral(LiteralExpr),
 	SQLIdentifier(String),
-	SQLAlias{expr: Box<SQLAST>, alias: Box<SQLAST>},
-	SQLNested(Box<SQLAST>),
-	SQLUnary{operator: SQLOperator, expr: Box<SQLAST>},
-	SQLOrderBy{expr: Box<SQLAST>, is_asc: bool},
+	SQLAlias{expr: Box<SQLExpr>, alias: Box<SQLExpr>},
+	SQLNested(Box<SQLExpr>),
+	SQLUnary{operator: SQLOperator, expr: Box<SQLExpr>},
+	SQLOrderBy{expr: Box<SQLExpr>, is_asc: bool},
 	SQLSelect{
-		expr_list: Box<SQLAST>,
-		relation: Option<Box<SQLAST>>,
-		selection: Option<Box<SQLAST>>,
-		order: Option<Box<SQLAST>>
+		expr_list: Box<SQLExpr>,
+		relation: Option<Box<SQLExpr>>,
+		selection: Option<Box<SQLExpr>>,
+		order: Option<Box<SQLExpr>>
 	},
-	SQLUnion{left: Box<SQLAST>, union_type: SQLUnionType, right: Box<SQLAST>},
-	SQLJoin{left: Box<SQLAST>, join_type: SQLJoinType, right: Box<SQLAST>, on_expr: Option<Box<SQLAST>>}
-
+	SQLUnion{left: Box<SQLExpr>, union_type: SQLUnionType, right: Box<SQLExpr>},
+	SQLJoin{left: Box<SQLExpr>, join_type: SQLJoinType, right: Box<SQLExpr>, on_expr: Option<Box<SQLExpr>>}
 }
 
 
@@ -70,20 +69,20 @@ struct AnsiSQLParser{}
 
 impl AnsiSQLParser {
 
-	fn parse(&self, sql: &str) -> SQLAST {
+	fn parse(&self, sql: &str) -> SQLExpr {
 		let tvec = String::from(sql).tokenize().unwrap();
 		let mut stream = (Tokens {tokens: tvec, index: 0}).peekable();
 		self.parse_expr(&mut stream, 0u32)
 	}
 
-	pub fn parse_expr(&self, stream: &mut Peekable<Tokens>, precedence: u32) -> SQLAST {
+	pub fn parse_expr(&self, stream: &mut Peekable<Tokens>, precedence: u32) -> SQLExpr {
 		match self.parse_prefix(stream) {
 			Some(node) => self.get_infix(stream, precedence, node),
 			None => panic!("TBD")
 		}
 	}
 
-	pub fn get_infix(&self, stream: &mut Peekable<Tokens>, precedence: u32, left: SQLAST) -> SQLAST {
+	pub fn get_infix(&self, stream: &mut Peekable<Tokens>, precedence: u32, left: SQLExpr) -> SQLExpr {
 		println!("get_infix()");
 		if precedence >= self.get_precedence(stream) {
 			println!("return");
@@ -99,7 +98,7 @@ impl AnsiSQLParser {
 		}
 	}
 
-	fn parse_prefix(&self, tokens: &mut Peekable<Tokens>) -> Option<SQLAST>{
+	fn parse_prefix(&self, tokens: &mut Peekable<Tokens>) -> Option<SQLExpr>{
 		println!("parse_prefix()");
 		// TODO need a better solution than cloned()
 		match tokens.peek().cloned() {
@@ -111,11 +110,11 @@ impl AnsiSQLParser {
 				Token::Literal(v) => match v {
 					LiteralToken::LiteralLong(value) => {
 						tokens.next();
-						Some(SQLAST::SQLLiteral(LiteralExpr::LiteralLong(u64::from_str(&value).unwrap())))
+						Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralLong(u64::from_str(&value).unwrap())))
 					},
 					LiteralToken::LiteralBool(value) => {
 						tokens.next();
-						Some(SQLAST::SQLLiteral(LiteralExpr::LiteralBool(bool::from_str(&value).unwrap())))
+						Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralBool(bool::from_str(&value).unwrap())))
 					},
 					_ => panic!("Literals")
 				},
@@ -136,7 +135,7 @@ impl AnsiSQLParser {
 		}
 	}
 
-	fn parse_infix(&self, left: SQLAST, stream: &mut Peekable<Tokens>, precedence: u32) -> Option<SQLAST>{
+	fn parse_infix(&self, left: SQLExpr, stream: &mut Peekable<Tokens>, precedence: u32) -> Option<SQLExpr>{
 		println!("parse_infix()");
 		match stream.peek().cloned() {
 			Some(token) => match token {
@@ -187,7 +186,7 @@ impl AnsiSQLParser {
 		}
 	}
 
-	fn parse_select(&self, tokens: &mut Peekable<Tokens>) -> SQLAST {
+	fn parse_select(&self, tokens: &mut Peekable<Tokens>) -> SQLExpr {
 		println!("parse_select()");
 		// consume the SELECT
 		tokens.next();
@@ -227,19 +226,19 @@ impl AnsiSQLParser {
 			}
 		};
 
-		SQLAST::SQLSelect{expr_list: proj, relation: from, selection: whr, order: ob}
+		SQLExpr::SQLSelect{expr_list: proj, relation: from, selection: whr, order: ob}
 	}
 
 	// TODO real parse_relation
-	fn parse_relation(&self, tokens: &mut Peekable<Tokens>) -> SQLAST {
+	fn parse_relation(&self, tokens: &mut Peekable<Tokens>) -> SQLExpr {
 		self.parse_expr(tokens, 0)
 		//self.parse_identifier(tokens)
 	}
 
-	fn parse_expr_list(&self, tokens: &mut Peekable<Tokens>) -> SQLAST {
+	fn parse_expr_list(&self, tokens: &mut Peekable<Tokens>) -> SQLExpr {
 		println!("parse_expr_list()");
 		let first = self.parse_expr(tokens, 0_u32);
-		let mut v: Vec<SQLAST> = Vec::new();
+		let mut v: Vec<SQLExpr> = Vec::new();
 		v.push(first);
 		while let Some(Token::Punctuator(p)) = tokens.peek().cloned() {
 			if p == "," {
@@ -249,13 +248,13 @@ impl AnsiSQLParser {
 				break;
 			}
 		}
-		SQLAST::SQLExprList(v)
+		SQLExpr::SQLExprList(v)
 	}
 
-	fn parse_order_by_list(&self, tokens: &mut Peekable<Tokens>) -> SQLAST {
+	fn parse_order_by_list(&self, tokens: &mut Peekable<Tokens>) -> SQLExpr {
 		println!("parse_order_by_list()");
 		let first = self.parse_order_by_expr(tokens);
-		let mut v: Vec<SQLAST> = Vec::new();
+		let mut v: Vec<SQLExpr> = Vec::new();
 		v.push(first);
 		while let Some(Token::Punctuator(p)) = tokens.peek().cloned() {
 			if p == "," {
@@ -265,12 +264,12 @@ impl AnsiSQLParser {
 				break;
 			}
 		}
-		SQLAST::SQLExprList(v)
+		SQLExpr::SQLExprList(v)
 	}
 
-	fn parse_order_by_expr(&self, tokens: &mut Peekable<Tokens>) -> SQLAST {
+	fn parse_order_by_expr(&self, tokens: &mut Peekable<Tokens>) -> SQLExpr {
 		let e = self.parse_expr(tokens, 0_u32);
-		SQLAST::SQLOrderBy {expr: Box::new(e), is_asc: self.is_asc(tokens)}
+		SQLExpr::SQLOrderBy {expr: Box::new(e), is_asc: self.is_asc(tokens)}
 	}
 
 	fn is_asc(&self, tokens: &mut Peekable<Tokens>) -> bool {
@@ -282,7 +281,7 @@ impl AnsiSQLParser {
 		}
 	}
 
-	fn parse_binary(&self, left: SQLAST, tokens: &mut Peekable<Tokens>) -> SQLAST {
+	fn parse_binary(&self, left: SQLExpr, tokens: &mut Peekable<Tokens>) -> SQLExpr {
 		println!("parse_binary()");
 		let precedence = self.get_precedence(tokens);
 		// determine operator
@@ -303,18 +302,18 @@ impl AnsiSQLParser {
 			_ => panic!("Expected operator, received something else")
 		};
 
-		SQLAST::SQLBinary {left: Box::new(left), op: operator, right: Box::new(self.parse_expr(tokens, precedence))}
+		SQLExpr::SQLBinary {left: Box::new(left), op: operator, right: Box::new(self.parse_expr(tokens, precedence))}
 	}
 
-	fn parse_identifier(&self, tokens: &mut Peekable<Tokens>) -> SQLAST {
+	fn parse_identifier(&self, tokens: &mut Peekable<Tokens>) -> SQLExpr {
 		println!("parse_identifier()");
 		match tokens.next().unwrap() {
-			Token::Identifier(v) => SQLAST::SQLIdentifier(v),
+			Token::Identifier(v) => SQLExpr::SQLIdentifier(v),
 			_ => panic!("Illegal state")
 		}
 	}
 
-	fn parse_nested(&self, tokens: &mut Peekable<Tokens>) -> SQLAST {
+	fn parse_nested(&self, tokens: &mut Peekable<Tokens>) -> SQLExpr {
 		//consume (
 		tokens.next();
 		let nested = self.parse_expr(tokens, 0);
@@ -327,10 +326,10 @@ impl AnsiSQLParser {
 			_ => panic!("Illegal state, expected , received {:?}", tokens.peek())
 		}
 
-		SQLAST::SQLNested(Box::new(nested))
+		SQLExpr::SQLNested(Box::new(nested))
 	}
 
-	fn parse_unary(&self, tokens: & mut Peekable<Tokens>) -> SQLAST {
+	fn parse_unary(&self, tokens: & mut Peekable<Tokens>) -> SQLExpr {
 		let precedence = self.get_precedence(tokens);
 		let op = match tokens.next() {
 			Some(Token::Operator(o)) => match &o as &str {
@@ -340,11 +339,11 @@ impl AnsiSQLParser {
 			},
 			_ => panic!("Illegal state")
 		};
-		SQLAST::SQLUnary{operator: op, expr: Box::new(self.parse_expr(tokens, precedence))}
+		SQLExpr::SQLUnary{operator: op, expr: Box::new(self.parse_expr(tokens, precedence))}
 
 	}
 
-	fn parse_union(&self, left: SQLAST, tokens: &mut Peekable<Tokens>) -> SQLAST {
+	fn parse_union(&self, left: SQLExpr, tokens: &mut Peekable<Tokens>) -> SQLExpr {
 		// consume the UNION
 		tokens.next();
 
@@ -359,11 +358,11 @@ impl AnsiSQLParser {
 
 		let right = Box::new(self.parse_expr(tokens, 0));
 
-		SQLAST::SQLUnion{left: Box::new(left), union_type: union_type, right: right}
+		SQLExpr::SQLUnion{left: Box::new(left), union_type: union_type, right: right}
 
 	}
 
-	fn parse_join(&self, left: SQLAST, tokens: &mut Peekable<Tokens>) -> SQLAST {
+	fn parse_join(&self, left: SQLExpr, tokens: &mut Peekable<Tokens>) -> SQLExpr {
 		let join_type = {
 			if self.consume_keyword("JOIN", tokens) || self.consume_keyword("INNER", tokens) {
 				self.consume_keyword("JOIN", tokens);
@@ -400,12 +399,12 @@ impl AnsiSQLParser {
 			}
 		};
 
-		SQLAST::SQLJoin {left: Box::new(left), join_type: join_type, right: right, on_expr: on}
+		SQLExpr::SQLJoin {left: Box::new(left), join_type: join_type, right: right, on_expr: on}
 	}
 
-	fn parse_alias(&self, left: SQLAST, tokens: &mut Peekable<Tokens>) -> SQLAST {
+	fn parse_alias(&self, left: SQLExpr, tokens: &mut Peekable<Tokens>) -> SQLExpr {
 		if self.consume_keyword(&"AS", tokens) {
-			SQLAST::SQLAlias{expr: Box::new(left), alias: Box::new(self.parse_identifier(tokens))}
+			SQLExpr::SQLAlias{expr: Box::new(left), alias: Box::new(self.parse_identifier(tokens))}
 		} else {
 			panic!("Illegal state, expected AS, received token {:?}", tokens.peek())
 		}
@@ -430,13 +429,13 @@ impl AnsiSQLParser {
 
 #[cfg(test)]
 mod tests {
-	use super::{AnsiSQLParser, SQLAST, LiteralExpr};
+	use super::{AnsiSQLParser, SQLExpr, LiteralExpr};
 
 	#[test]
 	fn sqlparser() {
 		let parser = AnsiSQLParser {};
 		// assert_eq!(
-		// 	SQLAST::SQLLiteral(LiteralExpr::LiteralLong(0_u64)),
+		// 	SQLExpr::SQLLiteral(LiteralExpr::LiteralLong(0_u64)),
 		// 	parser.parse("SELECT 1 + 1, a")
 		// );
 		let sql = "SELECT 1 + 1 + 1,
@@ -455,11 +454,11 @@ mod tests {
 	fn sql_join() {
 		let parser = AnsiSQLParser {};
 		// assert_eq!(
-		// 	SQLAST::SQLLiteral(LiteralExpr::LiteralLong(0_u64)),
+		// 	SQLExpr::SQLLiteral(LiteralExpr::LiteralLong(0_u64)),
 		// 	parser.parse("SELECT 1 + 1, a")
 		// );
 		let sql = "SELECT l.a, r.b, l.c FROM tOne AS l
-			JOIN (SELECT a, b, c FROM tTwo WHERE a > 0) AS r 
+			JOIN (SELECT a, b, c FROM tTwo WHERE a > 0) AS r
 			ON l.a = r.a
 			WHERE l.b > r.b
 			ORDER BY r.c DESC";
