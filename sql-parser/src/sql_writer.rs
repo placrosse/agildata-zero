@@ -1,0 +1,131 @@
+use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator, SQLUnionType, SQLJoinType};
+use std::fmt::Write;
+
+
+pub fn write(node:SQLExpr) -> String {
+	let mut builder = String::new();
+	_write(&mut builder, node);
+	builder
+}
+
+fn _write(builder: &mut String, node: SQLExpr) {
+	match node {
+		SQLExpr::SQLSelect{expr_list, relation, selection, order} => {
+			write!(builder, "{}", "SELECT");
+			_write(builder, *expr_list);
+			if !relation.is_none() {
+				write!(builder, " {}", "FROM");
+				_write(builder, *relation.unwrap())
+			}
+			if !selection.is_none() {
+				write!(builder, " {}", "WHERE");
+				_write(builder, *selection.unwrap())
+			}
+			if !order.is_none() {
+				write!(builder, " {}", "ORDER BY");
+				_write(builder, *order.unwrap())
+			}
+
+		},
+		SQLExpr::SQLExprList(vector) => {
+			let mut sep = "";
+			for e in vector {
+				write!(builder, "{}", sep);
+				_write(builder, e);
+				sep = ",";
+			}
+		},
+		SQLExpr::SQLBinary{left, op, right} => {
+			_write(builder, *left);
+			_write_operator(builder, op);
+			_write(builder, *right);
+
+		},
+		SQLExpr::SQLLiteral(lit) => match lit {
+			LiteralExpr::LiteralLong(i, l) => {
+				write!(builder, " {}", l);
+			},
+			LiteralExpr::LiteralBool(i, b) => {
+				write!(builder, " {}", b);
+			},
+			//_ => panic!("Unsupported literal for writing {:?}", lit)
+		},
+		SQLExpr::SQLAlias{expr, alias} => {
+			_write(builder, *expr);
+			write!(builder, " {}", "AS");
+			_write(builder, *alias);
+		},
+		SQLExpr::SQLIdentifier(id) => {
+			write!(builder, " {}", id);
+		},
+		SQLExpr::SQLNested(expr) => {
+			write!(builder, " {}", "(");
+			_write(builder, *expr);
+			write!(builder, "{}", ")");
+		},
+		SQLExpr::SQLUnary{operator, expr} => {
+			_write_operator(builder, operator);
+			_write(builder, *expr);
+		},
+		SQLExpr::SQLOrderBy{expr, is_asc} => {
+			_write(builder, *expr);
+			if !is_asc {
+				write!(builder, " {}", "DESC");
+			}
+		},
+		SQLExpr::SQLJoin{left, join_type, right, on_expr} => {
+			_write(builder, *left);
+			_write_join_type(builder, join_type);
+			_write(builder, *right);
+			if !on_expr.is_none() {
+				write!(builder, " {}", "ON");
+				_write(builder, *on_expr.unwrap());
+			}
+		},
+		SQLExpr::SQLUnion{left, union_type, right} => {
+			_write(builder, *left);
+			_write_union_type(builder, union_type);
+			_write(builder, *right);
+		}
+		//_ => panic!("Unsupported node for writing {:?}", node)
+	}
+
+	fn _write_operator(builder: &mut String, op: SQLOperator) {
+		let op_text = match op {
+			SQLOperator::ADD => "+",
+			SQLOperator::SUB => "-",
+			SQLOperator::MULT => "*",
+			SQLOperator::DIV => "/",
+			SQLOperator::MOD => "%",
+			SQLOperator::GT => ">",
+			SQLOperator::LT => "<",
+			SQLOperator::GTEQ => ">=",
+			SQLOperator::LTEQ => "<=",
+			SQLOperator::EQ => "=",
+			SQLOperator::NEQ => "!=",
+			SQLOperator::OR => "OR",
+			SQLOperator::AND  => "AND"
+		};
+		write!(builder, " {}", op_text);
+	}
+
+	fn _write_join_type(builder: &mut String, join_type: SQLJoinType) {
+		let text = match join_type {
+			SQLJoinType::INNER => "INNER JOIN",
+			SQLJoinType::LEFT => "LEFT JOIN",
+			SQLJoinType::RIGHT => "RIGHT JOIN",
+			SQLJoinType::FULL => "FULL OUTER JOIN",
+			SQLJoinType::CROSS => "CROSS JOIN"
+		};
+		write!(builder, " {}", text);
+	}
+
+	fn _write_union_type(builder: &mut String, union_type: SQLUnionType) {
+		let text = match union_type {
+			SQLUnionType::UNION => "UNION",
+			SQLUnionType::ALL => "UNION ALL",
+			SQLUnionType::DISTINCT => "UNION DISTINCT"
+		};
+		write!(builder, " {}", text);
+	}
+}
