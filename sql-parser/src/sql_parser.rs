@@ -4,7 +4,7 @@ use std::str::FromStr;
 use std::ascii::AsciiExt;
 
 #[derive(Debug)]
-enum SQLExpr {
+pub enum SQLExpr {
 	SQLExprList(Vec<SQLExpr>),
 	SQLLiteralLing(u64),
 	SQLBinary{left: Box<SQLExpr>, op: SQLOperator, right: Box<SQLExpr>},
@@ -26,13 +26,13 @@ enum SQLExpr {
 
 
 #[derive(Debug)]
-enum LiteralExpr {
+pub enum LiteralExpr {
 	LiteralLong(u64),
 	LiteralBool(bool)
 }
 
 #[derive(Debug)]
-enum SQLOperator {
+pub enum SQLOperator {
 	ADD,
 	SUB,
 	MULT,
@@ -49,14 +49,14 @@ enum SQLOperator {
 }
 
 #[derive(Debug)]
-enum SQLUnionType {
+pub enum SQLUnionType {
 	UNION,
 	ALL,
 	DISTINCT
 }
 
 #[derive(Debug, PartialEq)]
-enum SQLJoinType {
+pub enum SQLJoinType {
 	INNER,
 	LEFT,
 	RIGHT,
@@ -430,6 +430,7 @@ impl AnsiSQLParser {
 #[cfg(test)]
 mod tests {
 	use super::{AnsiSQLParser, SQLExpr, LiteralExpr};
+	use super::super::sql_writer;
 
 	#[test]
 	fn sqlparser() {
@@ -446,7 +447,13 @@ mod tests {
 			FROM (SELECT a, b, c FROM tThree) AS l
 			WHERE a > 10 AND b = true
 			ORDER BY a DESC, (a + b) ASC, c";
-		println!("{:?}", parser.parse(sql));
+		let parsed = parser.parse(sql);
+
+		println!("{:#?}", parser.parse(sql));
+
+		let rewritten = sql_writer::write(parsed);
+
+		println!("Rewritten: {:?}", rewritten);
 
 	}
 
