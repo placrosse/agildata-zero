@@ -154,14 +154,6 @@ impl AnsiSQLProvider {
 			}
 		};
 
-		// let ob = match tokens.peek().cloned() {
-		// 	Some(Token::Keyword(t)) => match &t as &str {
-		// 		"ORDER" => {
-		// 			Some(self)
-		// 		}
-		// 	}
-		// }
-
 		Box::new(SQLAST::SQLSelect{expr_list: proj, relation: from, selection: whr, order: ob})
 	}
 
@@ -187,7 +179,6 @@ impl AnsiSQLProvider {
 		let mut v: Vec<ASTNode> = Vec::new();
 		v.push(first);
 		while let Some(Token::Punctuator(p)) = tokens.peek().cloned() {
-			println!("HERERE {}", p);
 			if p == "," {
 				tokens.next();
 				v.push(self.parse_order_by_expr(tokens));
@@ -208,7 +199,7 @@ impl AnsiSQLProvider {
 			false
 		} else {
 			self.consume_keyword(&"ASC", tokens);
-			false
+			true
 		}
 	}
 
@@ -391,7 +382,7 @@ mod tests {
 		// 	SQLAST::SQLLiteral(LiteralExpr::LiteralLong(0_u64)),
 		// 	parser.parse("SELECT 1 + 1, a")
 		// );
-		println!("{:?}", parser.parse("SELECT 1 + 1, a AS alias, (3 * (1 + 2)), -1  FROM tOne WHERE a > 10 AND b = true ORDER BY a DESC, (a + b) ASC, c"));
+		println!("{:?}", parser.parse("SELECT 1 + 1 + 1, a AS alias, (3 * (1 + 2)), -1  FROM tOne WHERE a > 10 AND b = true ORDER BY a DESC, (a + b) ASC, c"));
 	}
 
 	#[test]

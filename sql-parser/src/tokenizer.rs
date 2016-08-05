@@ -24,7 +24,7 @@ pub enum LiteralToken {
 }
 
 static KEYWORDS: &'static [&'static str] = &["SELECT", "FROM", "WHERE", "AND", "OR", "UNION", "FROM", "AS",
-    "WHERE", "ORDER", "BY", "HAVING", "GROUP"];
+    "WHERE", "ORDER", "BY", "HAVING", "GROUP", "ASC", "DESC"];
 
 fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
 
