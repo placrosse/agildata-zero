@@ -6,7 +6,6 @@ use std::ascii::AsciiExt;
 #[derive(Debug)]
 pub enum SQLExpr {
 	SQLExprList(Vec<SQLExpr>),
-	SQLLiteralLing(u64),
 	SQLBinary{left: Box<SQLExpr>, op: SQLOperator, right: Box<SQLExpr>},
 	SQLLiteral(LiteralExpr),
 	SQLIdentifier(String),
@@ -27,8 +26,8 @@ pub enum SQLExpr {
 
 #[derive(Debug)]
 pub enum LiteralExpr {
-	LiteralLong(u64),
-	LiteralBool(bool)
+	LiteralLong(u32, u64),
+	LiteralBool(u32, bool)
 }
 
 #[derive(Debug)]
@@ -108,13 +107,13 @@ impl AnsiSQLParser {
 					_ => panic!("Unsupported prefix {}", v)
 				},
 				Token::Literal(v) => match v {
-					LiteralToken::LiteralLong(value) => {
+					LiteralToken::LiteralLong(i, value) => {
 						tokens.next();
-						Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralLong(u64::from_str(&value).unwrap())))
+						Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralLong(i, u64::from_str(&value).unwrap())))
 					},
-					LiteralToken::LiteralBool(value) => {
+					LiteralToken::LiteralBool(i, value) => {
 						tokens.next();
-						Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralBool(bool::from_str(&value).unwrap())))
+						Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralBool(i, bool::from_str(&value).unwrap())))
 					},
 					_ => panic!("Unsupported literal {:?}", v)
 				},

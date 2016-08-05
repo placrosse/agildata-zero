@@ -1,6 +1,7 @@
 use std::iter::Peekable;
 use std::str::Chars;
 use std::fmt::Write;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use std::ascii::AsciiExt;
 
@@ -17,17 +18,17 @@ pub enum Token {
 }
 #[derive(Debug,PartialEq,Clone)]
 pub enum LiteralToken {
-    LiteralString(String),
-    LiteralLong(String),
-    LiteralDouble(String),
-    LiteralBool(String),
+    LiteralString(u32, String),
+    LiteralLong(u32, String),
+    LiteralDouble(u32, String),
+    LiteralBool(u32, String),
 }
 
 static KEYWORDS: &'static [&'static str] = &["SELECT", "FROM", "WHERE", "AND", "OR", "UNION", "FROM", "AS",
     "WHERE", "ORDER", "BY", "HAVING", "GROUP", "ASC", "DESC", "JOIN", "INNER", "LEFT", "RIGHT", "CROSS",
     "FULL", "ON"];
 
-fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
+fn next_token(it: &mut Peekable<Chars>, lit_index: &AtomicU32) -> Result<Option<Token>, &'static str> {
 
     match it.peek() {
         Some(&ch) => match ch {
@@ -72,9 +73,9 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                 }
 
                 if text.as_str().contains('.') {
-                    Ok(Some(Token::Literal(LiteralToken::LiteralDouble(text))))
+                    Ok(Some(Token::Literal(LiteralToken::LiteralDouble(lit_index.fetch_add(1, Ordering::SeqCst), text))))
                 } else {
-                    Ok(Some(Token::Literal(LiteralToken::LiteralLong(text))))
+                    Ok(Some(Token::Literal(LiteralToken::LiteralLong(lit_index.fetch_add(1, Ordering::SeqCst), text))))
                 }
             },
             'a'...'z' | 'A'...'Z' => {
@@ -91,7 +92,7 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                 }
 
                 if "true".eq_ignore_ascii_case(&text) || "false".eq_ignore_ascii_case(&text) {
-                    Ok(Some(Token::Literal(LiteralToken::LiteralBool(text))))
+                    Ok(Some(Token::Literal(LiteralToken::LiteralBool(lit_index.fetch_add(1, Ordering::SeqCst), text))))
                 } else if KEYWORDS.iter().position(|&r| r.eq_ignore_ascii_case(&text)).is_none() {
                     Ok(Some(Token::Identifier(text)))
                 } else if "AND".eq_ignore_ascii_case(&text) || "OR".eq_ignore_ascii_case(&text) {
@@ -132,7 +133,8 @@ fn next_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, &'static str> {
                         None => panic!("Unexpected end of string")
                     }
                 }
-                Ok(Some(Token::Literal(LiteralToken::LiteralString(s))))
+
+                Ok(Some(Token::Literal(LiteralToken::LiteralString(lit_index.fetch_add(1, Ordering::SeqCst), s))))
             },
             ',' | '(' | ')' => {
                 it.next();
@@ -157,9 +159,9 @@ impl Tokenizer for String {
 
         let mut it = self.chars().peekable();
         let mut stream: Vec<Token> = Vec::new();
-
+        let mut literal_index = AtomicU32::new(0);
         loop {
-            match next_token(&mut it) {
+            match next_token(&mut it, &literal_index) {
                 Ok(Some(token)) => stream.push(token),
                 Ok(None) =>
                     return Ok(stream
@@ -204,9 +206,9 @@ mod tests {
     fn simple_tokenize() {
         assert_eq!(
             vec![Keyword("SELECT".to_string()),
-                Literal(LiteralToken::LiteralLong("1".to_string())),
+                Literal(LiteralToken::LiteralLong(0, "1".to_string())),
                 Operator("+".to_string()),
-                Literal(LiteralToken::LiteralLong("1".to_string()))],
+                Literal(LiteralToken::LiteralLong(1, "1".to_string()))],
             String::from("SELECT 1 + 1").tokenize().unwrap()
         );
     }
@@ -217,17 +219,17 @@ mod tests {
             vec![Keyword("SELECT".to_string()),
                 Identifier("a".to_string()),
                 Punctuator(",".to_string()),
-                Literal(LiteralToken::LiteralString("hello".to_string())),
+                Literal(LiteralToken::LiteralString(0, "hello".to_string())),
                 Keyword("FROM".to_string()),
                 Identifier("tOne".to_string()),
                 Keyword("WHERE".to_string()),
                 Identifier("b".to_string()),
                 Operator(">".to_string()),
-                Literal(LiteralToken::LiteralDouble("2.22".to_string())),
+                Literal(LiteralToken::LiteralDouble(1, "2.22".to_string())),
                 Operator("AND".to_string()),
                 Identifier("c".to_string()),
                 Operator("!=".to_string()),
-                Literal(LiteralToken::LiteralBool("true".to_string()))],
+                Literal(LiteralToken::LiteralBool(2, "true".to_string()))],
             String::from("SELECT a, 'hello' FROM tOne WHERE b > 2.22 AND c != true").tokenize().unwrap()
         );
     }
