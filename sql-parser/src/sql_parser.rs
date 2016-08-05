@@ -1,4 +1,3 @@
-// use super::pratt_parser::*;
 use super::tokenizer::*;
 use std::iter::Peekable;
 use std::str::FromStr;
@@ -67,6 +66,7 @@ enum SQLJoinType {
 
 struct AnsiSQLParser{}
 
+// TODO should switch to Result returns instead of use of panic! ?
 impl AnsiSQLParser {
 
 	fn parse(&self, sql: &str) -> SQLExpr {
@@ -116,7 +116,7 @@ impl AnsiSQLParser {
 						tokens.next();
 						Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralBool(bool::from_str(&value).unwrap())))
 					},
-					_ => panic!("Literals")
+					_ => panic!("Unsupported literal {:?}", v)
 				},
 				Token::Identifier(v) => Some(self.parse_identifier(tokens)),
 				Token::Punctuator(v) => match &v as &str {
@@ -157,7 +157,6 @@ impl AnsiSQLParser {
 			},
 			None => None
 		}
-		//panic!("parse_infix() Not implemented")
 	}
 
 	fn get_precedence(&self, stream: &mut Peekable<Tokens>) -> u32{
@@ -253,9 +252,8 @@ impl AnsiSQLParser {
 
 	fn parse_order_by_list(&self, tokens: &mut Peekable<Tokens>) -> SQLExpr {
 		println!("parse_order_by_list()");
-		let first = self.parse_order_by_expr(tokens);
 		let mut v: Vec<SQLExpr> = Vec::new();
-		v.push(first);
+		v.push(self.parse_order_by_expr(tokens));
 		while let Some(Token::Punctuator(p)) = tokens.peek().cloned() {
 			if p == "," {
 				tokens.next();
@@ -363,6 +361,7 @@ impl AnsiSQLParser {
 	}
 
 	fn parse_join(&self, left: SQLExpr, tokens: &mut Peekable<Tokens>) -> SQLExpr {
+		// TODO better protection on expected keyword sequences
 		let join_type = {
 			if self.consume_keyword("JOIN", tokens) || self.consume_keyword("INNER", tokens) {
 				self.consume_keyword("JOIN", tokens);
@@ -410,6 +409,7 @@ impl AnsiSQLParser {
 		}
 	}
 
+	// TODO more helper methods like consume_keyword_sequence, required_keyword_sequence, etc
 	fn consume_keyword(&self, text: &str, tokens: &mut Peekable<Tokens>) -> bool {
 		match tokens.peek().cloned() {
 			Some(Token::Keyword(v)) => {
