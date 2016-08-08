@@ -63,12 +63,12 @@ pub enum SQLJoinType {
 	CROSS
 }
 
-struct AnsiSQLParser{}
+pub struct AnsiSQLParser{}
 
 // TODO should switch to Result returns instead of use of panic! ?
 impl AnsiSQLParser {
 
-	fn parse(&self, sql: &str) -> SQLExpr {
+	pub fn parse(&self, sql: &str) -> SQLExpr {
 		let tvec = String::from(sql).tokenize().unwrap();
 		let mut stream = (Tokens {tokens: tvec, index: 0}).peekable();
 		self.parse_expr(&mut stream, 0u32)
