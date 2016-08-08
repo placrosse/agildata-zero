@@ -1,5 +1,5 @@
 [workspace]
-members = ["mysql-protocol", "sql-parser", "mysql-proxy"]
+members = ["mysql-protocol", "sql-parser", "mysql-proxy", "config"]
 
 [package]
 authors = ["Paul LaCrosse <paul.lacrosse@gmail.com>"]
@@ -13,6 +13,7 @@ log = "0.3.6"
 log4rs = { version = "0.4.8", features = ["toml"] }
 mysql-protocol = { path = "mysql-protocol", version = "*"}
 sql-parser = { path = "sql-parser", version = "*"}
+config = { path = "config", version = "*"}
 lazy_static = "0.2.1"
 rust-crypto = "0.2.36"
 chrono = { version = "0.2.22" }
