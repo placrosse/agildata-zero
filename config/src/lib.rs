@@ -91,8 +91,8 @@ fn parse_table_config(builder: &mut TableConfigBuilder, children: Vec<Xml>) {
 					let encryption = get_attr_or_fail("encryption", &e);
 					builder.add_column(ColumnConfig{
 						name: name,
-						encryption: determine_encryption(&native_type),
-						native_type: native_type
+						encryption: determine_encryption(&encryption),
+						native_type: determine_native_type(&native_type)
 					});
 
 				},
@@ -110,20 +110,39 @@ fn get_attr_or_fail(name: &'static str, element: &xml::Element) -> String {
 	}
 }
 
-fn determine_encryption(native_type: &String) -> EncryptionType {
+fn determine_native_type(native_type: &String) -> NativeType {
 	if native_type.contains("VARCHAR") {
-		EncryptionType::Varchar(50) // TODO hard coded display..
+		NativeType::Varchar(50) // TODO hard coded display..
 	} else {
 		match native_type as &str {
-			"INTEGER" => EncryptionType::U64,
-			"DOUBLE" => EncryptionType::F64,
+			"INTEGER" => NativeType::U64,
+			"DOUBLE" => NativeType::F64,
 			_ => panic!("Unsupported native type {}", native_type)
 		}
 	}
 }
 
+fn determine_encryption(encryption: &String) -> EncryptionType {
+	match &encryption.to_uppercase() as &str {
+		"AES" => EncryptionType::AES,
+		"AES-SALTED" => EncryptionType::AES_SALT,
+		"OPE" => EncryptionType::OPE,
+		"NONE" => EncryptionType::NA,
+		_ => panic!("Unsupported encryption type {}", encryption)
+	}
+
+}
+
 #[derive(Debug)]
 pub enum EncryptionType {
+	AES,
+	AES_SALT,
+	OPE,
+	NA,
+}
+
+#[derive(Debug)]
+pub enum NativeType {
 	U64,
 	Varchar(u32),
 	F64,
@@ -133,7 +152,7 @@ pub enum EncryptionType {
 pub struct ColumnConfig {
 	pub name: String,
 	pub encryption: EncryptionType,
-	pub native_type: String
+	pub native_type: NativeType
 }
 
 #[derive(Debug)]
