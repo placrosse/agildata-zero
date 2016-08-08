@@ -22,6 +22,9 @@ use std::path::Path;
 use std::fs::remove_file;
 use std::sync::atomic::{Ordering, AtomicBool, ATOMIC_BOOL_INIT};
 
+mod crypt;
+use crypt::*;
+
 static STOP: AtomicBool = ATOMIC_BOOL_INIT;
 fn ask_stop() { STOP.store(true, Ordering::SeqCst) }
 fn chk_stop() -> bool {
@@ -31,7 +34,7 @@ fn chk_stop() -> bool {
     STOP.load(Ordering::SeqCst)
 }
 
-fn x_sleep() { sleep(Duration::seconds(15).to_std().unwrap()); }
+fn x_sleep() { sleep(Duration::seconds(1).to_std().unwrap()); }
 
 pub const APP_NAME: &'static str = "AgilData Babel Proxy";
 pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -74,19 +77,19 @@ fn main() {
         ph(pi);
     }));
 
-    // {
+    {
         // {
             // let opt = opt.clone();
             // load(opt);  pre-start tasks to run to completion here
         // }
 
-        // let fs: Vec<fn(Opts)> = vec!(funcA, funcB, funcC, funcD);
-        // for f in fs {
-        //     let opt = opt.clone();
-        //     let _ = spawn(move || { f(opt); });  // one thread per independent task
-        //     x_sleep();
-        // }
-    // }
+        let fs: Vec<fn(Opts)> = vec!(watch);
+        for f in fs {
+            let opt = opt.clone();
+            let _ = spawn(move || { f(opt); });  // one thread per independent task
+            x_sleep();
+        }
+    }
 
     info!("{} is up", app_ver);
 

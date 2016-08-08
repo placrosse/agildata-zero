@@ -11,8 +11,11 @@ version = "0.0.3"
 argparse = "0.2.1"
 log = "0.3.6"
 log4rs = { version = "0.4.8", features = ["toml"] }
-mysql-protocol = { path = "mysql-protocol", version = "*"}
-sql-parser = { path = "sql-parser", version = "*"}
+parking_lot = "0.2.7"
+regex = "0.1.73"
+notify = "2.6.3"
 lazy_static = "0.2.1"
 rust-crypto = "0.2.36"
 chrono = { version = "0.2.22" }
+mysql-protocol = { path = "mysql-protocol", version = "*"}
+sql-parser = { path = "sql-parser", version = "*"}
