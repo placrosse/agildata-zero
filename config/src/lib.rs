@@ -4,7 +4,7 @@ use std::io::Read;
 use std::collections::HashMap;
 use xml::Xml;
 
-fn parse_config(path: &'static str) -> Config {
+pub fn parse_config(path: &'static str) -> Config {
 	let mut rdr = match File::open(path) {
         Ok(file) => file,
         Err(err) => {
@@ -91,7 +91,7 @@ fn parse_table_config(builder: &mut TableConfigBuilder, children: Vec<Xml>) {
 					let encryption = get_attr_or_fail("encryption", &e);
 					builder.add_column(ColumnConfig{
 						name: name,
-						encryption: encryption,
+						encryption: determine_encryption(&native_type),
 						native_type: native_type
 					});
 
@@ -110,15 +110,34 @@ fn get_attr_or_fail(name: &'static str, element: &xml::Element) -> String {
 	}
 }
 
-#[derive(Debug)]
-struct ColumnConfig {
-	name: String,
-	encryption: String,
-	native_type: String
+fn determine_encryption(native_type: &String) -> EncryptionType {
+	if native_type.contains("VARCHAR") {
+		EncryptionType::Varchar(50) // TODO hard coded display..
+	} else {
+		match native_type as &str {
+			"INTEGER" => EncryptionType::U64,
+			"DOUBLE" => EncryptionType::F64,
+			_ => panic!("Unsupported native type {}", native_type)
+		}
+	}
 }
 
 #[derive(Debug)]
-struct TableConfig {
+pub enum EncryptionType {
+	U64,
+	Varchar(u32),
+	F64,
+}
+
+#[derive(Debug)]
+pub struct ColumnConfig {
+	pub name: String,
+	pub encryption: EncryptionType,
+	pub native_type: String
+}
+
+#[derive(Debug)]
+pub struct TableConfig {
 	name: String,
 	column_map: HashMap<String, ColumnConfig>
 }
@@ -148,7 +167,7 @@ impl TableConfigBuilder {
 }
 
 #[derive(Debug)]
-struct SchemaConfig {
+pub struct SchemaConfig {
 	name: String,
 	table_map: HashMap<String, TableConfig>
 }
@@ -177,12 +196,12 @@ impl SchemaConfigBuilder {
 	}
 }
 
-struct ConnectionConfig {
+pub struct ConnectionConfig {
 	//TODO
 }
 
 #[derive(Debug)]
-struct Config {
+pub struct Config {
 	schema_map: HashMap<String, SchemaConfig>,
 	//connection_config : ConnectionConfig
 }
@@ -206,19 +225,39 @@ impl ConfigBuilder {
 	}
 }
 
-trait TConfig {
-	fn get_column_config(schema: &'static str, table: &'static str, column: &'static str) -> Option<ColumnConfig>;
-	fn get_table_config(schema: &'static str, table: &'static str) -> Option<ColumnConfig>;
-	fn get_schema_config(schema: &'static str) -> Option<SchemaConfig>;
+pub trait TConfig {
+	fn get_column_config(&self, schema: &'static str, table: &'static str, column: &'static str) -> Option<ColumnConfig>;
+	fn get_table_config(&self, schema: &'static str, table: &'static str) -> Option<ColumnConfig>;
+	fn get_schema_config(&self, schema: &'static str) -> Option<SchemaConfig>;
 
-	fn get_connection_config();
+	fn get_connection_config(&self);
 }
 
-trait TSchemaConfig {
+impl TConfig for Config {
+
+	fn get_column_config(&self, schema: &'static str, table: &'static str, column: &'static str) -> Option<ColumnConfig> {
+		panic!("get_column_config() not implemented");
+	}
+
+	fn get_table_config(&self, schema: &'static str, table: &'static str) -> Option<ColumnConfig> {
+		panic!("get_table_config() not implemented");
+	}
+
+	fn get_schema_config(&self, schema: &'static str) -> Option<SchemaConfig> {
+		panic!("get_table_config() not implemented");
+	}
+
+	fn get_connection_config(&self) {
+		panic!("get_table_config() not implemented");
+	}
+
+}
+
+pub trait TSchemaConfig {
 	fn get_table_config(table: &'static str) -> Option<TableConfig>;
 }
 
-trait TTableConfig {
+pub trait TTableConfig {
 	fn get_column_config(column: &'static str) -> Option<ColumnConfig>;
 }
 

@@ -1,48 +1,26 @@
+extern crate config;
+use self::config::{EncryptionType, Config, TConfig};
 use super::visitor::*;
 use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator, SQLUnionType, SQLJoinType};
 use std::collections::HashMap;
 
-enum EncType {
-	PlainText,
-	AES,
-	OPE
-}
-
-trait ConfigGetter {
-	fn get(&self, schema: &'static str, table: &'static str, column: &'static str) -> Option<&EncType>;
-}
-pub struct Config {
-	conf: HashMap<String, EncType>,
-}
-impl ConfigGetter for Config {
-	fn get(&self, schema: &'static str, table: &'static str, column: &'static str) -> Option<&EncType> {
-		// TODO do better...
-		let mut key = String::new();
-		key = format!("{}.{}.{}",
-	        schema,
-	        table,
-	        column
-	    );
-		self.conf.get(&key)
-	}
-}
-
 trait Encrypt {
-	fn encrypt(self, scheme: &EncType) -> String;
+	fn encrypt(self, scheme: &EncryptionType) -> String;
 }
 
 impl Encrypt for u64 {
-	fn encrypt(self, scheme: &EncType) -> String {
+	fn encrypt(self, scheme: &EncryptionType) -> String {
 		String::from("fooness")
 	}
 }
 
+#[derive(Debug)]
 struct EncryptionVisitor {
 	config: Config,
 	valuemap: HashMap<u32, String>
 }
 impl SQLExprVisitor for EncryptionVisitor {
-	fn visit_sql_expr(&self, expr: SQLExpr) {
+	fn visit_sql_expr(&mut self, expr: SQLExpr) {
 		match expr {
 			SQLExpr::SQLSelect{expr_list, relation, selection, order} => {
 				self.visit_sql_expr(*expr_list);
@@ -62,41 +40,34 @@ impl SQLExprVisitor for EncryptionVisitor {
 				}
 			},
 			SQLExpr::SQLBinary{left, op, right} => {
-				println!("HERE");
-				// match op {
-				// 	// TODO Messy...clean up
-				// 	SQLOperator::EQ => {
-				// 		let mut ret= match left {
-				// 			box SQLExpr::SQLIdentifier(v) => {
-				// 				match right {
-				// 					box SQLExpr::SQLLiteral(l) => {
-				// 						let encr = self.config.get("s", "tOne", "a");
-				// 						if (encr.is_some()) {
-				// 							match l {
-				// 								LiteralExpr::LiteralLong(i,value) => {
-				// 									// TODO Lifetimes of immutable self...
-				// 									self.valuemap.insert(i, value.encrypt(encr.unwrap()));
-				// 								}
-				// 								_ => panic!("Unsupported")
-				// 							}
-				// 						}
-				// 						true
-				// 					},
-				// 					_ => false
-				// 				}
-				// 			},
-				// 			_ => false
-				// 		};
-				// 		if ret {
-				// 			// ret = match right {
-				// 			// 	box SQLExpr::SQLIdentifier(v) => Some(v),
-				// 			// 	_ => None
-				// 			// };
-				// 			panic!("HERE")
-				// 		}
-				// 	}
-				// 	_ => {}
-				// }
+				//println!("HERE");
+				match op {
+					// TODO Messy...clean up
+					SQLOperator::EQ => {
+						let mut ret= match left {
+							box SQLExpr::SQLIdentifier(v) => {
+								match right {
+									box SQLExpr::SQLLiteral(l) => {
+										let mut col = self.config.get_column_config("s", "tOne", "a");
+										if (col.is_some()) {
+											match l {
+												LiteralExpr::LiteralLong(i,value) => {
+													// TODO Lifetimes of immutable self...
+													self.valuemap.insert(i, value.encrypt(&col.unwrap().encryption));
+												}
+												_ => panic!("Unsupported")
+											}
+										}
+										true
+									},
+									_ => false
+								}
+							},
+							_ => false
+						};
+					}
+					_ => {}
+				}
 
 				// self.visit_sql_expr(*left);
 				// self.visit_sql_expr(*right);
@@ -139,11 +110,11 @@ impl SQLExprVisitor for EncryptionVisitor {
 		}
 	}
 
-	fn visit_sql_lit_expr(&self, lit: LiteralExpr) {
+	fn visit_sql_lit_expr(&mut self, lit: LiteralExpr) {
 		panic!("visit_sql_lit_expr() not implemented");
 	}
 
-	fn visit_sql_operator(&self, op: SQLOperator) {
+	fn visit_sql_operator(&mut self, op: SQLOperator) {
 		panic!("visit_sql_operator() not implemented");
 	}
 }
@@ -156,7 +127,7 @@ pub fn walk(visitor: &mut SQLExprVisitor, e: SQLExpr) {
 mod tests {
 	use super::super::sql_parser::AnsiSQLParser;
 	use super::*;
-	use super::{EncryptionVisitor, EncType};
+	use super::{EncryptionVisitor};
 	use std::collections::HashMap;
 
 	#[test]
@@ -165,15 +136,14 @@ mod tests {
 		let sql = "SELECT a, b, c FROM tOne WHERE a = 1";
 		let parsed = parser.parse(sql);
 
-		let mut configMap: HashMap<String, EncType> = HashMap::new();
-		configMap.insert(String::from("s.tOne.a"), EncType::AES);
-		let config = Config{conf: configMap};
-
+		let config = super::config::parse_config("../config/src/demo-client-config.xml");
 		let mut valueMap: HashMap<u32, String> = HashMap::new();
 		let mut encrypt_vis = EncryptionVisitor {
 			config: config,
 			valuemap: valueMap
 		};
 		 walk(&mut encrypt_vis, parsed);
+
+		 println!("HERE {:#?}", encrypt_vis);
 	}
 }
