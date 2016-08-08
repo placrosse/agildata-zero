@@ -78,11 +78,11 @@ fn next_token(it: &mut Peekable<Chars>, lit_index: &AtomicU32) -> Result<Option<
                     Ok(Some(Token::Literal(LiteralToken::LiteralLong(lit_index.fetch_add(1, Ordering::SeqCst), text))))
                 }
             },
-            'a'...'z' | 'A'...'Z' => {
+            'a'...'z' | 'A'...'Z' => { // TODO this should really be any valid char for an identifier..
                 let mut text = String::new();
                 while let Some(&c) = it.peek() { // will break when it.peek() => None
 
-                    if c.is_alphabetic() || c == '.' {
+                    if c.is_alphabetic() || c == '.' || c =='_' {
                         text.push(c);
                     } else {
                         break; // leave the loop early

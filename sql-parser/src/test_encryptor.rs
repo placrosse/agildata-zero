@@ -19,6 +19,7 @@ struct EncryptionVisitor {
 	config: Config,
 	valuemap: HashMap<u32, String>
 }
+
 impl SQLExprVisitor for EncryptionVisitor {
 	fn visit_sql_expr(&mut self, expr: SQLExpr) {
 		match expr {
@@ -48,7 +49,7 @@ impl SQLExprVisitor for EncryptionVisitor {
 							box SQLExpr::SQLIdentifier(v) => {
 								match right {
 									box SQLExpr::SQLLiteral(l) => {
-										let mut col = self.config.get_column_config("s", "tOne", "a");
+										let mut col = self.config.get_column_config(&String::from("babel"), &String::from("users"), &String::from("age"));
 										if (col.is_some()) {
 											match l {
 												LiteralExpr::LiteralLong(i,value) => {
@@ -133,7 +134,7 @@ mod tests {
 	#[test]
 	fn test_visitor() {
 		let parser = AnsiSQLParser {};
-		let sql = "SELECT a, b, c FROM tOne WHERE a = 1";
+		let sql = "SELECT age, first_name, last_name FROM users WHERE age = 1";
 		let parsed = parser.parse(sql);
 
 		let config = super::config::parse_config("../config/src/demo-client-config.xml");

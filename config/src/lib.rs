@@ -91,13 +91,8 @@ fn parse_table_config(builder: &mut TableConfigBuilder, children: Vec<Xml>) {
 					let encryption = get_attr_or_fail("encryption", &e);
 					builder.add_column(ColumnConfig{
 						name: name,
-<<<<<<< HEAD
-						encryption: determine_encryption(&native_type),
-						native_type: native_type
-=======
 						encryption: determine_encryption(&encryption),
 						native_type: determine_native_type(&native_type)
->>>>>>> master
 					});
 
 				},
@@ -115,15 +110,6 @@ fn get_attr_or_fail(name: &'static str, element: &xml::Element) -> String {
 	}
 }
 
-<<<<<<< HEAD
-fn determine_encryption(native_type: &String) -> EncryptionType {
-	if native_type.contains("VARCHAR") {
-		EncryptionType::Varchar(50) // TODO hard coded display..
-	} else {
-		match native_type as &str {
-			"INTEGER" => EncryptionType::U64,
-			"DOUBLE" => EncryptionType::F64,
-=======
 fn determine_native_type(native_type: &String) -> NativeType {
 	if native_type.contains("VARCHAR") {
 		NativeType::Varchar(50) // TODO hard coded display..
@@ -131,29 +117,11 @@ fn determine_native_type(native_type: &String) -> NativeType {
 		match native_type as &str {
 			"INTEGER" => NativeType::U64,
 			"DOUBLE" => NativeType::F64,
->>>>>>> master
 			_ => panic!("Unsupported native type {}", native_type)
 		}
 	}
 }
 
-<<<<<<< HEAD
-#[derive(Debug)]
-pub enum EncryptionType {
-	U64,
-	Varchar(u32),
-	F64,
-}
-
-#[derive(Debug)]
-pub struct ColumnConfig {
-	pub name: String,
-	pub encryption: EncryptionType,
-	pub native_type: String
-}
-
-#[derive(Debug)]
-=======
 fn determine_encryption(encryption: &String) -> EncryptionType {
 	match &encryption.to_uppercase() as &str {
 		"AES" => EncryptionType::AES,
@@ -188,7 +156,6 @@ pub struct ColumnConfig {
 }
 
 #[derive(Debug)]
->>>>>>> master
 pub struct TableConfig {
 	name: String,
 	column_map: HashMap<String, ColumnConfig>
@@ -278,25 +245,31 @@ impl ConfigBuilder {
 }
 
 pub trait TConfig {
-	fn get_column_config(&self, schema: &'static str, table: &'static str, column: &'static str) -> Option<ColumnConfig>;
-	fn get_table_config(&self, schema: &'static str, table: &'static str) -> Option<ColumnConfig>;
-	fn get_schema_config(&self, schema: &'static str) -> Option<SchemaConfig>;
+	fn get_column_config(&self, schema: &String, table: &String, column: &String) -> Option<&ColumnConfig>;
+	fn get_table_config(&self, schema: &String, table: &String) -> Option<&TableConfig>;
+	fn get_schema_config(&self, schema: &String) -> Option<&SchemaConfig>;
 
 	fn get_connection_config(&self);
 }
 
 impl TConfig for Config {
 
-	fn get_column_config(&self, schema: &'static str, table: &'static str, column: &'static str) -> Option<ColumnConfig> {
-		panic!("get_column_config() not implemented");
+	fn get_column_config(&self, schema: &String, table: &String, column: &String) -> Option<&ColumnConfig> {
+		match self.get_table_config(schema, table) {
+			Some(t) => t.get_column_config(table),
+			None => None
+		}
 	}
 
-	fn get_table_config(&self, schema: &'static str, table: &'static str) -> Option<ColumnConfig> {
-		panic!("get_table_config() not implemented");
+	fn get_table_config(&self, schema: &String, table: &String) -> Option<&TableConfig> {
+		match self.get_schema_config(schema) {
+			Some(s) => s.get_table_config(table),
+			None => None
+		}
 	}
 
-	fn get_schema_config(&self, schema: &'static str) -> Option<SchemaConfig> {
-		panic!("get_table_config() not implemented");
+	fn get_schema_config(&self, schema: &String) -> Option<&SchemaConfig> {
+		self.schema_map.get(schema)
 	}
 
 	fn get_connection_config(&self) {
@@ -306,11 +279,23 @@ impl TConfig for Config {
 }
 
 pub trait TSchemaConfig {
-	fn get_table_config(table: &'static str) -> Option<TableConfig>;
+	fn get_table_config(&self, table: &String) -> Option<&TableConfig>;
+}
+
+impl TSchemaConfig for SchemaConfig {
+	fn get_table_config(&self, table: &String) -> Option<&TableConfig> {
+		self.table_map.get(table)
+	}
 }
 
 pub trait TTableConfig {
-	fn get_column_config(column: &'static str) -> Option<ColumnConfig>;
+	fn get_column_config(&self, column: &String) -> Option<&ColumnConfig>;
+}
+
+impl TTableConfig for TableConfig {
+	fn get_column_config(&self, column: &String) -> Option<&ColumnConfig> {
+		self.column_map.get(column)
+	}
 }
 
 #[cfg(test)]
