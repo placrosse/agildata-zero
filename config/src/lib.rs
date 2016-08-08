@@ -245,25 +245,31 @@ impl ConfigBuilder {
 }
 
 pub trait TConfig {
-	fn get_column_config(&self, schema: &'static str, table: &'static str, column: &'static str) -> Option<ColumnConfig>;
-	fn get_table_config(&self, schema: &'static str, table: &'static str) -> Option<ColumnConfig>;
-	fn get_schema_config(&self, schema: &'static str) -> Option<SchemaConfig>;
+	fn get_column_config(&self, schema: &String, table: &String, column: &String) -> Option<&ColumnConfig>;
+	fn get_table_config(&self, schema: &String, table: &String) -> Option<&TableConfig>;
+	fn get_schema_config(&self, schema: &String) -> Option<&SchemaConfig>;
 
 	fn get_connection_config(&self);
 }
 
 impl TConfig for Config {
 
-	fn get_column_config(&self, schema: &'static str, table: &'static str, column: &'static str) -> Option<ColumnConfig> {
-		panic!("get_column_config() not implemented");
+	fn get_column_config(&self, schema: &String, table: &String, column: &String) -> Option<&ColumnConfig> {
+		match self.get_table_config(schema, table) {
+			Some(t) => t.get_column_config(column),
+			None => None
+		}
 	}
 
-	fn get_table_config(&self, schema: &'static str, table: &'static str) -> Option<ColumnConfig> {
-		panic!("get_table_config() not implemented");
+	fn get_table_config(&self, schema: &String, table: &String) -> Option<&TableConfig> {
+		match self.get_schema_config(schema) {
+			Some(s) => s.get_table_config(table),
+			None => None
+		}
 	}
 
-	fn get_schema_config(&self, schema: &'static str) -> Option<SchemaConfig> {
-		panic!("get_table_config() not implemented");
+	fn get_schema_config(&self, schema: &String) -> Option<&SchemaConfig> {
+		self.schema_map.get(schema)
 	}
 
 	fn get_connection_config(&self) {
@@ -273,11 +279,23 @@ impl TConfig for Config {
 }
 
 pub trait TSchemaConfig {
-	fn get_table_config(table: &'static str) -> Option<TableConfig>;
+	fn get_table_config(&self, table: &String) -> Option<&TableConfig>;
+}
+
+impl TSchemaConfig for SchemaConfig {
+	fn get_table_config(&self, table: &String) -> Option<&TableConfig> {
+		self.table_map.get(table)
+	}
 }
 
 pub trait TTableConfig {
-	fn get_column_config(column: &'static str) -> Option<ColumnConfig>;
+	fn get_column_config(&self, column: &String) -> Option<&ColumnConfig>;
+}
+
+impl TTableConfig for TableConfig {
+	fn get_column_config(&self, column: &String) -> Option<&ColumnConfig> {
+		self.column_map.get(column)
+	}
 }
 
 #[cfg(test)]
@@ -287,6 +305,7 @@ mod tests {
 	#[test]
 	fn config_test() {
 		let config = super::parse_config("./src/demo-client-config.xml");
-		println!("Config {:#?}", config);
+		println!("CONFIG {:#?}", config);
+		println!("HERE {:#?}", config.get_column_config(&String::from("babel"), &String::from("users"), &String::from("age")))
 	}
 }
