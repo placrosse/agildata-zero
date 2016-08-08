@@ -16,6 +16,25 @@ use std::fs::File;
 use std::ops::Deref;
 use std::sync::mpsc::channel;
 
+// pub enum EncScheme {
+//
+// }
+//
+// trait Encryptable {
+//     fn encrypt(&self, scheme: EncScheme) -> Option<Vec<u8>>;
+//     fn decrypt(&self, scheme: EncScheme) -> Option<Vec<u8>>;
+// }
+//
+// impl Encryptable for String { …. }
+//
+// if let Some(scheme) = get_enc_scheme(table, col) {
+//
+// let new_value = value.encrypt(scheme);
+//
+// }
+//
+
+
 const FILE: &'static str = "./babel.key";
 
 lazy_static! {
