@@ -256,7 +256,7 @@ impl TConfig for Config {
 
 	fn get_column_config(&self, schema: &String, table: &String, column: &String) -> Option<&ColumnConfig> {
 		match self.get_table_config(schema, table) {
-			Some(t) => t.get_column_config(table),
+			Some(t) => t.get_column_config(column),
 			None => None
 		}
 	}
@@ -305,6 +305,7 @@ mod tests {
 	#[test]
 	fn config_test() {
 		let config = super::parse_config("./src/demo-client-config.xml");
-		println!("Config {:#?}", config);
+		println!("CONFIG {:#?}", config);
+		println!("HERE {:#?}", config.get_column_config(&String::from("babel"), &String::from("users"), &String::from("age")))
 	}
 }
