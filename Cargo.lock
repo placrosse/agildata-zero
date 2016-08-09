@@ -1,6 +1,9 @@
 [root]
 name = "sql-parser"
 version = "0.1.0"
+dependencies = [
+ "config 0.1.0",
+]
 
 [[package]]
 name = "RustyXML"
