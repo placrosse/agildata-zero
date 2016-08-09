@@ -52,11 +52,17 @@ struct MySQLPacketReader {
 impl MySQLPacketReader {
 
     fn read_lenenc_str(&mut self) -> String {
+        println!("read_lenenc_str BEGIN pos={}", self.pos);
         //TODO: HACK: assume single byte for length for now
         let n = self.payload[self.pos] as usize;
-        self.pos += n + 1;
+        self.pos += 1;
 
-        parse_string(&self.payload[self.pos..self.pos+n])
+        println!("read_lenenc_str str_len={}", n);
+
+        let s = parse_string(&self.payload[self.pos..self.pos+n]);
+        self.pos += n;
+        s
+
     }
 
     // fn read_bytes(len: usize) -> [u8] {
@@ -355,86 +361,85 @@ impl Connection {
 
         println!("Reading from MySQL...");
         let mut write_buf: Vec<u8> = Vec::new();
-        loop {
-            println!("Top of remote read loop..");
+        
+        let packet = self.remote.read_packet().unwrap();
+        let packet_type = packet.packet_type();
 
-            let packet = self.remote.read_packet().unwrap();
-            let packet_type = packet.packet_type();
+        println!("response packet type: {}", packet_type);
 
-            println!("response packet type: {}", packet_type);
+        match packet_type {
+            // break on receiving OK_Packet, Err_Packet, or EOF_Packet
+            0x00 | 0xfe | 0xff => {
+                println!("Got OK/ERR/EOF packet");
+                write_buf.extend_from_slice(&packet.header);
+                write_buf.extend_from_slice(&packet.payload);
+            },
+            0xfb => panic!("not implemented"),
+            _ => {
 
-            match packet_type {
-                // break on receiving OK_Packet, Err_Packet, or EOF_Packet
-                0x00 | 0xfe | 0xff => {
-                    write_buf.extend_from_slice(&packet.header);
-                    write_buf.extend_from_slice(&packet.payload);
-                    break
-                },
-                0xfb => panic!("not implemented"),
-                _ => {
+                println!("Got field_count packet");
 
-                    // first packet is field count
-                    write_buf.extend_from_slice(&packet.header);
-                    write_buf.extend_from_slice(&packet.payload);
+                // first packet is field count
+                write_buf.extend_from_slice(&packet.header);
+                write_buf.extend_from_slice(&packet.payload);
 
-                    //TODO: this assumes < 251 fields in result set
-                    let field_count = packet.payload[0] as u32;
+                //TODO: this assumes < 251 fields in result set
+                let field_count = packet.payload[0] as u32;
 
-                    println!("Result set has {} columns", field_count);
+                println!("Result set has {} columns", field_count);
 
-                    for i in 0 .. field_count {
+                for i in 0 .. field_count {
 
-                        let field_packet = self.remote.read_packet().unwrap();
-                        write_buf.extend_from_slice(&field_packet.header);
-                        write_buf.extend_from_slice(&field_packet.payload);
+                    let field_packet = self.remote.read_packet().unwrap();
+                    write_buf.extend_from_slice(&field_packet.header);
+                    write_buf.extend_from_slice(&field_packet.payload);
 
-                        let mut r = MySQLPacketReader { payload: field_packet.payload, pos: 0 };
+                    let mut r = MySQLPacketReader { payload: field_packet.payload, pos: 0 };
 
-                        let catalog = r.read_lenenc_str();
-                        let schema = r.read_lenenc_str();
-                        let table = r.read_lenenc_str();
-                        let org_table = r.read_lenenc_str();
-                        let name = r.read_lenenc_str();
-                        let org_name = r.read_lenenc_str();
+                    let catalog = r.read_lenenc_str();
+                    let schema = r.read_lenenc_str();
+                    let table = r.read_lenenc_str();
+                    let org_table = r.read_lenenc_str();
+                    let name = r.read_lenenc_str();
+                    let org_name = r.read_lenenc_str();
 
-                        println!("column {}: table={}, column={}", i, table, name);
+                    println!("column {}: table={}, column={}", i, table, name);
 
-                    }
+                }
 
-                    // expect EOF packet
-                    let eof_packet = self.remote.read_packet().unwrap();
-                    assert!(0xff == eof_packet.packet_type());
-                    write_buf.extend_from_slice(&eof_packet.header);
-                    write_buf.extend_from_slice(&eof_packet.payload);
+                // expect EOF packet
+                let eof_packet = self.remote.read_packet().unwrap();
+                println!("eof_packet type = {}", eof_packet.packet_type());
 
-                    // process row packets until ERR or EOF
-                    loop {
-                        let row_packet = self.remote.read_packet().unwrap();
-                        match row_packet.packet_type() {
-                            // break on receiving Err_Packet, or EOF_Packet
-                            0xfe | 0xff => {
-                                write_buf.extend_from_slice(&row_packet.header);
-                                write_buf.extend_from_slice(&row_packet.payload);
-                                break
-                            },
+                //assert!(0xfe == eof_packet.packet_type());
 
-                            _ => {
-                                println!("Received row");
+                write_buf.extend_from_slice(&eof_packet.header);
+                write_buf.extend_from_slice(&eof_packet.payload);
 
-                                //TODO do decryption here if required
+                // process row packets until ERR or EOF
+                loop {
+                    let row_packet = self.remote.read_packet().unwrap();
+                    match row_packet.packet_type() {
+                        // break on receiving Err_Packet, or EOF_Packet
+                        0xfe | 0xff => {
 
-                                write_buf.extend_from_slice(&row_packet.header);
-                                write_buf.extend_from_slice(&row_packet.payload);
-                            }
+                            println!("End of result rows");
+                            write_buf.extend_from_slice(&row_packet.header);
+                            write_buf.extend_from_slice(&row_packet.payload);
+                            break
+                        },
+
+                        _ => {
+                            println!("Received row");
+
+                            //TODO do decryption here if required
+
+                            write_buf.extend_from_slice(&row_packet.header);
+                            write_buf.extend_from_slice(&row_packet.payload);
                         }
                     }
                 }
             }
-
-            // if packet_type == 0x00 || packet_type == 0xfe || packet_type == 0xff {
-            //     println!("breaking out of read loop");
-            //     break;
-            // }
         }
 
         println!("Setting state to writing..");
