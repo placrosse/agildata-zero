@@ -284,9 +284,7 @@ impl Connection {
 
                                 // parse query
                                 let parser = AnsiSQLParser {};
-                                let result = std::panic::catch_unwind(|| {
-                                    parser.parse(&query)
-                                });
+                                let result = parser.parse(&query);
 
                                 let parsed: Option<SQLExpr> = match result {
                                     Ok(p) => Some(p),
