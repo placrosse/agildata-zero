@@ -76,7 +76,7 @@ pub struct AnsiSQLParser{}
 impl AnsiSQLParser {
 
 	pub fn parse(&self, sql: &str) -> Result<SQLExpr,  String> {
-		let tvec = String::from(sql).tokenize().unwrap();
+		let tvec = try!(String::from(sql).tokenize());
 		let mut stream = (Tokens {tokens: tvec, index: 0}).peekable();
 		self.parse_expr(&mut stream, 0u32)
 	}
