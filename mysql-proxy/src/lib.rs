@@ -12,10 +12,14 @@ use mio::util::Slab;
 use bytes::{Buf, Take};
 use std::mem;
 use std::io::Cursor;
+use std::str::FromStr;
 
 extern crate sql_parser;
 use sql_parser::sql_parser::*;
 use sql_parser::sql_writer;
+
+extern crate config;
+use config::*;
 
 const SERVER: mio::Token = mio::Token(0);
 
@@ -77,15 +81,18 @@ fn read_packet_length(header: &[u8]) -> usize {
     header[0] as u32) as usize
 }
 
-pub struct Proxy {
+pub struct Proxy<'a> {
     server: TcpListener,
-    connections: Slab<Connection>,
+    connections: Slab<Connection<'a>>,
+    config: &'a Config
 }
 
-impl Proxy {
+impl<'a> Proxy<'a> {
 
-    pub fn run(bind_host: String, bind_port: u16) {
+    pub fn run(config: &Config) {
 
+        let bind_host = config.get_client_config().props.get("host").unwrap().clone();
+        let bind_port = u16::from_str(config.get_client_config().props.get("port").unwrap()).unwrap();
         let bind_addr = format!("{}:{}", bind_host, bind_port);
 
         let address = &bind_addr.parse().unwrap();
@@ -101,7 +108,8 @@ impl Proxy {
 
         let mut proxy = Proxy {
             server: server,
-            connections: slab
+            connections: slab,
+            config: config
         };
 
         println!("running MySQLProxy server on host {} port {}", bind_host, bind_port);
@@ -109,7 +117,7 @@ impl Proxy {
     }
 }
 
-impl mio::Handler for Proxy {
+impl<'a> mio::Handler for Proxy<'a> {
     type Timeout = ();
     type Message = ();
 
@@ -125,8 +133,9 @@ impl mio::Handler for Proxy {
                         println!("accepted a new client socket");
 
                         // This will fail when the connection cap is reached
+                        let config = self.config;
                         let token = self.connections
-                            .insert_with(|token| Connection::new(socket, token))
+                            .insert_with(|token| Connection::new(socket, token, config))
                             .unwrap();
 
                         // Register the connection with the event loop.
@@ -195,16 +204,17 @@ impl MySQLConnection for std::net::TcpStream {
 
 
 #[derive(Debug)]
-struct Connection {
+struct Connection<'a> {
     socket: TcpStream,
     token: mio::Token,
     state: State,
     remote: std::net::TcpStream,
+    config: &'a Config
     //authenticating: bool
 }
 
-impl Connection {
-    fn new(socket: TcpStream, token: mio::Token) -> Connection {
+impl<'a> Connection<'a> {
+    fn new(socket: TcpStream, token: mio::Token, config: &Config) -> Connection {
         println!("Creating remote connection...");
         // let ip  = std::net::Ipv4Addr::new(127,0,0,1);
         // let saddr = std::net::SocketAddr::new(std::net::IpAddr::V4(ip), 3306);
@@ -229,6 +239,7 @@ impl Connection {
             token: token,
             state: State::Writing(Take::new(buf, auth_packet.payload.len()+4)),
             remote: realtcps,
+            config: &config
             // authenticating: true
         }
     }

@@ -249,6 +249,7 @@ version = "0.1.0"
 dependencies = [
  "byteorder 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
+ "config 0.1.0",
  "mio 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "sql-parser 0.1.0",
 ]

@@ -76,9 +76,7 @@ fn main() {
     info!("{} is up", app_ver);
 
     // create proxy
-    let host = config.get_client_config().props.get("host").unwrap().clone();
-    let port = u16::from_str(config.get_client_config().props.get("port").unwrap()).unwrap();
-    Proxy::run(host, port);
+    Proxy::run(&config);
 
     while !chk_stop() { x_sleep(); }
 
