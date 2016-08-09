@@ -10,12 +10,12 @@ use sql_parser::sql_parser::{SQLExpr, LiteralExpr, SQLOperator, SQLUnionType, SQ
 use std::collections::HashMap;
 
 #[derive(Debug)]
-struct EncryptionVisitor {
-	config: Config,
-	valuemap: HashMap<u32, Option<Vec<u8>>>
+pub struct EncryptionVisitor<'a> {
+	pub config: &'a Config,
+	pub valuemap: HashMap<u32, Option<Vec<u8>>>
 }
 
-impl EncryptionVisitor {
+impl<'a> EncryptionVisitor<'a> {
 	fn is_identifier(&self, expr: &SQLExpr) -> bool {
 		match expr {
 			&SQLExpr::SQLIdentifier(_) => true,
@@ -31,7 +31,7 @@ impl EncryptionVisitor {
 	}
 }
 
-impl SQLExprVisitor for EncryptionVisitor {
+impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 	fn visit_sql_expr(&mut self, expr: SQLExpr) {
 		match expr {
 			SQLExpr::SQLSelect{expr_list, relation, selection, order} => {
@@ -142,7 +142,6 @@ pub fn walk(visitor: &mut SQLExprVisitor, e: SQLExpr) {
 mod tests {
 	use super::sql_parser::sql_parser::AnsiSQLParser;
 	use super::*;
-	use super::{EncryptionVisitor};
 	use std::collections::HashMap;
 
 	#[test]
@@ -157,7 +156,7 @@ mod tests {
 			config: config,
 			valuemap: valueMap
 		};
-		 walk(&mut encrypt_vis, parsed);
+		 walk(&mut encrypt_vis, &parsed);
 
 		 println!("HERE {:#?}", encrypt_vis);
 	}

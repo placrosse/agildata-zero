@@ -3,6 +3,8 @@
 
 mod encryption_visitor;
 
+use encryption_visitor::EncryptionVisitor;
+
 extern crate mio;
 extern crate bytes;
 extern crate byteorder;
@@ -25,6 +27,8 @@ extern crate config;
 use config::*;
 
 const SERVER: mio::Token = mio::Token(0);
+
+use std::collections::HashMap;
 
 #[derive(Debug)]
 struct MySQLPacket {
@@ -314,8 +318,17 @@ impl<'a> Connection<'a> {
 
                                 // visit and conditionally encrypt query
 
+
                                 // reqwrite query
                                 if parsed.is_some() {
+
+                                    // let mut value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
+                                    // let mut encrypt_vis = EncryptionVisitor {
+                                    //     config: self.config,
+                                    //     valuemap: value_map
+                                    // };
+                                    // encryption_visitor::walk(&mut encrypt_vis, parsed.unwrap());
+
                                     let rewritten = sql_writer::write(parsed.unwrap());
                                     println!("REWRITTEN {:?}", rewritten);
 
