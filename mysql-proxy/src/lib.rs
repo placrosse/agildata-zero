@@ -21,7 +21,7 @@ const SERVER: mio::Token = mio::Token(0);
 
 #[derive(Debug)]
 struct MySQLPacket {
-    header: Vec<u8>,
+    header: Vec<u8>, // 4 bytes - packet_len (3 bytes), sequence_id (1 byte)
     payload: Vec<u8>
 }
 
@@ -361,7 +361,7 @@ impl Connection {
 
         println!("Reading from MySQL...");
         let mut write_buf: Vec<u8> = Vec::new();
-        
+
         let packet = self.remote.read_packet().unwrap();
         let packet_type = packet.packet_type();
 
@@ -407,14 +407,14 @@ impl Connection {
 
                 }
 
-                // expect EOF packet
-                let eof_packet = self.remote.read_packet().unwrap();
-                println!("eof_packet type = {}", eof_packet.packet_type());
-
-                //assert!(0xfe == eof_packet.packet_type());
-
-                write_buf.extend_from_slice(&eof_packet.header);
-                write_buf.extend_from_slice(&eof_packet.payload);
+                //TODO: expect EOF packet in some versions of MySQL
+                // let eof_packet = self.remote.read_packet().unwrap();
+                // println!("eof_packet type = {}", eof_packet.packet_type());
+                //
+                // //assert!(0xfe == eof_packet.packet_type());
+                //
+                // write_buf.extend_from_slice(&eof_packet.header);
+                // write_buf.extend_from_slice(&eof_packet.payload);
 
                 // process row packets until ERR or EOF
                 loop {
