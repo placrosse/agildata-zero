@@ -40,6 +40,31 @@ impl MySQLPacket {
 
 }
 
+fn parse_string(bytes: &[u8]) -> String {
+    String::from_utf8(bytes.to_vec()).expect("Invalid UTF-8")
+}
+
+struct MySQLPacketReader {
+    payload: Vec<u8>,
+    pos: usize
+}
+
+impl MySQLPacketReader {
+
+    fn read_lenenc_str(&mut self) -> String {
+        //TODO: HACK: assume single byte for length for now
+        let n = self.payload[self.pos] as usize;
+        self.pos += 1;
+
+        parse_string(&self.payload[self.pos..self.pos+n])
+    }
+
+    // fn read_bytes(len: usize) -> [u8] {
+    //     panic!("not implemented");
+    // }
+
+}
+
 fn read_packet_length(header: &[u8]) -> usize {
     (((header[2] as u32) << 16) |
     ((header[1] as u32) << 8) |
@@ -216,10 +241,6 @@ impl Connection {
         }
     }
 
-    fn parse_string(&mut self, bytes: &[u8]) -> String {
-        String::from_utf8(bytes.to_vec()).expect("Invalid UTF-8")
-    }
-
     fn read(&mut self, event_loop: &mut mio::EventLoop<Proxy>) {
 
         println!("Reading from client");
@@ -256,7 +277,7 @@ impl Connection {
                             0x03 => {
                                 println!("0x03");
 
-                                let query = self.parse_string(&buf[5 as usize .. (packet_len+4) as usize]);
+                                let query = parse_string(&buf[5 as usize .. (packet_len+4) as usize]);
                                 println!("QUERY : {:?}", query);
 
                                 // mutate with builder
@@ -340,19 +361,46 @@ impl Connection {
             println!("Top of remote read loop..");
 
             let packet = self.remote.read_packet().unwrap();
-
-            write_buf.extend_from_slice(&packet.header);
-            write_buf.extend_from_slice(&packet.payload);
-
             let packet_type = packet.packet_type();
 
             println!("response packet type: {}", packet_type);
 
-            // break on receiving OK_Packet, Err_Packet, or EOF_Packet
-            if packet_type == 0x00 || packet_type == 0xfe || packet_type == 0xff {
-                println!("breaking out of read loop");
-                break;
+            match packet_type {
+                // break on receiving OK_Packet, Err_Packet, or EOF_Packet
+                0x00 | 0xfe | 0xff => {
+                    write_buf.extend_from_slice(&packet.header);
+                    write_buf.extend_from_slice(&packet.payload);
+                    break
+                },
+                0xfb => panic!("not implemented"),
+                _ => {
+
+                    write_buf.extend_from_slice(&packet.header);
+                    write_buf.extend_from_slice(&packet.payload);
+
+                    //TODO: this assumes < 251 fields in result set
+                    let field_count = packet.payload[0] as u32;
+
+                    for i in 0 .. field_count {
+
+                        let field_packet = self.remote.read_packet().unwrap();
+
+
+                        write_buf.extend_from_slice(&field_packet.header);
+                        write_buf.extend_from_slice(&field_packet.payload);
+
+                    }
+
+
+
+
+                }
             }
+
+            // if packet_type == 0x00 || packet_type == 0xfe || packet_type == 0xff {
+            //     println!("breaking out of read loop");
+            //     break;
+            // }
         }
 
         println!("Setting state to writing..");
