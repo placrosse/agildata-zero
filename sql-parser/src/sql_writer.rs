@@ -61,7 +61,10 @@ fn _write(builder: &mut String, node: SQLExpr) {
 				write!(builder, " {}", d).unwrap();
 			},
 			LiteralExpr::LiteralString(i, s) => {
-				write!(builder, " '{}'", s).unwrap();
+				// let quote = """'""";
+				// write!(builder, " {}", quote).unwrap();
+				write!(builder, "'{}'", s).unwrap(); // TODO write! is auto escaping the single quotes...
+				// write!(builder, "{}", quote).unwrap();
 			}
 			//_ => panic!("Unsupported literal for writing {:?}", lit)
 		},
