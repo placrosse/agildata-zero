@@ -54,7 +54,7 @@ impl MySQLPacketReader {
     fn read_lenenc_str(&mut self) -> String {
         //TODO: HACK: assume single byte for length for now
         let n = self.payload[self.pos] as usize;
-        self.pos += 1;
+        self.pos += n + 1;
 
         parse_string(&self.payload[self.pos..self.pos+n])
     }
@@ -375,6 +375,7 @@ impl Connection {
                 0xfb => panic!("not implemented"),
                 _ => {
 
+                    // first packet is field count
                     write_buf.extend_from_slice(&packet.header);
                     write_buf.extend_from_slice(&packet.payload);
 
@@ -383,13 +384,22 @@ impl Connection {
 
                     for i in 0 .. field_count {
 
-                        let field_packet = self.remote.read_packet().unwrap();
-
-
+                        let mut field_packet = self.remote.read_packet().unwrap();
                         write_buf.extend_from_slice(&field_packet.header);
                         write_buf.extend_from_slice(&field_packet.payload);
 
+                        let catalog = field_packet.read_lenenc_str();
+                        let schema = field_packet.read_lenenc_str();
+                        let table = field_packet.read_lenenc_str();
+                        let org_table = field_packet.read_lenenc_str();
+                        let name = field_packet.read_lenenc_str();
+                        let org_name = field_packet.read_lenenc_str();
+
+                        println!("result meta: table={}, column={}", table, name);
+
                     }
+
+
 
 
 
