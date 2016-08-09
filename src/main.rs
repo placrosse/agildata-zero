@@ -93,6 +93,9 @@ fn main() {
 
     info!("{} is up", app_ver);
 
+    // create proxy
+    run_proxy();
+    
     while !chk_stop() { x_sleep(); }
 
     x_sleep();
