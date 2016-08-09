@@ -9,8 +9,6 @@ use self::notify::{RecommendedWatcher, Error, Watcher};
 
 use chrono::*;
 
-use ::Opts;
-
 use std::io::prelude::*;
 use std::fs::File;
 use std::ops::Deref;
@@ -78,7 +76,7 @@ fn ld_keys() {
     }
 }
 
-pub fn watch(_: Opts) {
+pub fn watch() {
     info!("encryption key monitor is up");
     let (tx, rx) = channel();
     let rw: Result<RecommendedWatcher, Error> = Watcher::new(tx);
