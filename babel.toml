@@ -1,0 +1,26 @@
+refresh_rate = 30
+
+[appenders.stdout]
+kind = "console"
+
+[root]
+level = "warn"
+appenders = ["stdout"]
+
+[loggers."babel"]
+level = "info"
+
+[loggers."babel::config"]
+level = "info"
+
+[loggers."babel::mysql-protocol"]
+level = "info"
+
+[loggers."babel::mysql-proxy"]
+level = "info"
+
+[loggers."babel::sql-parser"]
+level = "info"
+
+[loggers."babel::crypt"]
+level = "info"
