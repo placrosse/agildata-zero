@@ -243,22 +243,28 @@ impl Connection {
                     println!("incoming packet_len = {}", packet_len);
                     println!("Buf len {}", buf.len());
 
-                    match buf[4] {
-                        0x03 => {
-                            println!("0x03");
-
-                            let query = self.parse_string(&buf[5 as usize .. (packet_len+4) as usize]);
-                            println!("QUERY : {:?}", query);
-
-                            // parse query
-                            // visit and conditionally encrypt query
-                            // reqwrite query
-                            // handle packet with new query
-                        },
-                        _ => {}
-                    }
                     if buf.len() >= packet_len+4 {
-                        self.mysql_send(&buf[0 .. packet_len+4]);
+                        match buf[4] {
+                            0x03 => {
+                                println!("0x03");
+
+                                let query = self.parse_string(&buf[5 as usize .. (packet_len+4) as usize]);
+                                println!("QUERY : {:?}", query);
+
+                                // mutate with builder
+
+                                // parse query
+                                // visit and conditionally encrypt query
+                                // reqwrite query
+                                // handle packet with new query
+
+                                self.mysql_send(&buf[0 .. packet_len+4]);
+                            },
+                            _ => {
+                                self.mysql_send(&buf[0 .. packet_len+4]);
+                            }
+                        }
+                        // self.mysql_send(&buf[0 .. packet_len+4]);
 
                         //self.authenticating = false;
 
