@@ -27,6 +27,15 @@ fn _write(builder: &mut String, node: SQLExpr) {
 			}
 
 		},
+		SQLExpr::SQLInsert{table, column_list, values_list} => {
+			write!(builder, "{}", "INSERT INTO").unwrap();
+			_write(builder, *table);
+			write!(builder, " {}", "(");
+			_write(builder, *column_list);
+			write!(builder, "{}", ") VALUES(");
+			_write(builder, *values_list);
+			write!(builder, " {}", ")");
+		},
 		SQLExpr::SQLExprList(vector) => {
 			let mut sep = "";
 			for e in vector {
@@ -48,6 +57,12 @@ fn _write(builder: &mut String, node: SQLExpr) {
 			LiteralExpr::LiteralBool(i, b) => {
 				write!(builder, " {}", b).unwrap();
 			},
+			LiteralExpr::LiteralDouble(i, d) => {
+				write!(builder, " {}", d).unwrap();
+			},
+			LiteralExpr::LiteralString(i, s) => {
+				write!(builder, " '{}'", s).unwrap();
+			}
 			//_ => panic!("Unsupported literal for writing {:?}", lit)
 		},
 		SQLExpr::SQLAlias{expr, alias} => {

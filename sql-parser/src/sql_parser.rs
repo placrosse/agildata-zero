@@ -19,6 +19,11 @@ pub enum SQLExpr {
 		selection: Option<Box<SQLExpr>>,
 		order: Option<Box<SQLExpr>>
 	},
+	SQLInsert {
+		table: Box<SQLExpr>,
+		column_list: Box<SQLExpr>,
+		values_list: Box<SQLExpr>
+	},
 	SQLUnion{left: Box<SQLExpr>, union_type: SQLUnionType, right: Box<SQLExpr>},
 	SQLJoin{left: Box<SQLExpr>, join_type: SQLJoinType, right: Box<SQLExpr>, on_expr: Option<Box<SQLExpr>>}
 }
@@ -27,7 +32,9 @@ pub enum SQLExpr {
 #[derive(Debug)]
 pub enum LiteralExpr {
 	LiteralLong(u32, u64),
-	LiteralBool(u32, bool)
+	LiteralBool(u32, bool),
+	LiteralDouble(u32, f64),
+	LiteralString(u32, String)
 }
 
 #[derive(Debug)]
@@ -104,6 +111,7 @@ impl AnsiSQLParser {
 			Some(t) => match t {
 				Token::Keyword(ref v) => match &v as &str {
 					"SELECT" => Some(self.parse_select(tokens)),
+					"INSERT" => Some(self.parse_insert(tokens)),
 					_ => panic!("Unsupported prefix {}", v)
 				},
 				Token::Literal(v) => match v {
@@ -115,7 +123,15 @@ impl AnsiSQLParser {
 						tokens.next();
 						Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralBool(i, bool::from_str(&value).unwrap())))
 					},
-					_ => panic!("Unsupported literal {:?}", v)
+					LiteralToken::LiteralDouble(i, value) => {
+						tokens.next();
+						Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralDouble(i, f64::from_str(&value).unwrap())))
+					},
+					LiteralToken::LiteralString(i, value) => {
+						tokens.next();
+						Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralString(i, value.clone())))
+					}
+					//_ => panic!("Unsupported literal {:?}", v)
 				},
 				Token::Identifier(v) => Some(self.parse_identifier(tokens)),
 				Token::Punctuator(v) => match &v as &str {
@@ -182,6 +198,36 @@ impl AnsiSQLParser {
 			},
 			None => 0
 		}
+	}
+
+	fn parse_insert(&self, tokens: &mut Peekable<Tokens>) -> SQLExpr {
+		println!("parse_insert()");
+
+		// TODO validation
+		self.consume_keyword("INSERT", tokens);
+		self.consume_keyword("INTO", tokens);
+
+		let table = self.parse_identifier(tokens);
+
+		let columns = if self.consume_punctuator("(", tokens) {
+			let ret = self.parse_expr_list(tokens);
+			self.consume_punctuator(")", tokens);
+			ret
+		} else {
+			panic!("Expected column list paren, received {:?}", tokens.peek());
+		};
+
+		self.consume_keyword("VALUES", tokens);
+		self.consume_punctuator("(", tokens);
+		let values = self.parse_expr_list(tokens);
+		self.consume_keyword(")", tokens);
+
+		SQLExpr::SQLInsert {
+			table: Box::new(table),
+			column_list: Box::new(columns),
+			values_list: Box::new(values)
+		}
+
 	}
 
 	fn parse_select(&self, tokens: &mut Peekable<Tokens>) -> SQLExpr {
@@ -423,6 +469,20 @@ impl AnsiSQLParser {
 		}
 	}
 
+	fn consume_punctuator(&self, text: &str, tokens: &mut Peekable<Tokens>) -> bool {
+		match tokens.peek().cloned() {
+			Some(Token::Punctuator(v)) => {
+				if text.eq_ignore_ascii_case(&v) {
+					tokens.next();
+					true
+				} else {
+					false
+				}
+			},
+			_ => false
+		}
+	}
+
 }
 
 
@@ -489,5 +549,20 @@ mod tests {
 		let rewritten = sql_writer::write(parsed);
 
 		println!("Rewritten: {:?}", rewritten);
+	}
+
+	#[test]
+	fn insert() {
+		let parser = AnsiSQLParser {};
+		let sql = "INSERT INTO foo (a, b, c) VALUES(1, 20.45, 'abcdefghijk')";
+
+		let parsed = parser.parse(sql);
+
+		println!("{:#?}", parser.parse(sql));
+
+		let rewritten = sql_writer::write(parsed);
+
+		println!("Rewritten: {:?}", rewritten);
+
 	}
 }

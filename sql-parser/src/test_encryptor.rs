@@ -51,6 +51,9 @@ impl SQLExprVisitor for EncryptionVisitor {
 					self.visit_sql_expr(*order.unwrap());
 				}
 			},
+			SQLExpr::SQLInsert{table, column_list, values_list} => {
+				panic!("Not implemented");
+			},
 			SQLExpr::SQLExprList(vector) => {
 				for e in vector {
 					self.visit_sql_expr(e);
