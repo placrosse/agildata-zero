@@ -208,6 +208,10 @@ impl Connection {
         }
     }
 
+    fn parse_string(&mut self, bytes: &[u8]) -> String {
+        String::from_utf8(bytes.to_vec()).expect("Invalid UTF-8")
+    }
+
     fn read(&mut self, event_loop: &mut mio::EventLoop<Proxy>) {
 
         println!("Reading from client");
@@ -239,6 +243,30 @@ impl Connection {
                     println!("incoming packet_len = {}", packet_len);
                     println!("Buf len {}", buf.len());
 
+                    match buf[4] {
+                        0x01 => panic!("0x01"),
+                        0x02 => {
+                            panic!("0x02")
+                        //     Ok(MySQLPacket::COM_InitDB {
+                        //     db: parse_string(&bytes[5 as usize .. (packet_len+4) as usize])
+                        // })
+                        },
+                        0x03 => {
+                            //panic!("0x03")
+                            println!("0x03");
+
+                            let query = self.parse_string(&buf[5 as usize .. (packet_len+4) as usize]);
+                            println!("QUERY : {:?}", query);
+                        },
+                        // Ok(MySQLPacket::COM_Query {
+                        //     query: parse_string(&bytes[5 as usize .. (packet_len+4) as usize])
+                        // }),
+                        0x0e => {
+                            panic!("0x0e")
+                        },
+                        //Ok(MySQLPacket::COM_Ping),
+                        _ => {}//panic!("Unsupported packet type")
+                    }
                     if buf.len() >= packet_len+4 {
                         self.mysql_send(&buf[0 .. packet_len+4]);
 
