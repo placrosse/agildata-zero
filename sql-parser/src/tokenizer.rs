@@ -100,7 +100,7 @@ fn next_token(it: &mut Peekable<Chars>, lit_index: &AtomicU32) -> Result<Option<
                 } else {
                     Ok(Some(Token::Keyword(text)))
                 }
-            }
+            },
             '\'' => {
                 it.next();
                 let mut s = String::new();

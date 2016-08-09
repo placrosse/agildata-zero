@@ -1,3 +1,5 @@
+#![feature(recover, std_panic, panic_handler)]
+
 extern crate mio;
 extern crate bytes;
 
@@ -8,6 +10,10 @@ use mio::util::Slab;
 use bytes::{Buf, Take};
 use std::mem;
 use std::io::Cursor;
+
+extern crate sql_parser;
+use sql_parser::sql_parser::*;
+use sql_parser::sql_writer;
 
 const SERVER: mio::Token = mio::Token(0);
 
@@ -254,11 +260,35 @@ impl Connection {
                                 // mutate with builder
 
                                 // parse query
-                                // visit and conditionally encrypt query
-                                // reqwrite query
-                                // handle packet with new query
+                                let parser = AnsiSQLParser {};
+                                let result = std::panic::catch_unwind(|| {
+                                    parser.parse(&query)
+                                });
 
-                                self.mysql_send(&buf[0 .. packet_len+4]);
+                                let parsed: Option<SQLExpr> = match result {
+                                    Ok(p) => Some(p),
+                                    Err(e) => {
+                                        println!("Failed to parse due to {:?}", e);
+                                        None
+                                    }
+                                };
+
+                                // visit and conditionally encrypt query
+
+                                // reqwrite query
+                                if parsed.is_some() {
+                                    let rewritten = sql_writer::write(parsed.unwrap());
+                                    println!("REWRITTEN {:?}", rewritten);
+
+                                    // write packed with new query
+                                    //let n_buf: Vec<u8> = Vec::new();
+
+                                    self.mysql_send(&buf[0 .. packet_len+4]);
+
+                                } else {
+                                    self.mysql_send(&buf[0 .. packet_len+4]);
+                                }
+
                             },
                             _ => {
                                 self.mysql_send(&buf[0 .. packet_len+4]);

@@ -28,8 +28,6 @@ use mysql_protocol::*;
 extern crate mysql_proxy;
 use mysql_proxy::*;
 
-extern crate sql_parser;
-use sql_parser::*;
 
 static STOP: AtomicBool = ATOMIC_BOOL_INIT;
 fn ask_stop() { STOP.store(true, Ordering::SeqCst) }

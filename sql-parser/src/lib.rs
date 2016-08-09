@@ -1,9 +1,9 @@
 #![feature(integer_atomics)]
 #![feature(box_syntax, box_patterns)]
-mod tokenizer;
+pub mod tokenizer;
 mod legacy_parser;
 mod helper;
-mod sql_parser;
-mod sql_writer;
-mod visitor;
+pub mod sql_parser;
+pub mod sql_writer;
+pub mod visitor;
 mod test_encryptor;

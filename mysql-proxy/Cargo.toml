@@ -7,3 +7,4 @@ authors = ["Carl Lerche <me@carllerche.com>"]
 bytes = "0.2.10"
 mio = "0.4.4"
 byteorder = "*"
+sql-parser = { path = "../sql-parser", version="*" }
