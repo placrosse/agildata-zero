@@ -20,6 +20,22 @@ struct EncryptionVisitor {
 	valuemap: HashMap<u32, String>
 }
 
+impl EncryptionVisitor {
+	fn is_identifier(&self, expr: &SQLExpr) -> bool {
+		match expr {
+			&SQLExpr::SQLIdentifier(_) => true,
+			_ => false
+		}
+	}
+
+	fn is_literal(&self, expr: &SQLExpr) -> bool {
+		match expr {
+			&SQLExpr::SQLLiteral(_) => true,
+			_ => false
+		}
+	}
+}
+
 impl SQLExprVisitor for EncryptionVisitor {
 	fn visit_sql_expr(&mut self, expr: SQLExpr) {
 		match expr {
@@ -44,34 +60,34 @@ impl SQLExprVisitor for EncryptionVisitor {
 				//println!("HERE");
 				match op {
 					// TODO Messy...clean up
+					// TODO should check left and right
 					SQLOperator::EQ => {
-						let mut ret= match left {
-							box SQLExpr::SQLIdentifier(v) => {
+						if (self.is_identifier(&*left) && self.is_literal(&*right)) {
+							let ident = match left {
+								box SQLExpr::SQLIdentifier(v) => v,
+								_ => panic!("Unreachable")
+							};
+							let mut col = self.config.get_column_config(&String::from("babel"), &String::from("users"), &String::from("age"));
+							if (col.is_some()) {
 								match right {
-									box SQLExpr::SQLLiteral(l) => {
-										let mut col = self.config.get_column_config(&String::from("babel"), &String::from("users"), &String::from("age"));
-										if (col.is_some()) {
-											match l {
-												LiteralExpr::LiteralLong(i,value) => {
-													// TODO Lifetimes of immutable self...
-													self.valuemap.insert(i, value.encrypt(&col.unwrap().encryption));
-												}
-												_ => panic!("Unsupported")
-											}
-										}
-										true
+									box SQLExpr::SQLLiteral(l) => match l {
+										LiteralExpr::LiteralLong(i, val) => {
+											self.valuemap.insert(i, val.encrypt(&col.unwrap().encryption));
+										},
+										_ => panic!("Unsupported value type {:?}", l)
 									},
-									_ => false
+									_ => panic!("Unreachable")
 								}
-							},
-							_ => false
-						};
-					}
+							}
+						} else if (self.is_identifier(&*right) && self.is_literal(&*left)) {
+							panic!("Syntax literal = identifier not currently supported")
+						}
+
+						// self.visit_sql_expr(*left);
+						// self.visit_sql_expr(*right);
+					},
 					_ => {}
 				}
-
-				// self.visit_sql_expr(*left);
-				// self.visit_sql_expr(*right);
 			},
 			SQLExpr::SQLLiteral(lit) => {
 				self.visit_sql_lit_expr(lit);
