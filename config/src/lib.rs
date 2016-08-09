@@ -53,10 +53,35 @@ fn parse_client_config(builder: &mut ConfigBuilder, children: Vec<Xml>) {
 						parse_schema_config(&mut sb, e.children);
 						builder.add_schema(sb.build());
 					},
-					"connection" => {//TODO
+					"connection" => {
+						for prop in e.children {
+							match prop {
+								Xml::ElementNode(n) => match &n.name as &str {
+									"property" => {
+										let key = get_attr_or_fail("name", &n);
+										let val = get_attr_or_fail("value", &n);
+										builder.add_conn_prop(key, val)
+									},
+									_ => panic!("expected property, received {}", n.name)
+								},
+								_ => {} // dont care yet
+							}
+						}
 					},
 					"client" => {
-						// TODO
+						for prop in e.children {
+							match prop {
+								Xml::ElementNode(n) => match &n.name as &str {
+									"property" => {
+										let key = get_attr_or_fail("name", &n);
+										let val = get_attr_or_fail("value", &n);
+										builder.add_client_prop(key, val)
+									},
+									_ => panic!("expected property, received {}", n.name)
+								},
+								_ => {} // dont care yet
+							}
+						}
 					},
 					_ => panic!("Unexpected element tag {}", e.name)
 				}
@@ -218,10 +243,12 @@ impl SchemaConfigBuilder {
 	}
 }
 
+#[derive(Debug)]
 pub struct ConnectionConfig {
 	props: HashMap<String, String>
 }
 
+#[derive(Debug)]
 pub struct ClientConfig {
 	props: HashMap<String, String>
 }
@@ -229,17 +256,23 @@ pub struct ClientConfig {
 #[derive(Debug)]
 pub struct Config {
 	schema_map: HashMap<String, SchemaConfig>,
-	// connection_config : ConnectionConfig,
-	// client_config: ClientConfig
+	connection_config : ConnectionConfig,
+	client_config: ClientConfig
 }
 
 struct ConfigBuilder {
-	schema_map : HashMap<String, SchemaConfig>
+	schema_map : HashMap<String, SchemaConfig>,
+	conn_props : HashMap<String, String>,
+	client_props : HashMap<String,String>
 }
 
 impl ConfigBuilder {
 	fn new() -> ConfigBuilder {
-		ConfigBuilder{schema_map: HashMap::new()}
+		ConfigBuilder{
+			schema_map: HashMap::new(),
+			conn_props: HashMap::new(),
+			client_props: HashMap::new(),
+		}
 	}
 
 	fn add_schema(&mut self, schema: SchemaConfig) {
@@ -247,8 +280,20 @@ impl ConfigBuilder {
 		self.schema_map.insert(key, schema);
 	}
 
+	fn add_client_prop(&mut self, key: String, value: String) {
+		self.client_props.insert(key, value);
+	}
+
+	fn add_conn_prop(&mut self, key: String, value: String) {
+		self.conn_props.insert(key, value);
+	}
+
 	fn build(mut self) -> Config {
-		Config {schema_map: self.schema_map}
+		Config {
+			schema_map: self.schema_map,
+			connection_config : ConnectionConfig {props: self.conn_props},
+			client_config: ClientConfig {props: self.client_props}
+		}
 	}
 }
 
@@ -257,7 +302,8 @@ pub trait TConfig {
 	fn get_table_config(&self, schema: &String, table: &String) -> Option<&TableConfig>;
 	fn get_schema_config(&self, schema: &String) -> Option<&SchemaConfig>;
 
-	fn get_connection_config(&self);
+	fn get_connection_config(&self) -> &ConnectionConfig;
+	fn get_client_config(&self) -> &ClientConfig;
 }
 
 impl TConfig for Config {
@@ -280,8 +326,12 @@ impl TConfig for Config {
 		self.schema_map.get(schema)
 	}
 
-	fn get_connection_config(&self) {
-		panic!("get_table_config() not implemented");
+	fn get_connection_config(&self) -> &ConnectionConfig {
+		&self.connection_config
+	}
+
+	fn get_client_config(&self) -> &ClientConfig {
+		&self.client_config
 	}
 
 }

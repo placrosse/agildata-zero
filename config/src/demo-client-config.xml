@@ -5,9 +5,9 @@
 	<client>
 		<property name="host" value="127.0.0.1" />
 		<property name="port" value="3307" />
-		<property key="S0m3 Str0ng K3y!" />
+		<property name="key" value="S0m3 Str0ng K3y!" />
 	</client>
-	
+
 	<connection>
 		<property name="dbms" value="mysql"/>
 		<property name="host" value="127.0.0.1"/>
