@@ -2,6 +2,8 @@
 
 extern crate mio;
 extern crate bytes;
+extern crate byteorder;
+use byteorder::*;
 
 use mio::{TryRead, TryWrite};
 use mio::tcp::*;
@@ -282,8 +284,15 @@ impl Connection {
 
                                     // write packed with new query
                                     //let n_buf: Vec<u8> = Vec::new();
+                                    let slice: &[u8] = rewritten.as_bytes();
 
-                                    self.mysql_send(&buf[0 .. packet_len+4]);
+                                    let mut wtr: Vec<u8> = vec![];
+                                    wtr.write_u32::<LittleEndian>(slice.len() as u32).unwrap();
+                                    assert!(0x00 == wtr.pop().unwrap());
+                                    wtr.push(0x03); // packet type for COM_Query
+                                    wtr.extend_from_slice(slice);
+
+                                    self.mysql_send(&wtr);
 
                                 } else {
                                     self.mysql_send(&buf[0 .. packet_len+4]);
