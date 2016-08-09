@@ -55,6 +55,9 @@ fn parse_client_config(builder: &mut ConfigBuilder, children: Vec<Xml>) {
 					},
 					"connection" => {//TODO
 					},
+					"client" => {
+						// TODO
+					},
 					_ => panic!("Unexpected element tag {}", e.name)
 				}
 			},
@@ -216,13 +219,18 @@ impl SchemaConfigBuilder {
 }
 
 pub struct ConnectionConfig {
-	//TODO
+	props: HashMap<String, String>
+}
+
+pub struct ClientConfig {
+	props: HashMap<String, String>
 }
 
 #[derive(Debug)]
 pub struct Config {
 	schema_map: HashMap<String, SchemaConfig>,
-	//connection_config : ConnectionConfig
+	// connection_config : ConnectionConfig,
+	// client_config: ClientConfig
 }
 
 struct ConfigBuilder {
