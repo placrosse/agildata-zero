@@ -20,3 +20,4 @@ chrono = { version = "0.2.22" }
 mysql-protocol = { path = "mysql-protocol", version = "*"}
 sql-parser = { path = "sql-parser", version = "*"}
 config = { path = "config", version = "*"}
+mysql-proxy = { path = "mysql-proxy", version = "*" }

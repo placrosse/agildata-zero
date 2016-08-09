@@ -1,7 +1,5 @@
 extern crate mio;
 extern crate bytes;
-// extern crate byteorder;
-// use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian, LittleEndian};
 
 use mio::{TryRead, TryWrite};
 use mio::tcp::*;
@@ -40,26 +38,18 @@ fn read_packet_length(header: &[u8]) -> usize {
     header[0] as u32) as usize
 }
 
-struct Proxy {
+pub struct Proxy {
     server: TcpListener,
     connections: Slab<Connection>,
 }
 
-// trait ConnectionFactory {
-//     fn new() -> Connection;
-// }
-//
-// trait Connection {
-//     fn process_request(&self, request: &MySQLPacket) -> MySQLPacket;
-//     fn process_response(&self, request: &MySQLPacket) -> MySQLPacket;
-//
-// }
-
 impl Proxy {
 
-    fn new(bind_host: &'static str, bind_port: u32) -> Proxy {
+    pub fn run(bind_host: &'static str, bind_port: u32) {
 
-        let address = bind_addr.parse().unwrap();
+        let bind_addr = format!("{}:{}", bind_host, bind_port);
+
+        let address = &bind_addr.parse().unwrap();
         let server = TcpListener::bind(&address).unwrap();
 
         let mut event_loop = mio::EventLoop::new().unwrap();
@@ -70,10 +60,13 @@ impl Proxy {
         // starting at 1.
         let slab = Slab::new_starting_at(mio::Token(1), 1024);
 
-        Proxy {
+        let mut proxy = Proxy {
             server: server,
-            connections: slab,
-        }
+            connections: slab
+        };
+
+        println!("running MySQLProxy server on host {} port {}", bind_host, bind_port);
+        event_loop.run(&mut proxy).unwrap();
     }
 }
 
@@ -273,10 +266,6 @@ impl Connection {
         }
     }
 
-    fn mutate_packet() -> {
-
-    }
-
     fn mysql_send(&mut self, request: &[u8]) {
         println!("Sending packet to mysql");
         self.remote.write(request).unwrap();
@@ -467,18 +456,4 @@ fn drain_to(vec: &mut Vec<u8>, count: usize) {
     for _ in 0..count {
         vec.remove(0);
     }
-}
-
-fn run_proxy() {
-    let address = "0.0.0.0:6567".parse().unwrap();
-    let server = TcpListener::bind(&address).unwrap();
-
-    let mut event_loop = mio::EventLoop::new().unwrap();
-    event_loop.register(&server, SERVER).unwrap();
-
-    let mut proxy = Proxy::new(server);
-
-    println!("running MySQLProxy server; port=6567");
-    event_loop.run(&mut proxy).unwrap();
-    
 }

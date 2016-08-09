@@ -13,6 +13,9 @@ use argparse::{ArgumentParser, Store, StoreTrue};
 
 // extern crate rand;
 
+extern crate mysql_proxy;
+use mysql_proxy::Proxy;
+
 extern crate chrono;
 use chrono::*;
 
@@ -94,8 +97,8 @@ fn main() {
     info!("{} is up", app_ver);
 
     // create proxy
-    run_proxy();
-    
+    Proxy::run("0.0.0.0", 6567);
+
     while !chk_stop() { x_sleep(); }
 
     x_sleep();
