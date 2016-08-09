@@ -67,7 +67,7 @@ impl SQLExprVisitor for EncryptionVisitor {
 								box SQLExpr::SQLIdentifier(v) => v,
 								_ => panic!("Unreachable")
 							};
-							let mut col = self.config.get_column_config(&String::from("babel"), &String::from("users"), &String::from("age"));
+							let mut col = self.config.get_column_config(&String::from("babel"), &String::from("users"), &String::from(ident));
 							if (col.is_some()) {
 								match right {
 									box SQLExpr::SQLLiteral(l) => match l {
