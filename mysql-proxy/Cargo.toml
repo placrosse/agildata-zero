@@ -9,3 +9,4 @@ mio = "0.4.4"
 byteorder = "*"
 sql-parser = { path = "../sql-parser", version="*" }
 config = { path = "../config", version="*" }
+encrypt = {path = "../encrypt", verstion="*"}

@@ -6,3 +6,4 @@ authors = ["Andy Grove <andygrove73@gmail.com>"]
 [dependencies]
 # ...
 config = { path = "../config" }
+encrypt = { path = "../encrypt" }

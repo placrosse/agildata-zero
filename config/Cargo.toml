@@ -5,3 +5,4 @@ authors = ["Andrew Manlove <ajmanlove@gmail.com>"]
 
 [dependencies]
 RustyXML = "0.1.1"
+encrypt = {path="../encrypt", version="*"}

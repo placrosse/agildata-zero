@@ -4,6 +4,9 @@ use std::io::Read;
 use std::collections::HashMap;
 use xml::Xml;
 
+extern crate encrypt;
+use encrypt::*;
+
 pub fn parse_config(path: &'static str) -> Config {
 	println!("parse_config() path: {}", path);
 	let mut rdr = match File::open(path) {
@@ -160,14 +163,6 @@ fn determine_encryption(encryption: &String) -> EncryptionType {
 		_ => panic!("Unsupported encryption type {}", encryption)
 	}
 
-}
-
-#[derive(Debug)]
-pub enum EncryptionType {
-	AES,
-	AES_SALT,
-	OPE,
-	NA,
 }
 
 #[derive(Debug)]

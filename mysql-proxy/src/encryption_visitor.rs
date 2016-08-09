@@ -1,23 +1,18 @@
 extern crate config;
-use self::config::{EncryptionType, Config, TConfig};
-use super::visitor::*;
-use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator, SQLUnionType, SQLJoinType};
+use self::config::{Config, TConfig};
+extern crate encrypt;
+use self::encrypt::{Encrypt, EncryptionType};
+
+extern crate sql_parser;
+use sql_parser::visitor::*;
+use sql_parser::sql_parser::{SQLExpr, LiteralExpr, SQLOperator, SQLUnionType, SQLJoinType};
+
 use std::collections::HashMap;
-
-trait Encrypt {
-	fn encrypt(self, scheme: &EncryptionType) -> String;
-}
-
-impl Encrypt for u64 {
-	fn encrypt(self, scheme: &EncryptionType) -> String {
-		String::from("fooness")
-	}
-}
 
 #[derive(Debug)]
 struct EncryptionVisitor {
 	config: Config,
-	valuemap: HashMap<u32, String>
+	valuemap: HashMap<u32, Vec<u8>>
 }
 
 impl EncryptionVisitor {
@@ -145,7 +140,7 @@ pub fn walk(visitor: &mut SQLExprVisitor, e: SQLExpr) {
 
 #[cfg(test)]
 mod tests {
-	use super::super::sql_parser::AnsiSQLParser;
+	use super::sql_parser::sql_parser::AnsiSQLParser;
 	use super::*;
 	use super::{EncryptionVisitor};
 	use std::collections::HashMap;
@@ -157,7 +152,7 @@ mod tests {
 		let parsed = parser.parse(sql).unwrap();
 
 		let config = super::config::parse_config("../config/src/demo-client-config.xml");
-		let mut valueMap: HashMap<u32, String> = HashMap::new();
+		let mut valueMap: HashMap<u32, Vec<u8>> = HashMap::new();
 		let mut encrypt_vis = EncryptionVisitor {
 			config: config,
 			valuemap: valueMap

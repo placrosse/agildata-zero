@@ -1,4 +1,7 @@
 #![feature(recover, std_panic, panic_handler)]
+#![feature(box_syntax, box_patterns)]
+
+mod encryption_visitor;
 
 extern crate mio;
 extern crate bytes;
@@ -296,8 +299,6 @@ impl<'a> Connection<'a> {
 
                                 let query = parse_string(&buf[5 as usize .. (packet_len+4) as usize]);
                                 println!("QUERY : {:?}", query);
-
-                                // mutate with builder
 
                                 // parse query
                                 let parser = AnsiSQLParser {};
