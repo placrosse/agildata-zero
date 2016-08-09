@@ -13,12 +13,22 @@ use chrono::*;
 
 use std::thread::{sleep, spawn};
 use std::{env, panic};
-use std::path::Path;
-use std::fs::remove_file;
 use std::sync::atomic::{Ordering, AtomicBool, ATOMIC_BOOL_INIT};
 
 mod crypt;
 use crypt::*;
+
+extern crate config;
+use config::*;
+
+extern crate mysql_protocol;
+use mysql_protocol::*;
+
+extern crate mysql_proxy;
+use mysql_proxy::*;
+
+extern crate sql_parser;
+use sql_parser::*;
 
 static STOP: AtomicBool = ATOMIC_BOOL_INIT;
 fn ask_stop() { STOP.store(true, Ordering::SeqCst) }
