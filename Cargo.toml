@@ -8,7 +8,6 @@ name = "babel"
 version = "0.0.3"
 
 [dependencies]
-argparse = "0.2.1"
 log = "0.3.6"
 log4rs = { version = "0.4.8", features = ["toml"] }
 parking_lot = "0.2.7"
@@ -20,3 +19,4 @@ chrono = { version = "0.2.22" }
 mysql-protocol = { path = "mysql-protocol", version = "*"}
 sql-parser = { path = "sql-parser", version = "*"}
 config = { path = "config", version = "*"}
+mysql-proxy = { path = "mysql-proxy", version = "*" }

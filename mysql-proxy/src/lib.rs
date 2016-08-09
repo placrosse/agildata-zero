@@ -1,7 +1,5 @@
 extern crate mio;
 extern crate bytes;
-// extern crate byteorder;
-// use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian, LittleEndian};
 
 use mio::{TryRead, TryWrite};
 use mio::tcp::*;
@@ -40,22 +38,35 @@ fn read_packet_length(header: &[u8]) -> usize {
     header[0] as u32) as usize
 }
 
-struct Proxy {
+pub struct Proxy {
     server: TcpListener,
     connections: Slab<Connection>,
 }
 
 impl Proxy {
-    fn new(server: TcpListener) -> Proxy {
+
+    pub fn run(bind_host: String, bind_port: u16) {
+
+        let bind_addr = format!("{}:{}", bind_host, bind_port);
+
+        let address = &bind_addr.parse().unwrap();
+        let server = TcpListener::bind(&address).unwrap();
+
+        let mut event_loop = mio::EventLoop::new().unwrap();
+        event_loop.register(&server, SERVER).unwrap();
+
         // Token `0` is reserved for the server socket. Tokens 1+ are used for
         // client connections. The slab is initialized to return Tokens
         // starting at 1.
         let slab = Slab::new_starting_at(mio::Token(1), 1024);
 
-        Proxy {
+        let mut proxy = Proxy {
             server: server,
-            connections: slab,
-        }
+            connections: slab
+        };
+
+        println!("running MySQLProxy server on host {} port {}", bind_host, bind_port);
+        event_loop.run(&mut proxy).unwrap();
     }
 }
 
@@ -197,6 +208,10 @@ impl Connection {
         }
     }
 
+    fn parse_string(&mut self, bytes: &[u8]) -> String {
+        String::from_utf8(bytes.to_vec()).expect("Invalid UTF-8")
+    }
+
     fn read(&mut self, event_loop: &mut mio::EventLoop<Proxy>) {
 
         println!("Reading from client");
@@ -229,7 +244,27 @@ impl Connection {
                     println!("Buf len {}", buf.len());
 
                     if buf.len() >= packet_len+4 {
-                        self.mysql_send(&buf[0 .. packet_len+4]);
+                        match buf[4] {
+                            0x03 => {
+                                println!("0x03");
+
+                                let query = self.parse_string(&buf[5 as usize .. (packet_len+4) as usize]);
+                                println!("QUERY : {:?}", query);
+
+                                // mutate with builder
+
+                                // parse query
+                                // visit and conditionally encrypt query
+                                // reqwrite query
+                                // handle packet with new query
+
+                                self.mysql_send(&buf[0 .. packet_len+4]);
+                            },
+                            _ => {
+                                self.mysql_send(&buf[0 .. packet_len+4]);
+                            }
+                        }
+                        // self.mysql_send(&buf[0 .. packet_len+4]);
 
                         //self.authenticating = false;
 
@@ -438,18 +473,6 @@ impl State {
     }
 }
 
-fn main() {
-    let address = "0.0.0.0:6567".parse().unwrap();
-    let server = TcpListener::bind(&address).unwrap();
-
-    let mut event_loop = mio::EventLoop::new().unwrap();
-    event_loop.register(&server, SERVER).unwrap();
-
-    let mut proxy = Proxy::new(server);
-
-    println!("running MySQLProxy server; port=6567");
-    event_loop.run(&mut proxy).unwrap();
-}
 
 fn drain_to(vec: &mut Vec<u8>, count: usize) {
     // A very inefficient implementation. A better implementation could be

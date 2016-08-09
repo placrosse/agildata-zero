@@ -1,5 +1,5 @@
 #![feature(custom_derive, const_fn, inclusive_range_syntax, question_mark, box_syntax,
-           collections_bound, btree_range, stmt_expr_attributes, integer_atomics, plugin)]
+           stmt_expr_attributes, plugin)]
 
 #[macro_use]
 extern crate lazy_static;
@@ -8,22 +8,28 @@ extern crate lazy_static;
 extern crate log;
 extern crate log4rs;
 
-extern crate argparse;
-use argparse::{ArgumentParser, Store, StoreTrue};
-
-// extern crate rand;
-
 extern crate chrono;
 use chrono::*;
 
 use std::thread::{sleep, spawn};
 use std::{env, panic};
-use std::path::Path;
-use std::fs::remove_file;
 use std::sync::atomic::{Ordering, AtomicBool, ATOMIC_BOOL_INIT};
+use std::str::FromStr;
 
 mod crypt;
 use crypt::*;
+
+extern crate config;
+use config::*;
+
+extern crate mysql_protocol;
+use mysql_protocol::*;
+
+extern crate mysql_proxy;
+use mysql_proxy::*;
+
+extern crate sql_parser;
+use sql_parser::*;
 
 static STOP: AtomicBool = ATOMIC_BOOL_INIT;
 fn ask_stop() { STOP.store(true, Ordering::SeqCst) }
@@ -39,36 +45,12 @@ fn x_sleep() { sleep(Duration::seconds(1).to_std().unwrap()); }
 pub const APP_NAME: &'static str = "AgilData Babel Proxy";
 pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-#[derive(Clone, Debug)]
-pub struct Opts {
-    pub host: String,
-    pub port: u16,
-}
-
 #[allow(deprecated)]
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
     let _ = log4rs::init_file("babel.toml", Default::default());
 
     let app_ver: &str = &format!("{} v. {}", APP_NAME, VERSION);
-
-    let mut opt = Opts {
-        host: String::from(""),
-        port: 0,
-    };
-
-    {
-        let mut ap = ArgumentParser::new();
-        ap.set_description(&app_ver);
-        ap.refer(&mut opt.host)
-            .required()
-            .add_option(&["--host"], Store,
-            "host name for MySQL server");
-        ap.refer(&mut opt.port)
-            .add_option(&["--port"], Store,
-            "port number for MySQL server");
-        ap.parse_args_or_exit();
-    }
 
     let ph = panic::take_hook();
     panic::set_hook(Box::new(move |pi| {
@@ -77,21 +59,28 @@ fn main() {
         ph(pi);
     }));
 
+    let config_path = "src/example-babel-config.xml";
+    let config = config::parse_config(config_path);
+
     {
         // {
             // let opt = opt.clone();
             // load(opt);  pre-start tasks to run to completion here
         // }
 
-        let fs: Vec<fn(Opts)> = vec!(watch);
+        let fs: Vec<fn()> = vec!(watch);
         for f in fs {
-            let opt = opt.clone();
-            let _ = spawn(move || { f(opt); });  // one thread per independent task
+            let _ = spawn(move || { f(); });  // one thread per independent task
             x_sleep();
         }
     }
 
     info!("{} is up", app_ver);
+
+    // create proxy
+    let host = config.get_client_config().props.get("host").unwrap().clone();
+    let port = u16::from_str(config.get_client_config().props.get("port").unwrap()).unwrap();
+    Proxy::run(host, port);
 
     while !chk_stop() { x_sleep(); }
 
