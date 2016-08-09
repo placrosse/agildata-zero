@@ -98,6 +98,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "encrypt"
 version = "0.1.0"
+dependencies = [
+ "byteorder 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.2.25 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log4rs 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rust-crypto 0.2.36 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "filetime"

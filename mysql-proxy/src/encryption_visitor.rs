@@ -12,7 +12,7 @@ use std::collections::HashMap;
 #[derive(Debug)]
 struct EncryptionVisitor {
 	config: Config,
-	valuemap: HashMap<u32, Vec<u8>>
+	valuemap: HashMap<u32, Option<Vec<u8>>>
 }
 
 impl EncryptionVisitor {
@@ -152,7 +152,7 @@ mod tests {
 		let parsed = parser.parse(sql).unwrap();
 
 		let config = super::config::parse_config("../config/src/demo-client-config.xml");
-		let mut valueMap: HashMap<u32, Vec<u8>> = HashMap::new();
+		let mut valueMap: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
 		let mut encrypt_vis = EncryptionVisitor {
 			config: config,
 			valuemap: valueMap
