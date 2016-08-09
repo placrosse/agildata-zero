@@ -45,7 +45,7 @@ pub struct Proxy {
 
 impl Proxy {
 
-    pub fn run(bind_host: &'static str, bind_port: u32) {
+    pub fn run(bind_host: String, bind_port: u16) {
 
         let bind_addr = format!("{}:{}", bind_host, bind_port);
 
@@ -244,28 +244,18 @@ impl Connection {
                     println!("Buf len {}", buf.len());
 
                     match buf[4] {
-                        0x01 => panic!("0x01"),
-                        0x02 => {
-                            panic!("0x02")
-                        //     Ok(MySQLPacket::COM_InitDB {
-                        //     db: parse_string(&bytes[5 as usize .. (packet_len+4) as usize])
-                        // })
-                        },
                         0x03 => {
-                            //panic!("0x03")
                             println!("0x03");
 
                             let query = self.parse_string(&buf[5 as usize .. (packet_len+4) as usize]);
                             println!("QUERY : {:?}", query);
+
+                            // parse query
+                            // visit and conditionally encrypt query
+                            // reqwrite query
+                            // handle packet with new query
                         },
-                        // Ok(MySQLPacket::COM_Query {
-                        //     query: parse_string(&bytes[5 as usize .. (packet_len+4) as usize])
-                        // }),
-                        0x0e => {
-                            panic!("0x0e")
-                        },
-                        //Ok(MySQLPacket::COM_Ping),
-                        _ => {}//panic!("Unsupported packet type")
+                        _ => {}
                     }
                     if buf.len() >= packet_len+4 {
                         self.mysql_send(&buf[0 .. packet_len+4]);

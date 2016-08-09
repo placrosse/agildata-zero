@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use xml::Xml;
 
 pub fn parse_config(path: &'static str) -> Config {
+	println!("parse_config() path: {}", path);
 	let mut rdr = match File::open(path) {
         Ok(file) => file,
         Err(err) => {
@@ -245,12 +246,12 @@ impl SchemaConfigBuilder {
 
 #[derive(Debug)]
 pub struct ConnectionConfig {
-	props: HashMap<String, String>
+	pub props: HashMap<String, String>
 }
 
 #[derive(Debug)]
 pub struct ClientConfig {
-	props: HashMap<String, String>
+	pub props: HashMap<String, String>
 }
 
 #[derive(Debug)]

@@ -14,6 +14,7 @@ use chrono::*;
 use std::thread::{sleep, spawn};
 use std::{env, panic};
 use std::sync::atomic::{Ordering, AtomicBool, ATOMIC_BOOL_INIT};
+use std::str::FromStr;
 
 mod crypt;
 use crypt::*;
@@ -58,6 +59,9 @@ fn main() {
         ph(pi);
     }));
 
+    let config_path = "src/example-babel-config.xml";
+    let config = config::parse_config(config_path);
+
     {
         // {
             // let opt = opt.clone();
@@ -74,7 +78,9 @@ fn main() {
     info!("{} is up", app_ver);
 
     // create proxy
-    Proxy::run("0.0.0.0", 6567);
+    let host = config.get_client_config().props.get("host").unwrap().clone();
+    let port = u16::from_str(config.get_client_config().props.get("port").unwrap()).unwrap();
+    Proxy::run(host, port);
 
     while !chk_stop() { x_sleep(); }
 
