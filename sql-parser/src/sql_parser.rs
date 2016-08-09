@@ -75,102 +75,101 @@ pub struct AnsiSQLParser{}
 // TODO should switch to Result returns instead of use of panic! ?
 impl AnsiSQLParser {
 
-	pub fn parse(&self, sql: &str) -> SQLExpr {
+	pub fn parse(&self, sql: &str) -> Result<SQLExpr,  String> {
 		let tvec = String::from(sql).tokenize().unwrap();
 		let mut stream = (Tokens {tokens: tvec, index: 0}).peekable();
 		self.parse_expr(&mut stream, 0u32)
 	}
 
-	pub fn parse_expr(&self, stream: &mut Peekable<Tokens>, precedence: u32) -> SQLExpr {
+	pub fn parse_expr(&self, stream: &mut Peekable<Tokens>, precedence: u32) -> Result<SQLExpr,  String> {
 		match self.parse_prefix(stream) {
-			Some(node) => self.get_infix(stream, precedence, node),
-			None => panic!("TBD")
+			Ok(Some(node)) => self.get_infix(stream, precedence, node),
+			Ok(None) => Err(String::from("Failed to parse expr TBD")),
+			Err(e) => Err(e)
 		}
 	}
 
-	pub fn get_infix(&self, stream: &mut Peekable<Tokens>, precedence: u32, left: SQLExpr) -> SQLExpr {
+	pub fn get_infix(&self, stream: &mut Peekable<Tokens>, precedence: u32, left: SQLExpr) -> Result<SQLExpr,  String> {
 		println!("get_infix()");
 		if precedence >= self.get_precedence(stream) {
 			println!("return");
-			left
+			Ok(left)
 		} else {
 			println!("recurse");
 			let p = self.get_precedence(stream);
-			let ret = {
-				let r = self.parse_infix(left, stream, p).unwrap();
-				self.get_infix(stream, precedence, r)
-			};
-			ret
+			let r = try!(self.parse_infix(left, stream, p));
+			self.get_infix(stream, precedence, r.unwrap())
+
 		}
 	}
 
-	fn parse_prefix(&self, tokens: &mut Peekable<Tokens>) -> Option<SQLExpr>{
+	fn parse_prefix(&self, tokens: &mut Peekable<Tokens>) -> Result<Option<SQLExpr>,  String>{
 		println!("parse_prefix()");
 		// TODO need a better solution than cloned()
 		match tokens.peek().cloned() {
 			Some(t) => match t {
 				Token::Keyword(ref v) => match &v as &str {
-					"SELECT" => Some(self.parse_select(tokens)),
-					"INSERT" => Some(self.parse_insert(tokens)),
-					_ => panic!("Unsupported prefix {}", v)
+					"SELECT" => Ok(Some(try!(self.parse_select(tokens)))),
+					"INSERT" => Ok(Some(try!(self.parse_insert(tokens)))), // TODO wrap in option?
+					_ => Err(format!("Unsupported prefix {:?}", v))
 				},
 				Token::Literal(v) => match v {
 					LiteralToken::LiteralLong(i, value) => {
 						tokens.next();
-						Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralLong(i, u64::from_str(&value).unwrap())))
+						Ok(Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralLong(i, u64::from_str(&value).unwrap()))))
 					},
 					LiteralToken::LiteralBool(i, value) => {
 						tokens.next();
-						Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralBool(i, bool::from_str(&value).unwrap())))
+						Ok(Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralBool(i, bool::from_str(&value).unwrap()))))
 					},
 					LiteralToken::LiteralDouble(i, value) => {
 						tokens.next();
-						Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralDouble(i, f64::from_str(&value).unwrap())))
+						Ok(Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralDouble(i, f64::from_str(&value).unwrap()))))
 					},
 					LiteralToken::LiteralString(i, value) => {
 						tokens.next();
-						Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralString(i, value.clone())))
+						Ok(Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralString(i, value.clone()))))
 					}
 					//_ => panic!("Unsupported literal {:?}", v)
 				},
-				Token::Identifier(v) => Some(self.parse_identifier(tokens)),
+				Token::Identifier(v) => Ok(Some(try!(self.parse_identifier(tokens)))),//Some(self.parse_identifier(tokens)),
 				Token::Punctuator(v) => match &v as &str {
 					"(" => {
-						Some(self.parse_nested(tokens))
+						Ok(Some(try!(self.parse_nested(tokens))))
 					},
-					_ => panic!("Unsupported prefix for punctuator {:?}", v)
+					_ => Err(format!("Unsupported prefix for punctuator {:?}", &v))
 				},
 				Token::Operator(v) => match &v as &str {
-					"+" | "-" => Some(self.parse_unary(tokens)),
-					_ => panic!("Unsupported operator as prefix {:?}", v)
+					"+" | "-" => Ok(Some(try!(self.parse_unary(tokens)))),
+					_ => Err(format!("Unsupported operator as prefix {:?}", &v))
 				},
-				_ => panic!("parse_prefix() {:?}", t)
+				_ => Err(format!("parse_prefix() {:?}", &t))
 			},
-			None => None
+			None => Ok(None)
 		}
 	}
 
-	fn parse_infix(&self, left: SQLExpr, stream: &mut Peekable<Tokens>, precedence: u32) -> Option<SQLExpr>{
+	fn parse_infix(&self, left: SQLExpr, stream: &mut Peekable<Tokens>, precedence: u32) -> Result<Option<SQLExpr>,  String>{
 		println!("parse_infix()");
 		match stream.peek().cloned() {
 			Some(token) => match token {
-				Token::Operator(t) => Some(self.parse_binary(left, stream)),
+				Token::Operator(t) => Ok(Some(try!(self.parse_binary(left, stream)))),//Some(self.parse_binary(left, stream)),
 				Token::Keyword(t) => match &t as &str {
-					"UNION" => Some(self.parse_union(left, stream)),
-					"JOIN" | "INNER" | "RIGHT" | "LEFT" | "CROSS" | "FULL" => Some(self.parse_join(left, stream)),
-					"AS" => Some(self.parse_alias(left, stream)),
+					"UNION" => Ok(Some(try!(self.parse_union(left, stream)))),//Some(self.parse_union(left, stream)),
+					"JOIN" | "INNER" | "RIGHT" | "LEFT" | "CROSS" | "FULL" => Ok(Some(try!(self.parse_join(left, stream)))),
+					"AS" => Ok(Some(try!(self.parse_alias(left, stream)))),
 					_ => {
 						println!("Returning no infix for keyword {:?}", t);
-						None
+						Ok(None)
 					}
 				},
 				_ => {
 					println!("Returning no infix for token {:?}", token);
-					None
+					Ok(None)
 				}
 
 			},
-			None => None
+			None => Ok(None)
 		}
 	}
 
@@ -200,58 +199,58 @@ impl AnsiSQLParser {
 		}
 	}
 
-	fn parse_insert(&self, tokens: &mut Peekable<Tokens>) -> SQLExpr {
+	fn parse_insert(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
 		println!("parse_insert()");
 
 		// TODO validation
 		self.consume_keyword("INSERT", tokens);
 		self.consume_keyword("INTO", tokens);
 
-		let table = self.parse_identifier(tokens);
+		let table = try!(self.parse_identifier(tokens));
 
 		let columns = if self.consume_punctuator("(", tokens) {
-			let ret = self.parse_expr_list(tokens);
+			let ret = try!(self.parse_expr_list(tokens));
 			self.consume_punctuator(")", tokens);
 			ret
 		} else {
-			panic!("Expected column list paren, received {:?}", tokens.peek());
+			return Err(format!("Expected column list paren, received {:?}", &tokens.peek()));
 		};
 
 		self.consume_keyword("VALUES", tokens);
 		self.consume_punctuator("(", tokens);
-		let values = self.parse_expr_list(tokens);
+		let values = try!(self.parse_expr_list(tokens));
 		self.consume_keyword(")", tokens);
 
-		SQLExpr::SQLInsert {
+		Ok(SQLExpr::SQLInsert {
 			table: Box::new(table),
 			column_list: Box::new(columns),
 			values_list: Box::new(values)
-		}
+		})
 
 	}
 
-	fn parse_select(&self, tokens: &mut Peekable<Tokens>) -> SQLExpr {
+	fn parse_select(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
 		println!("parse_select()");
 		// consume the SELECT
 		tokens.next();
-		let proj = Box::new(self.parse_expr_list(tokens));
+		let proj = Box::new(try!(self.parse_expr_list(tokens)));
 
 		let from = match tokens.peek().cloned() {
 			Some(Token::Keyword(t)) => match &t as &str {
 				"FROM" => {
 					tokens.next();
-					Some(Box::new(self.parse_relation(tokens)))
+					Some(Box::new(try!(self.parse_relation(tokens))))
 				},
 				_ => None
 			},
-			_ => panic!("unexpected token {:?}", tokens.peek())
+			_ => return Err(format!("unexpected token {:?}", tokens.peek()))
 		};
 
 		let whr = match tokens.peek().cloned() {
 			Some(Token::Keyword(t)) => match &t as &str {
 				"WHERE" => {
 					tokens.next();
-					Some(Box::new(self.parse_expr(tokens, 0)))
+					Some(Box::new(try!(self.parse_expr(tokens, 0))))
 				},
 				_ => None
 			},
@@ -261,58 +260,57 @@ impl AnsiSQLParser {
 		let ob = {
 			if self.consume_keyword(&"ORDER", tokens) {
 				if self.consume_keyword(&"BY", tokens) {
-					Some(Box::new(self.parse_order_by_list(tokens)))
+					Some(Box::new(try!(self.parse_order_by_list(tokens))))
 				} else {
-					panic!("Expected ORDER BY, found ORDER {:?}", tokens.peek());
+					return Err(format!("Expected ORDER BY, found ORDER {:?}", tokens.peek()));
 				}
 			} else {
 				None
 			}
 		};
 
-		SQLExpr::SQLSelect{expr_list: proj, relation: from, selection: whr, order: ob}
+		Ok(SQLExpr::SQLSelect{expr_list: proj, relation: from, selection: whr, order: ob})
 	}
 
 	// TODO real parse_relation
-	fn parse_relation(&self, tokens: &mut Peekable<Tokens>) -> SQLExpr {
+	fn parse_relation(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
 		self.parse_expr(tokens, 0)
-		//self.parse_identifier(tokens)
 	}
 
-	fn parse_expr_list(&self, tokens: &mut Peekable<Tokens>) -> SQLExpr {
+	fn parse_expr_list(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
 		println!("parse_expr_list()");
-		let first = self.parse_expr(tokens, 0_u32);
+		let first = try!(self.parse_expr(tokens, 0_u32));
 		let mut v: Vec<SQLExpr> = Vec::new();
 		v.push(first);
 		while let Some(Token::Punctuator(p)) = tokens.peek().cloned() {
 			if p == "," {
 				tokens.next();
-				v.push(self.parse_expr(tokens, 0_u32));
+				v.push(try!(self.parse_expr(tokens, 0_u32)));
 			} else {
 				break;
 			}
 		}
-		SQLExpr::SQLExprList(v)
+		Ok(SQLExpr::SQLExprList(v))
 	}
 
-	fn parse_order_by_list(&self, tokens: &mut Peekable<Tokens>) -> SQLExpr {
+	fn parse_order_by_list(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
 		println!("parse_order_by_list()");
 		let mut v: Vec<SQLExpr> = Vec::new();
-		v.push(self.parse_order_by_expr(tokens));
+		v.push(try!(self.parse_order_by_expr(tokens)));
 		while let Some(Token::Punctuator(p)) = tokens.peek().cloned() {
 			if p == "," {
 				tokens.next();
-				v.push(self.parse_order_by_expr(tokens));
+				v.push(try!(self.parse_order_by_expr(tokens)));
 			} else {
 				break;
 			}
 		}
-		SQLExpr::SQLExprList(v)
+		Ok(SQLExpr::SQLExprList(v))
 	}
 
-	fn parse_order_by_expr(&self, tokens: &mut Peekable<Tokens>) -> SQLExpr {
-		let e = self.parse_expr(tokens, 0_u32);
-		SQLExpr::SQLOrderBy {expr: Box::new(e), is_asc: self.is_asc(tokens)}
+	fn parse_order_by_expr(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
+		let e = try!(self.parse_expr(tokens, 0_u32));
+		Ok(SQLExpr::SQLOrderBy {expr: Box::new(e), is_asc: self.is_asc(tokens)})
 	}
 
 	fn is_asc(&self, tokens: &mut Peekable<Tokens>) -> bool {
@@ -324,7 +322,7 @@ impl AnsiSQLParser {
 		}
 	}
 
-	fn parse_binary(&self, left: SQLExpr, tokens: &mut Peekable<Tokens>) -> SQLExpr {
+	fn parse_binary(&self, left: SQLExpr, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
 		println!("parse_binary()");
 		let precedence = self.get_precedence(tokens);
 		// determine operator
@@ -340,53 +338,53 @@ impl AnsiSQLParser {
 				"=" => SQLOperator::EQ,
 				"AND" => SQLOperator::AND,
 				"OR" => SQLOperator::OR,
-				_ => panic!("Unsupported operator {}", t)
+				_ => return Err(format!("Unsupported operator {}", t))
 			},
-			_ => panic!("Expected operator, received something else")
+			_ => return Err(format!("Expected operator, received something else"))
 		};
 
-		SQLExpr::SQLBinary {left: Box::new(left), op: operator, right: Box::new(self.parse_expr(tokens, precedence))}
+		Ok(SQLExpr::SQLBinary {left: Box::new(left), op: operator, right: Box::new(try!(self.parse_expr(tokens, precedence)))})
 	}
 
-	fn parse_identifier(&self, tokens: &mut Peekable<Tokens>) -> SQLExpr {
+	fn parse_identifier(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
 		println!("parse_identifier()");
 		match tokens.next().unwrap() {
-			Token::Identifier(v) => SQLExpr::SQLIdentifier(v),
-			_ => panic!("Illegal state")
+			Token::Identifier(v) => Ok(SQLExpr::SQLIdentifier(v)),
+			_ => Err(format!("Illegal state"))
 		}
 	}
 
-	fn parse_nested(&self, tokens: &mut Peekable<Tokens>) -> SQLExpr {
+	fn parse_nested(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
 		//consume (
 		tokens.next();
-		let nested = self.parse_expr(tokens, 0);
+		let nested = try!(self.parse_expr(tokens, 0));
 		// consume )
 		match tokens.peek().cloned() {
 			Some(Token::Punctuator(v)) => match &v as &str {
 				")" => {tokens.next();},
-				_ => panic!("Expected , punctuator, received {}", v)
+				_ => return Err(format!("Expected , punctuator, received {}", v))
 			},
-			_ => panic!("Illegal state, expected , received {:?}", tokens.peek())
+			_ => return Err(format!("Illegal state, expected , received {:?}", tokens.peek()))
 		}
 
-		SQLExpr::SQLNested(Box::new(nested))
+		Ok(SQLExpr::SQLNested(Box::new(nested)))
 	}
 
-	fn parse_unary(&self, tokens: & mut Peekable<Tokens>) -> SQLExpr {
+	fn parse_unary(&self, tokens: & mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
 		let precedence = self.get_precedence(tokens);
 		let op = match tokens.next() {
 			Some(Token::Operator(o)) => match &o as &str {
 				"+" => SQLOperator::ADD,
 				"-" => SQLOperator::SUB,
-				_ => panic!("Illegal operator for unary {}", o)
+				_ => return Err(format!("Illegal operator for unary {}", o))
 			},
-			_ => panic!("Illegal state")
+			_ => return Err(format!("Illegal state"))
 		};
-		SQLExpr::SQLUnary{operator: op, expr: Box::new(self.parse_expr(tokens, precedence))}
+		Ok(SQLExpr::SQLUnary{operator: op, expr: Box::new(try!(self.parse_expr(tokens, precedence)))})
 
 	}
 
-	fn parse_union(&self, left: SQLExpr, tokens: &mut Peekable<Tokens>) -> SQLExpr {
+	fn parse_union(&self, left: SQLExpr, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
 		// consume the UNION
 		tokens.next();
 
@@ -399,13 +397,13 @@ impl AnsiSQLParser {
 			_ => SQLUnionType::UNION
 		};
 
-		let right = Box::new(self.parse_expr(tokens, 0));
+		let right = Box::new(try!(self.parse_expr(tokens, 0)));
 
-		SQLExpr::SQLUnion{left: Box::new(left), union_type: union_type, right: right}
+		Ok(SQLExpr::SQLUnion{left: Box::new(left), union_type: union_type, right: right})
 
 	}
 
-	fn parse_join(&self, left: SQLExpr, tokens: &mut Peekable<Tokens>) -> SQLExpr {
+	fn parse_join(&self, left: SQLExpr, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
 		// TODO better protection on expected keyword sequences
 		let join_type = {
 			if self.consume_keyword("JOIN", tokens) || self.consume_keyword("INNER", tokens) {
@@ -427,30 +425,30 @@ impl AnsiSQLParser {
 				self.consume_keyword("JOIN", tokens);
 				SQLJoinType::LEFT
 			} else {
-				panic!("Unsupported join keyword {:?}", tokens.peek())
+				return Err(format!("Unsupported join keyword {:?}", tokens.peek()))
 			}
 		};
 
-		let right = Box::new(self.parse_expr(tokens, 0));
+		let right = Box::new(try!(self.parse_expr(tokens, 0)));
 
 		let on = {
 			if self.consume_keyword("ON", tokens) {
-				Some(Box::new(self.parse_expr(tokens, 0)))
+				Some(Box::new(try!(self.parse_expr(tokens, 0))))
 			} else if join_type != SQLJoinType::CROSS {
-				panic!("Expected ON, received token {:?}", tokens.peek())
+				return Err(format!("Expected ON, received token {:?}", tokens.peek()))
 			} else {
 				None
 			}
 		};
 
-		SQLExpr::SQLJoin {left: Box::new(left), join_type: join_type, right: right, on_expr: on}
+		Ok(SQLExpr::SQLJoin {left: Box::new(left), join_type: join_type, right: right, on_expr: on})
 	}
 
-	fn parse_alias(&self, left: SQLExpr, tokens: &mut Peekable<Tokens>) -> SQLExpr {
+	fn parse_alias(&self, left: SQLExpr, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
 		if self.consume_keyword(&"AS", tokens) {
-			SQLExpr::SQLAlias{expr: Box::new(left), alias: Box::new(self.parse_identifier(tokens))}
+			Ok(SQLExpr::SQLAlias{expr: Box::new(left), alias: Box::new(try!(self.parse_identifier(tokens)))})
 		} else {
-			panic!("Illegal state, expected AS, received token {:?}", tokens.peek())
+			Err(format!("Illegal state, expected AS, received token {:?}", tokens.peek()))
 		}
 	}
 
@@ -506,7 +504,7 @@ mod tests {
 			FROM (SELECT a, b, c FROM tThree) AS l
 			WHERE a > 10 AND b = true
 			ORDER BY a DESC, (a + b) ASC, c";
-		let parsed = parser.parse(sql);
+		let parsed = parser.parse(sql).unwrap();
 
 		println!("{:#?}", parser.parse(sql));
 
@@ -528,7 +526,7 @@ mod tests {
 			ON l.a = r.a
 			WHERE l.b > r.b
 			ORDER BY r.c DESC";
-		let parsed = parser.parse(sql);
+		let parsed = parser.parse(sql).unwrap();
 
 		println!("{:#?}", parser.parse(sql));
 
@@ -542,7 +540,7 @@ mod tests {
 		let parser = AnsiSQLParser {};
 		let sql = "((((SELECT a, b, c FROM tOne UNION (SELECT a, b, c FROM tTwo))))) UNION (((SELECT a, b, c FROM tThree) UNION ((SELECT a, b, c FROM tFour))))";
 
-		let parsed = parser.parse(sql);
+		let parsed = parser.parse(sql).unwrap();
 
 		println!("{:#?}", parser.parse(sql));
 
@@ -556,7 +554,7 @@ mod tests {
 		let parser = AnsiSQLParser {};
 		let sql = "INSERT INTO foo (a, b, c) VALUES(1, 20.45, 'abcdefghijk')";
 
-		let parsed = parser.parse(sql);
+		let parsed = parser.parse(sql).unwrap();
 
 		println!("{:#?}", parser.parse(sql));
 

@@ -28,7 +28,7 @@ static KEYWORDS: &'static [&'static str] = &["SELECT", "FROM", "WHERE", "AND", "
     "WHERE", "ORDER", "BY", "HAVING", "GROUP", "ASC", "DESC", "JOIN", "INNER", "LEFT", "RIGHT", "CROSS",
     "FULL", "ON", "INSERT", "UPDATE", "SET", "VALUES", "INTO"];
 
-fn next_token(it: &mut Peekable<Chars>, lit_index: &AtomicU32) -> Result<Option<Token>, &'static str> {
+fn next_token(it: &mut Peekable<Chars>, lit_index: &AtomicU32) -> Result<Option<Token>, String> {
 
     match it.peek() {
         Some(&ch) => match ch {
@@ -55,7 +55,7 @@ fn next_token(it: &mut Peekable<Chars>, lit_index: &AtomicU32) -> Result<Option<
                         }
                         _ => {}
                     },
-                    None => panic!("Expected token received None")
+                    None => return Err(String::from("Expected token received None"))
                 }
                 Ok(Some(Token::Operator(op)))
             },
@@ -118,7 +118,7 @@ fn next_token(it: &mut Peekable<Chars>, lit_index: &AtomicU32) -> Result<Option<
                                         },
                                         _ => continue,
                                     },
-                                    None => panic!("Unexpected end of string")
+                                    None => return Err(String::from("Unexpected end of string"))
                                 }
                             },
                             '\'' => {
@@ -130,7 +130,7 @@ fn next_token(it: &mut Peekable<Chars>, lit_index: &AtomicU32) -> Result<Option<
                                 it.next();
                             }
                         },
-                        None => panic!("Unexpected end of string")
+                        None => return Err(String::from("Unexpected end of string"))
                     }
                 }
 
@@ -142,7 +142,7 @@ fn next_token(it: &mut Peekable<Chars>, lit_index: &AtomicU32) -> Result<Option<
             },
             // just playing around ...
             _ => {
-                panic!("Unsupported char {:?}", ch)
+                Err(format!("Unsupported char {:?}", ch))
             }
         },
         None => Ok(None),
@@ -150,12 +150,12 @@ fn next_token(it: &mut Peekable<Chars>, lit_index: &AtomicU32) -> Result<Option<
 }
 
 pub trait Tokenizer {
-    fn tokenize(&self) -> Result<Vec<Token>, &'static str>;
+    fn tokenize(&self) -> Result<Vec<Token>, String>;
 }
 
 impl Tokenizer for String {
 
-    fn tokenize(&self) -> Result<Vec<Token>, &'static str> {
+    fn tokenize(&self) -> Result<Vec<Token>, String> {
 
         let mut it = self.chars().peekable();
         let mut stream: Vec<Token> = Vec::new();

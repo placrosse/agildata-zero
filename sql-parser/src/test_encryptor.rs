@@ -154,7 +154,7 @@ mod tests {
 	fn test_visitor() {
 		let parser = AnsiSQLParser {};
 		let sql = "SELECT age, first_name, last_name FROM users WHERE age = 1";
-		let parsed = parser.parse(sql);
+		let parsed = parser.parse(sql).unwrap();
 
 		let config = super::config::parse_config("../config/src/demo-client-config.xml");
 		let mut valueMap: HashMap<u32, String> = HashMap::new();
