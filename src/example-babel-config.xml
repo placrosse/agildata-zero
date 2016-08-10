@@ -19,7 +19,7 @@
 
 	<schema name="babel">
 		<table name="users">
-			<column name="id" type="INTEGER" encryption="none" pkOrdinal="0"/>
+			<!-- <column name="id" type="INTEGER" encryption="none" pkOrdinal="0"/> -->
 			<column name="first_name" type="VARCHAR(50)" encryption="ope"/>
 			<column name="last_name" type="VARCHAR(50)" encryption="ope"/>
 			<column name="ssn" type="VARCHAR(50)" encryption="aes"/>

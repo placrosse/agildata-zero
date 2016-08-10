@@ -59,6 +59,16 @@ impl Encrypt for u64 {
 	}
 }
 
+impl Encrypt for String {
+	fn encrypt(self, scheme: &EncryptionType) -> Option<Vec<u8>> {
+		// let mut buf: [u8] = [0_u8; 8];
+		// byteorder::ByteOrder::write_u64(&mut buf, self);
+		let mut buf = self.as_bytes();
+
+		encrypt(&get_key(), &buf)
+	}
+}
+
 fn mk_nonce(n0: u8, n1: u8) -> [u8; 12] {
     let now = UTC::now();
     let mut ts = now.timestamp();

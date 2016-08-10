@@ -78,10 +78,17 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 				write!(builder, " {}", d).unwrap();
 			},
 			LiteralExpr::LiteralString(i, s) => {
-				// let quote = """'""";
-				// write!(builder, " {}", quote).unwrap();
-				write!(builder, "'{}'", s).unwrap(); // TODO write! is auto escaping the single quotes...
-				// write!(builder, "{}", quote).unwrap();
+				match literals.get(&i) {
+					Some(value) => match value {
+						// TODO write! escapes the single quotes...
+						// X'...'
+						&Some(ref e) => {
+							write!(builder, "X'{}'", to_hex_string(e)).unwrap();
+						},
+						&None => write!(builder, " {}", "NULL").unwrap()
+					},
+					None => write!(builder, " {}", s).unwrap()
+				}
 			}
 			//_ => panic!("Unsupported literal for writing {:?}", lit)
 		},

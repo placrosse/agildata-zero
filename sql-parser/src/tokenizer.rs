@@ -98,7 +98,7 @@ fn next_token(it: &mut Peekable<Chars>, lit_index: &AtomicU32) -> Result<Option<
                 } else if "AND".eq_ignore_ascii_case(&text) || "OR".eq_ignore_ascii_case(&text) {
                     Ok(Some(Token::Operator(text)))
                 } else {
-                    Ok(Some(Token::Keyword(text)))
+                    Ok(Some(Token::Keyword(text.to_uppercase())))
                 }
             },
             '\'' => {

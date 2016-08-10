@@ -53,8 +53,44 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 					&None => {}
 				}
 			},
-			&SQLExpr::SQLInsert{ref table, ref column_list, ref values_list} => {
-				panic!("Not implemented");
+			&SQLExpr::SQLInsert{box ref table, box ref column_list, box ref values_list} => {
+				let table = match table {
+					&SQLExpr::SQLIdentifier(ref v) => v,
+					_ => panic!("Illegal")
+				};
+				match column_list {
+					&SQLExpr::SQLExprList(ref columns) => {
+						match values_list {
+							&SQLExpr::SQLExprList(ref values) => {
+								for (i, e) in columns.iter().enumerate() {
+									match e {
+										&SQLExpr::SQLIdentifier(ref name) => {
+											let mut col = self.config.get_column_config(&String::from("babel"), table, name);
+											if (col.is_some()) {
+												match values[i] {
+													SQLExpr::SQLLiteral(ref l) => match l {
+														&LiteralExpr::LiteralLong(ref i, ref val) => {
+															self.valuemap.insert(i.clone(), val.encrypt(&col.unwrap().encryption));
+														},
+														&LiteralExpr::LiteralString(ref i, ref val) => {
+															self.valuemap.insert(i.clone(), val.clone().encrypt(&col.unwrap().encryption));
+														}
+														_ => panic!("Unsupported value type {:?}", l)
+													},
+													_ => {}
+												}
+											}
+										},
+										_ => panic!("Illegal")
+									}
+								}
+							},
+							_ => panic!("Illegal")
+						}
+
+					},
+					_ => panic!("Illegal")
+				}
 			},
 			&SQLExpr::SQLExprList(ref vector) => {
 				for e in vector {
@@ -79,6 +115,9 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 										&LiteralExpr::LiteralLong(ref i, ref val) => {
 											self.valuemap.insert(i.clone(), val.encrypt(&col.unwrap().encryption));
 										},
+										&LiteralExpr::LiteralString(ref i, ref val) => {
+											self.valuemap.insert(i.clone(), val.clone().encrypt(&col.unwrap().encryption));
+										}
 										_ => panic!("Unsupported value type {:?}", l)
 									},
 									_ => panic!("Unreachable")
@@ -161,7 +200,24 @@ mod tests {
 		let config = super::config::parse_config("../config/src/demo-client-config.xml");
 		let mut valueMap: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
 		let mut encrypt_vis = EncryptionVisitor {
-			config: config,
+			config: &config,
+			valuemap: valueMap
+		};
+		 walk(&mut encrypt_vis, &parsed);
+
+		 println!("HERE {:#?}", encrypt_vis);
+	}
+
+	#[test]
+	fn test_vis_insert() {
+		let parser = AnsiSQLParser {};
+		let sql = "INSERT INTO users (id, first_name, last_name, ssn, age, sex) VALUES(1, 'Janis', 'Joplin', '123456789', 27, 'F')";
+		let parsed = parser.parse(sql).unwrap();
+
+		let config = super::config::parse_config("../config/src/demo-client-config.xml");
+		let mut valueMap: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
+		let mut encrypt_vis = EncryptionVisitor {
+			config: &config,
 			valuemap: valueMap
 		};
 		 walk(&mut encrypt_vis, &parsed);
