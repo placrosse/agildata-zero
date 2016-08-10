@@ -166,13 +166,6 @@ fn determine_encryption(encryption: &String) -> EncryptionType {
 }
 
 #[derive(Debug)]
-pub enum NativeType {
-	U64,
-	Varchar(u32),
-	F64,
-}
-
-#[derive(Debug)]
 pub struct ColumnConfig {
 	pub name: String,
 	pub encryption: EncryptionType,

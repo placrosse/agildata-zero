@@ -20,11 +20,11 @@
 	<schema name="babel">
 		<table name="users">
 			<column name="id" type="INTEGER" encryption="none" pkOrdinal="0"/>
-			<column name="first_name" type="VARCHAR(50)" encryption="ope"/>
-			<column name="last_name" type="VARCHAR(50)" encryption="ope"/>
+			<column name="first_name" type="VARCHAR(50)" encryption="aes"/>
+			<column name="last_name" type="VARCHAR(50)" encryption="aes"/>
 			<column name="ssn" type="VARCHAR(50)" encryption="aes"/>
-			<column name="age" type="INTEGER" encryption="aes-salted"/>
-			<column name="sex" type="VARCHAR(50)" encryption="aes-salted"/>
+			<column name="age" type="INTEGER" encryption="aes"/>
+			<column name="sex" type="VARCHAR(50)" encryption="aes"/>
 		</table>
 		<table name="user_purchases">
 			<column name="id" type="INTEGER" encryption="none" pkOrdinal="0"/>

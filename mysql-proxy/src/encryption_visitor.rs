@@ -29,112 +29,160 @@ impl<'a> EncryptionVisitor<'a> {
 			_ => false
 		}
 	}
+
+	pub fn get_value_map(&self) -> &HashMap<u32, Option<Vec<u8>>> {
+		&self.valuemap
+	}
 }
 
 impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
-	fn visit_sql_expr(&mut self, expr: SQLExpr) {
+	fn visit_sql_expr(&mut self, expr: &SQLExpr) {
 		match expr {
-			SQLExpr::SQLSelect{expr_list, relation, selection, order} => {
-				self.visit_sql_expr(*expr_list);
-				if !relation.is_none() {
-					self.visit_sql_expr(*relation.unwrap());
+			&SQLExpr::SQLSelect{box ref expr_list, ref relation, ref selection, ref order} => {
+				self.visit_sql_expr(expr_list);
+				match relation {
+					&Some(box ref expr) => self.visit_sql_expr(expr),
+					&None => {}
 				}
-				if !selection.is_none() {
-					self.visit_sql_expr(*selection.unwrap());
+				match selection {
+					&Some(box ref expr) => self.visit_sql_expr(expr),
+					&None => {}
 				}
-				if !order.is_none() {
-					self.visit_sql_expr(*order.unwrap());
+				match order {
+					&Some(box ref expr) => self.visit_sql_expr(expr),
+					&None => {}
 				}
 			},
-			SQLExpr::SQLInsert{table, column_list, values_list} => {
-				panic!("Not implemented");
+			&SQLExpr::SQLInsert{box ref table, box ref column_list, box ref values_list} => {
+				let table = match table {
+					&SQLExpr::SQLIdentifier(ref v) => v,
+					_ => panic!("Illegal")
+				};
+				match column_list {
+					&SQLExpr::SQLExprList(ref columns) => {
+						match values_list {
+							&SQLExpr::SQLExprList(ref values) => {
+								for (i, e) in columns.iter().enumerate() {
+									match e {
+										&SQLExpr::SQLIdentifier(ref name) => {
+											let mut col = self.config.get_column_config(&String::from("babel"), table, name);
+											if (col.is_some()) {
+												match values[i] {
+													SQLExpr::SQLLiteral(ref l) => match l {
+														&LiteralExpr::LiteralLong(ref i, ref val) => {
+															self.valuemap.insert(i.clone(), val.encrypt(&col.unwrap().encryption));
+														},
+														&LiteralExpr::LiteralString(ref i, ref val) => {
+															self.valuemap.insert(i.clone(), val.clone().encrypt(&col.unwrap().encryption));
+														}
+														_ => panic!("Unsupported value type {:?}", l)
+													},
+													_ => {}
+												}
+											}
+										},
+										_ => panic!("Illegal")
+									}
+								}
+							},
+							_ => panic!("Illegal")
+						}
+
+					},
+					_ => panic!("Illegal")
+				}
 			},
-			SQLExpr::SQLExprList(vector) => {
+			&SQLExpr::SQLExprList(ref vector) => {
 				for e in vector {
-					self.visit_sql_expr(e);
+					self.visit_sql_expr(&e);
 				}
 			},
-			SQLExpr::SQLBinary{left, op, right} => {
+			&SQLExpr::SQLBinary{box ref left, ref op, box ref right} => {
 				//println!("HERE");
+				// ident = lit
 				match op {
 					// TODO Messy...clean up
 					// TODO should check left and right
-					SQLOperator::EQ => {
-						if (self.is_identifier(&*left) && self.is_literal(&*right)) {
+					&SQLOperator::EQ => {
+						if (self.is_identifier(left) && self.is_literal(right)) {
 							let ident = match left {
-								box SQLExpr::SQLIdentifier(v) => v,
+								&SQLExpr::SQLIdentifier(ref v) => v,
 								_ => panic!("Unreachable")
 							};
-							let mut col = self.config.get_column_config(&String::from("babel"), &String::from("users"), &String::from(ident));
+							let mut col = self.config.get_column_config(&String::from("babel"), &String::from("users"), ident);
 							if (col.is_some()) {
 								match right {
-									box SQLExpr::SQLLiteral(l) => match l {
-										LiteralExpr::LiteralLong(i, val) => {
-											self.valuemap.insert(i, val.encrypt(&col.unwrap().encryption));
+									&SQLExpr::SQLLiteral(ref l) => match l {
+										&LiteralExpr::LiteralLong(ref i, ref val) => {
+											self.valuemap.insert(i.clone(), val.encrypt(&col.unwrap().encryption));
 										},
+										&LiteralExpr::LiteralString(ref i, ref val) => {
+											self.valuemap.insert(i.clone(), val.clone().encrypt(&col.unwrap().encryption));
+										}
 										_ => panic!("Unsupported value type {:?}", l)
 									},
 									_ => panic!("Unreachable")
 								}
 							}
-						} else if (self.is_identifier(&*right) && self.is_literal(&*left)) {
+						} else if (self.is_identifier(&right) && self.is_literal(&left)) {
 							panic!("Syntax literal = identifier not currently supported")
 						}
-
-						// self.visit_sql_expr(*left);
-						// self.visit_sql_expr(*right);
 					},
 					_ => {}
 				}
+
+				self.visit_sql_expr(left);
+				self.visit_sql_expr(right);
 			},
-			SQLExpr::SQLLiteral(lit) => {
+			&SQLExpr::SQLLiteral(ref lit) => {
 				self.visit_sql_lit_expr(lit);
 			},
-			SQLExpr::SQLAlias{expr, alias} => {
-				self.visit_sql_expr(*expr);
-				self.visit_sql_expr(*alias);
+			&SQLExpr::SQLAlias{box ref expr, box ref alias} => {
+				self.visit_sql_expr(&expr);
+				self.visit_sql_expr(&alias);
 			},
-			SQLExpr::SQLIdentifier(id) => {
+			&SQLExpr::SQLIdentifier(ref id) => {
 				// TODO end of visit arm
 			},
-			SQLExpr::SQLNested(expr) => {
-				self.visit_sql_expr(*expr);
+			&SQLExpr::SQLNested(ref expr) => {
+				self.visit_sql_expr(expr);
 			},
-			SQLExpr::SQLUnary{operator, expr} => {
+			&SQLExpr::SQLUnary{ref operator, box ref expr} => {
 				self.visit_sql_operator(operator);
-				self.visit_sql_expr(*expr);
+				self.visit_sql_expr(expr);
 			},
-			SQLExpr::SQLOrderBy{expr, is_asc} => {
-				self.visit_sql_expr(*expr);
+			&SQLExpr::SQLOrderBy{box ref expr, ref is_asc} => {
+				self.visit_sql_expr(expr);
 				// TODO bool
 			},
-			SQLExpr::SQLJoin{left, join_type, right, on_expr} => {
-				self.visit_sql_expr(*left);
+			&SQLExpr::SQLJoin{box ref left, ref join_type, box ref right, ref on_expr} => {
+				self.visit_sql_expr(left);
 				// TODO visit join type
-				self.visit_sql_expr(*right);
-				if !on_expr.is_none() {
-					self.visit_sql_expr(*on_expr.unwrap());
+				self.visit_sql_expr(right);
+				match on_expr {
+					&Some(box ref expr) => self.visit_sql_expr(expr),
+					&None => {}
 				}
 			},
-			SQLExpr::SQLUnion{left, union_type, right} => {
-				self.visit_sql_expr(*left);
+			&SQLExpr::SQLUnion{box ref left, ref union_type, box ref right} => {
+				self.visit_sql_expr(left);
 				// TODO union type
-				self.visit_sql_expr(*right);
+				self.visit_sql_expr(right);
 			},
 			//_ => panic!("Unsupported expr {:?}", expr)
 		}
 	}
 
-	fn visit_sql_lit_expr(&mut self, lit: LiteralExpr) {
-		panic!("visit_sql_lit_expr() not implemented");
+	fn visit_sql_lit_expr(&mut self, lit: &LiteralExpr) {
+		//do nothing
 	}
 
-	fn visit_sql_operator(&mut self, op: SQLOperator) {
-		panic!("visit_sql_operator() not implemented");
+	fn visit_sql_operator(&mut self, op: &SQLOperator) {
+		// do nothing
 	}
 }
 
-pub fn walk(visitor: &mut SQLExprVisitor, e: SQLExpr) {
+pub fn walk(visitor: &mut SQLExprVisitor, e: &SQLExpr) {
 	visitor.visit_sql_expr(e);
 }
 
@@ -153,7 +201,24 @@ mod tests {
 		let config = super::config::parse_config("../config/src/demo-client-config.xml");
 		let mut valueMap: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
 		let mut encrypt_vis = EncryptionVisitor {
-			config: config,
+			config: &config,
+			valuemap: valueMap
+		};
+		 walk(&mut encrypt_vis, &parsed);
+
+		 println!("HERE {:#?}", encrypt_vis);
+	}
+
+	#[test]
+	fn test_vis_insert() {
+		let parser = AnsiSQLParser {};
+		let sql = "INSERT INTO users (id, first_name, last_name, ssn, age, sex) VALUES(1, 'Janis', 'Joplin', '123456789', 27, 'F')";
+		let parsed = parser.parse(sql).unwrap();
+
+		let config = super::config::parse_config("../src/example-babel-config.xml");
+		let mut valueMap: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
+		let mut encrypt_vis = EncryptionVisitor {
+			config: &config,
 			valuemap: valueMap
 		};
 		 walk(&mut encrypt_vis, &parsed);

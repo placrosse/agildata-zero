@@ -26,7 +26,7 @@ pub enum LiteralToken {
 
 static KEYWORDS: &'static [&'static str] = &["SELECT", "FROM", "WHERE", "AND", "OR", "UNION", "FROM", "AS",
     "WHERE", "ORDER", "BY", "HAVING", "GROUP", "ASC", "DESC", "JOIN", "INNER", "LEFT", "RIGHT", "CROSS",
-    "FULL", "ON", "INSERT", "UPDATE", "SET", "VALUES", "INTO"];
+    "FULL", "ON", "INSERT", "UPDATE", "SET", "VALUES", "INTO", "SHOW"];
 
 fn next_token(it: &mut Peekable<Chars>, lit_index: &AtomicU32) -> Result<Option<Token>, String> {
 
@@ -98,7 +98,7 @@ fn next_token(it: &mut Peekable<Chars>, lit_index: &AtomicU32) -> Result<Option<
                 } else if "AND".eq_ignore_ascii_case(&text) || "OR".eq_ignore_ascii_case(&text) {
                     Ok(Some(Token::Operator(text)))
                 } else {
-                    Ok(Some(Token::Keyword(text)))
+                    Ok(Some(Token::Keyword(text.to_uppercase())))
                 }
             },
             '\'' => {

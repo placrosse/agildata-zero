@@ -25,6 +25,7 @@ use std::sync::mpsc::channel;
 
 extern crate byteorder;
 use byteorder::{WriteBytesExt,ReadBytesExt,BigEndian,LittleEndian};
+use std::io::Cursor;
 
 // lazy_static! {
 //     static ref KEYS: Vec<Mutex<[u8; 32]>> = {
@@ -42,20 +43,75 @@ pub enum EncryptionType {
 	NA,
 }
 
+#[derive(Debug)]
+pub enum NativeType {
+	U64,
+	Varchar(u32),
+	F64,
+}
+
 pub trait Encrypt {
 	fn encrypt(self, scheme: &EncryptionType) -> Option<Vec<u8>>;
 }
 
+pub trait Decrypt {
+	fn decrypt(value: Vec<u8>, scheme: &EncryptionType) -> Self;
+}
+
+impl Decrypt for u64 {
+	fn decrypt(value: Vec<u8>, scheme: &EncryptionType) -> u64 {
+		match scheme {
+			&EncryptionType::AES => {
+				let mut decrypted = Cursor::new(decrypt(&get_key(), &value).unwrap());
+				decrypted.read_u64::<BigEndian>().unwrap()
+			},
+			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
+			_ => panic!("Not implemented")
+		}
+	}
+}
+
+impl Decrypt for String {
+	fn decrypt(value: Vec<u8>, scheme: &EncryptionType) -> String {
+		match scheme {
+			&EncryptionType::AES => {
+				let decrypted = decrypt(&get_key(), &value);
+				String::from_utf8(decrypted.unwrap()).expect("Invalid UTF-8")
+			},
+			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
+			_ => panic!("Not implemented")
+		}
+	}
+}
+// u64::from()
 impl Encrypt for u64 {
 	fn encrypt(self, scheme: &EncryptionType) -> Option<Vec<u8>> {
-		// let mut buf: [u8] = [0_u8; 8];
-		// byteorder::ByteOrder::write_u64(&mut buf, self);
-		let mut buf: Vec<u8> = Vec::new();
+		match scheme {
+			&EncryptionType::AES => {
+				let mut buf: Vec<u8> = Vec::new();
+				buf.write_u64::<BigEndian>(self).unwrap();
+				encrypt(&get_key(), &buf)
+			},
+			&EncryptionType::NA => None,
+			_ => panic!("Not implemented")
+		}
 
-		// wtr.write_u32::<LittleEndian>(slice.len() as u32).unwrap();
-		buf.write_u64::<BigEndian>(self).unwrap();
+	}
+}
 
-		encrypt(&get_key(), &buf)
+impl Encrypt for String {
+	fn encrypt(self, scheme: &EncryptionType) -> Option<Vec<u8>> {
+		match scheme {
+			&EncryptionType::AES => {
+				let mut buf = self.as_bytes();
+				println!("Buf length = {}", buf.len());
+				let e = encrypt(&get_key(), &buf).unwrap();
+				println!("Encrypted length = {}", e.len());
+				Some(e)
+			},
+			&EncryptionType::NA => None,
+			_ => panic!("Not implemented")
+		}
 	}
 }
 
@@ -127,7 +183,7 @@ pub fn encrypt(key: &[u8], buf: &[u8]) -> Option<Vec<u8>> {
 }
 
 pub fn decrypt(key: &[u8], buf: &[u8]) -> Option<Vec<u8>> {
-    if buf.len() < 36 { return None; }  // min size w/nonce & k & tag
+    //if buf.len() < 36 { return None; }  // min size w/nonce & k & tag
 
     let n0 = buf[6];
     //let key: [u8; 32] = KEYS[n0 as usize].lock().deref().clone();

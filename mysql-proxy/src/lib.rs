@@ -26,6 +26,9 @@ use sql_parser::sql_writer;
 extern crate config;
 use config::*;
 
+extern crate encrypt;
+use encrypt::{Decrypt, NativeType, EncryptionType};
+
 const SERVER: mio::Token = mio::Token(0);
 
 use std::collections::HashMap;
@@ -62,18 +65,44 @@ struct MySQLPacketReader {
 
 impl MySQLPacketReader {
 
-    fn read_lenenc_str(&mut self) -> String {
+    fn read_lenenc_str(&mut self) -> Option<String> {
         println!("read_lenenc_str BEGIN pos={}", self.pos);
+
         //TODO: HACK: assume single byte for length for now
         let n = self.payload[self.pos] as usize;
         self.pos += 1;
 
-        println!("read_lenenc_str str_len={}", n);
+        match n {
+            0xfb => None, // MySQL NULL value
+            _ => {
+                println!("read_lenenc_str str_len={}", n);
 
-        let s = parse_string(&self.payload[self.pos..self.pos+n]);
-        self.pos += n;
-        s
+                let s = parse_string(&self.payload[self.pos..self.pos+n]);
+                self.pos += n;
+                Some(s)
+            }
+        }
 
+    }
+
+    fn read_len_bytes(&mut self) -> Vec<u8> {
+        println!("read_len_bytes BEGIN pos={}", self.pos);
+
+        //TODO: HACK: assume single byte for length for now
+        let n = self.payload[self.pos] as usize;
+        self.pos += 1;
+
+        match n {
+            0xfb => vec![0xfb], // MySQL NULL value
+            _ => {
+                println!("read_len_bytes str_len={}", n);
+
+
+                let s = self.payload[self.pos..self.pos+n].to_vec();
+                self.pos += n;
+                s
+            }
+        }
     }
 
     // fn read_bytes(len: usize) -> [u8] {
@@ -209,6 +238,12 @@ impl MySQLConnection for std::net::TcpStream {
     }
 }
 
+#[derive(Debug)]
+struct ColumnMetaData {
+    schema: String,
+    table_name: String,
+    column_name: String
+}
 
 #[derive(Debug)]
 struct Connection<'a> {
@@ -322,29 +357,36 @@ impl<'a> Connection<'a> {
                                 // reqwrite query
                                 if parsed.is_some() {
 
-                                    // let mut value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
-                                    // let mut encrypt_vis = EncryptionVisitor {
-                                    //     config: self.config,
-                                    //     valuemap: value_map
-                                    // };
-                                    // encryption_visitor::walk(&mut encrypt_vis, parsed.unwrap());
+                                    let mut value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
+                                    let mut encrypt_vis = EncryptionVisitor {
+                                        config: self.config,
+                                        valuemap: value_map
+                                    };
+                                    match parsed {
+                                        Some(ref expr) => encryption_visitor::walk(&mut encrypt_vis, expr),
+                                        None => {}
+                                    }
+                                    // encryption_visitor::walk(&mut encrypt_vis, &parsed.unwrap());
 
-                                    let rewritten = sql_writer::write(parsed.unwrap());
-                                    println!("REWRITTEN {:?}", rewritten);
+                                    let rewritten = sql_writer::write(parsed.unwrap(), encrypt_vis.get_value_map());
+                                    println!("REWRITTEN {}", rewritten);
 
                                     // write packed with new query
                                     //let n_buf: Vec<u8> = Vec::new();
                                     let slice: &[u8] = rewritten.as_bytes();
 
                                     let mut wtr: Vec<u8> = vec![];
-                                    wtr.write_u32::<LittleEndian>(slice.len() as u32).unwrap();
-                                    assert!(0x00 == wtr.pop().unwrap());
+                                    wtr.write_u32::<LittleEndian>((slice.len() + 1) as u32).unwrap();
+                                    assert!(0x00 == wtr[3]);
                                     wtr.push(0x03); // packet type for COM_Query
                                     wtr.extend_from_slice(slice);
 
+                                    println!("SENDING {:?}", wtr);
                                     self.mysql_send(&wtr);
 
                                 } else {
+                                    let send = &buf[0 .. packet_len+4];
+                                    println!("SENDING {:?}", send);
                                     self.mysql_send(&buf[0 .. packet_len+4]);
                                 }
 
@@ -400,6 +442,29 @@ impl<'a> Connection<'a> {
                 write_buf.extend_from_slice(&packet.payload);
             },
             0xfb => panic!("not implemented"),
+            0x03 => {
+                println!("Got COM_QUERY packet");
+                write_buf.extend_from_slice(&packet.header);
+                write_buf.extend_from_slice(&packet.payload);
+
+                loop {
+                    let row_packet = self.remote.read_packet().unwrap();
+                    match row_packet.packet_type() {
+                        // break on receiving Err_Packet, or EOF_Packet
+                        0xfe | 0xff => {
+
+                            println!("End of result rows");
+                            write_buf.extend_from_slice(&row_packet.header);
+                            write_buf.extend_from_slice(&row_packet.payload);
+                            break
+                        },
+                        _ => {
+                            write_buf.extend_from_slice(&row_packet.header);
+                            write_buf.extend_from_slice(&row_packet.payload);
+                        }
+                    }
+                }
+            },
             _ => {
 
                 println!("Got field_count packet");
@@ -413,6 +478,8 @@ impl<'a> Connection<'a> {
 
                 println!("Result set has {} columns", field_count);
 
+                let mut column_meta: Vec<ColumnMetaData> = vec![];
+
                 for i in 0 .. field_count {
 
                     let field_packet = self.remote.read_packet().unwrap();
@@ -421,14 +488,27 @@ impl<'a> Connection<'a> {
 
                     let mut r = MySQLPacketReader { payload: field_packet.payload, pos: 0 };
 
-                    let catalog = r.read_lenenc_str();
-                    let schema = r.read_lenenc_str();
-                    let table = r.read_lenenc_str();
-                    let org_table = r.read_lenenc_str();
-                    let name = r.read_lenenc_str();
-                    let org_name = r.read_lenenc_str();
+                    //TODO: assumes these values can never be NULL
+                    let catalog = r.read_lenenc_str().unwrap();
+                    let schema = r.read_lenenc_str().unwrap();
+                    let table = r.read_lenenc_str().unwrap();
+                    let org_table = r.read_lenenc_str().unwrap();
+                    let name = r.read_lenenc_str().unwrap();
+                    let org_name = r.read_lenenc_str().unwrap();
 
-                    println!("column {}: table={}, column={}", i, table, name);
+                    println!("ALL catalog {}, schema {}, table {}, org_table {}, name {}, org_name {}",
+                        catalog, schema, table, org_table, name, org_name);
+
+                    let md = ColumnMetaData {
+                        schema: schema,
+                        table_name: table,
+                        column_name: name
+                    };
+
+                    println!("column {} = {:?}", i, md);
+
+
+                    column_meta.push(md);
 
                 }
 
@@ -457,10 +537,84 @@ impl<'a> Connection<'a> {
                         _ => {
                             println!("Received row");
 
-                            //TODO do decryption here if required
+                            //TODO: if this result set does not contain any encrypted values
+                            // then we can just write the packet straight to the client and
+                            // skip all of this processing
 
-                            write_buf.extend_from_slice(&row_packet.header);
-                            write_buf.extend_from_slice(&row_packet.payload);
+                            println!("Original Header: {:?}", &row_packet.header);
+                            println!("Original Payload: {:?}", &row_packet.payload);
+
+                            //TODO do decryption here if required
+                            let mut r = MySQLPacketReader { payload: row_packet.payload, pos: 0 };
+
+                            let mut wtr: Vec<u8> = vec![];
+
+                            for i in 0 .. field_count {
+                                let is_encrypted = false;
+
+                                //println!("Value {} is {:?}", i, orig_value);
+
+                                let column_config = self.config.get_column_config(
+                                    &(column_meta[i as usize].schema),
+                                    &(column_meta[i as usize].table_name),
+                                    &(column_meta[i as usize].column_name));
+
+                                println!("config is {:?}", column_config);
+
+                                let value = match column_config {
+
+                                    None => r.read_lenenc_str(),
+                                    Some(cc) => match cc {
+                                        &ColumnConfig {ref name, ref encryption, ref native_type} => {
+                                            match native_type {
+                                                &NativeType::U64 => {
+                                                    match encryption {
+                                                        &EncryptionType::NA => r.read_lenenc_str(),
+                                                        _ => Some(format!("{}", u64::decrypt(r.read_len_bytes(), encryption)))
+                                                    }
+                                                },
+                                                &NativeType::Varchar(_) => {
+                                                    match encryption {
+                                                        &EncryptionType::NA => r.read_lenenc_str(),
+                                                        _ => Some(String::decrypt(r.read_len_bytes(), encryption))
+                                                    }
+                                                }
+                                                _ => panic!("Native type {:?} not implemented", native_type)
+                                            }
+                                        }
+                                    }
+
+                                    /*match cc.encryption {
+                                        EncryptionType::AES => orig_value,
+                                        _ => orig_value
+                                    }*/
+                                };
+
+                                // encode this field in the new packet
+                                match value {
+                                    None => wtr.push(0xfb),
+                                    Some(v) => {
+                                        let slice = v.as_bytes();
+                                        //TODO: hacked to assume single byte for string length
+                                        wtr.write_u8(slice.len() as u8).unwrap();
+                                        wtr.extend_from_slice(&slice);
+                                    }
+                                }
+
+                            }
+
+                            let mut new_header: Vec<u8> = vec![];
+                            let sequence_id = row_packet.header[3];
+                            new_header.write_u32::<LittleEndian>(wtr.len() as u32).unwrap();
+                            new_header.pop();
+                            new_header.push(sequence_id);
+
+                            println!("Modified Header: {:?}", &new_header);
+                            println!("Modified Payload: {:?}", &wtr);
+
+                            write_buf.extend_from_slice(&new_header);
+                            write_buf.extend_from_slice(&wtr);
+
                         }
                     }
                 }
