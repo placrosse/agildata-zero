@@ -48,24 +48,29 @@ pub trait Encrypt {
 
 impl Encrypt for u64 {
 	fn encrypt(self, scheme: &EncryptionType) -> Option<Vec<u8>> {
-		// let mut buf: [u8] = [0_u8; 8];
-		// byteorder::ByteOrder::write_u64(&mut buf, self);
-		let mut buf: Vec<u8> = Vec::new();
+		match scheme {
+			&EncryptionType::AES => {
+				let mut buf: Vec<u8> = Vec::new();
+				buf.write_u64::<BigEndian>(self).unwrap();
+				encrypt(&get_key(), &buf)
+			},
+			&EncryptionType::NA => None,
+			_ => panic!("Not implemented")
+		}
 
-		// wtr.write_u32::<LittleEndian>(slice.len() as u32).unwrap();
-		buf.write_u64::<BigEndian>(self).unwrap();
-
-		encrypt(&get_key(), &buf)
 	}
 }
 
 impl Encrypt for String {
 	fn encrypt(self, scheme: &EncryptionType) -> Option<Vec<u8>> {
-		// let mut buf: [u8] = [0_u8; 8];
-		// byteorder::ByteOrder::write_u64(&mut buf, self);
-		let mut buf = self.as_bytes();
-
-		encrypt(&get_key(), &buf)
+		match scheme {
+			&EncryptionType::AES => {
+				let mut buf = self.as_bytes();
+				encrypt(&get_key(), &buf)
+			},
+			&EncryptionType::NA => None,
+			_ => panic!("Not implemented")
+		}
 	}
 }
 

@@ -66,7 +66,7 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 						&Some(ref e) => {
 							write!(builder, "X'{}'", to_hex_string(e)).unwrap();
 						},
-						&None => write!(builder, " {}", "NULL").unwrap()
+						&None => write!(builder, " {}", l).unwrap()
 					},
 					None => write!(builder, " {}", l).unwrap()
 				}
@@ -85,7 +85,7 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 						&Some(ref e) => {
 							write!(builder, "X'{}'", to_hex_string(e)).unwrap();
 						},
-						&None => write!(builder, " {}", "NULL").unwrap()
+						&None => write!(builder, " {}", s).unwrap()
 					},
 					None => write!(builder, " {}", s).unwrap()
 				}
