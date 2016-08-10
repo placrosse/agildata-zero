@@ -65,7 +65,7 @@ impl Decrypt for u64 {
 				let mut decrypted = Cursor::new(decrypt(&get_key(), &value).unwrap());
 				decrypted.read_u64::<BigEndian>().unwrap()
 			},
-			&EncryptionType::NA => panic!("What to do...?"),
+			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
 			_ => panic!("Not implemented")
 		}
 	}
