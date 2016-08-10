@@ -31,53 +31,74 @@ impl<'a> EncryptionVisitor<'a> {
 	}
 }
 
+// impl<'a> EncryptionVisitor<'a> {
+// 	fn visit_box(&mut self, boxed_expr: &Box<SQLExpr>) {
+// 		match boxed_expr {
+// 			box expr => self.visit_sql_expr(expr),
+// 			_ => panic!("Illegal state")
+// 		}
+// 	}
+// }
+
 impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
-	fn visit_sql_expr(&mut self, expr: SQLExpr) {
+	fn visit_sql_expr(&mut self, expr: &SQLExpr) {
 		match expr {
-			SQLExpr::SQLSelect{expr_list, relation, selection, order} => {
-				self.visit_sql_expr(*expr_list);
-				if !relation.is_none() {
-					self.visit_sql_expr(*relation.unwrap());
+			&SQLExpr::SQLSelect{box ref expr_list, ref relation, ref selection, ref order} => {
+				self.visit_sql_expr(expr_list);
+				match relation {
+					&Some(box ref expr) => self.visit_sql_expr(expr),
+					&None => {}
 				}
-				if !selection.is_none() {
-					self.visit_sql_expr(*selection.unwrap());
+				match selection {
+					&Some(box ref expr) => self.visit_sql_expr(expr),
+					&None => {}
 				}
-				if !order.is_none() {
-					self.visit_sql_expr(*order.unwrap());
+				match order {
+					&Some(box ref expr) => self.visit_sql_expr(expr),
+					&None => {}
 				}
+				// if !relation.is_none() {
+				// 	self.visit_sql_expr(relation.unwrap());
+				// }
+				// if !selection.is_none() {
+				// 	self.visit_sql_expr(&*selection.unwrap());
+				// }
+				// if !order.is_none() {
+				// 	self.visit_sql_expr(&*order.unwrap());
+				// }
 			},
-			SQLExpr::SQLInsert{table, column_list, values_list} => {
+			&SQLExpr::SQLInsert{ref table, ref column_list, ref values_list} => {
 				panic!("Not implemented");
 			},
-			SQLExpr::SQLExprList(vector) => {
+			&SQLExpr::SQLExprList(ref vector) => {
 				for e in vector {
-					self.visit_sql_expr(e);
+					self.visit_sql_expr(&e);
 				}
 			},
-			SQLExpr::SQLBinary{left, op, right} => {
+			&SQLExpr::SQLBinary{box ref left, ref op, box ref right} => {
 				//println!("HERE");
 				match op {
 					// TODO Messy...clean up
 					// TODO should check left and right
-					SQLOperator::EQ => {
-						if (self.is_identifier(&*left) && self.is_literal(&*right)) {
+					&SQLOperator::EQ => {
+						if (self.is_identifier(left) && self.is_literal(right)) {
 							let ident = match left {
-								box SQLExpr::SQLIdentifier(v) => v,
+								&SQLExpr::SQLIdentifier(ref v) => v,
 								_ => panic!("Unreachable")
 							};
-							let mut col = self.config.get_column_config(&String::from("babel"), &String::from("users"), &String::from(ident));
+							let mut col = self.config.get_column_config(&String::from("babel"), &String::from("users"), ident);
 							if (col.is_some()) {
 								match right {
-									box SQLExpr::SQLLiteral(l) => match l {
-										LiteralExpr::LiteralLong(i, val) => {
-											self.valuemap.insert(i, val.encrypt(&col.unwrap().encryption));
+									&SQLExpr::SQLLiteral(ref l) => match l {
+										&LiteralExpr::LiteralLong(ref i, ref val) => {
+											self.valuemap.insert(i.clone(), val.encrypt(&col.unwrap().encryption));
 										},
 										_ => panic!("Unsupported value type {:?}", l)
 									},
 									_ => panic!("Unreachable")
 								}
 							}
-						} else if (self.is_identifier(&*right) && self.is_literal(&*left)) {
+						} else if (self.is_identifier(&right) && self.is_literal(&left)) {
 							panic!("Syntax literal = identifier not currently supported")
 						}
 
@@ -87,54 +108,55 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 					_ => {}
 				}
 			},
-			SQLExpr::SQLLiteral(lit) => {
+			&SQLExpr::SQLLiteral(ref lit) => {
 				self.visit_sql_lit_expr(lit);
 			},
-			SQLExpr::SQLAlias{expr, alias} => {
-				self.visit_sql_expr(*expr);
-				self.visit_sql_expr(*alias);
+			&SQLExpr::SQLAlias{box ref expr, box ref alias} => {
+				self.visit_sql_expr(&expr);
+				self.visit_sql_expr(&alias);
 			},
-			SQLExpr::SQLIdentifier(id) => {
+			&SQLExpr::SQLIdentifier(ref id) => {
 				// TODO end of visit arm
 			},
-			SQLExpr::SQLNested(expr) => {
-				self.visit_sql_expr(*expr);
+			&SQLExpr::SQLNested(ref expr) => {
+				self.visit_sql_expr(expr);
 			},
-			SQLExpr::SQLUnary{operator, expr} => {
+			&SQLExpr::SQLUnary{ref operator, box ref expr} => {
 				self.visit_sql_operator(operator);
-				self.visit_sql_expr(*expr);
+				self.visit_sql_expr(expr);
 			},
-			SQLExpr::SQLOrderBy{expr, is_asc} => {
-				self.visit_sql_expr(*expr);
+			&SQLExpr::SQLOrderBy{box ref expr, ref is_asc} => {
+				self.visit_sql_expr(expr);
 				// TODO bool
 			},
-			SQLExpr::SQLJoin{left, join_type, right, on_expr} => {
-				self.visit_sql_expr(*left);
+			&SQLExpr::SQLJoin{box ref left, ref join_type, box ref right, ref on_expr} => {
+				self.visit_sql_expr(left);
 				// TODO visit join type
-				self.visit_sql_expr(*right);
-				if !on_expr.is_none() {
-					self.visit_sql_expr(*on_expr.unwrap());
+				self.visit_sql_expr(right);
+				match on_expr {
+					&Some(box ref expr) => self.visit_sql_expr(expr),
+					&None => {}
 				}
 			},
-			SQLExpr::SQLUnion{left, union_type, right} => {
-				self.visit_sql_expr(*left);
+			&SQLExpr::SQLUnion{box ref left, ref union_type, box ref right} => {
+				self.visit_sql_expr(left);
 				// TODO union type
-				self.visit_sql_expr(*right);
+				self.visit_sql_expr(right);
 			},
 			//_ => panic!("Unsupported expr {:?}", expr)
 		}
 	}
 
-	fn visit_sql_lit_expr(&mut self, lit: LiteralExpr) {
+	fn visit_sql_lit_expr(&mut self, lit: &LiteralExpr) {
 		panic!("visit_sql_lit_expr() not implemented");
 	}
 
-	fn visit_sql_operator(&mut self, op: SQLOperator) {
+	fn visit_sql_operator(&mut self, op: &SQLOperator) {
 		panic!("visit_sql_operator() not implemented");
 	}
 }
 
-pub fn walk(visitor: &mut SQLExprVisitor, e: SQLExpr) {
+pub fn walk(visitor: &mut SQLExprVisitor, e: &SQLExpr) {
 	visitor.visit_sql_expr(e);
 }
 

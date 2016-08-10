@@ -322,12 +322,16 @@ impl<'a> Connection<'a> {
                                 // reqwrite query
                                 if parsed.is_some() {
 
-                                    // let mut value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
-                                    // let mut encrypt_vis = EncryptionVisitor {
-                                    //     config: self.config,
-                                    //     valuemap: value_map
-                                    // };
-                                    // encryption_visitor::walk(&mut encrypt_vis, parsed.unwrap());
+                                    let mut value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
+                                    let mut encrypt_vis = EncryptionVisitor {
+                                        config: self.config,
+                                        valuemap: value_map
+                                    };
+                                    match parsed {
+                                        Some(ref expr) => encryption_visitor::walk(&mut encrypt_vis, expr),
+                                        None => {}
+                                    }
+                                    // encryption_visitor::walk(&mut encrypt_vis, &parsed.unwrap());
 
                                     let rewritten = sql_writer::write(parsed.unwrap());
                                     println!("REWRITTEN {:?}", rewritten);
