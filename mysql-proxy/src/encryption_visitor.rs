@@ -73,6 +73,7 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 															self.valuemap.insert(i.clone(), val.encrypt(&col.unwrap().encryption));
 														},
 														&LiteralExpr::LiteralString(ref i, ref val) => {
+															println!("VAL IS {}", val);
 															self.valuemap.insert(i.clone(), val.clone().encrypt(&col.unwrap().encryption));
 														}
 														_ => panic!("Unsupported value type {:?}", l)

@@ -86,7 +86,7 @@ impl MySQLPacketReader {
     }
 
     fn read_len_bytes(&mut self) -> Vec<u8> {
-        println!("read_lenenc_str BEGIN pos={}", self.pos);
+        println!("read_len_bytes BEGIN pos={}", self.pos);
 
         //TODO: HACK: assume single byte for length for now
         let n = self.payload[self.pos] as usize;
@@ -95,13 +95,12 @@ impl MySQLPacketReader {
         match n {
             0xfb => vec![0xfb], // MySQL NULL value
             _ => {
-                println!("read_lenenc_str str_len={}", n);
+                println!("read_len_bytes str_len={}", n);
 
-                self.payload[self.pos..self.pos+n].to_vec()
 
-                // let s = parse_string(&self.payload[self.pos..self.pos+n]);
-                // self.pos += n;
-                // Some(s)
+                let s = self.payload[self.pos..self.pos+n].to_vec();
+                self.pos += n;
+                s
             }
         }
     }
@@ -574,6 +573,12 @@ impl<'a> Connection<'a> {
                                                         _ => Some(format!("{}", u64::decrypt(r.read_len_bytes(), encryption)))
                                                     }
                                                 },
+                                                &NativeType::Varchar(_) => {
+                                                    match encryption {
+                                                        &EncryptionType::NA => r.read_lenenc_str(),
+                                                        _ => Some(String::decrypt(r.read_len_bytes(), encryption))
+                                                    }
+                                                }
                                                 _ => panic!("Native type {:?} not implemented", native_type)
                                             }
                                         }

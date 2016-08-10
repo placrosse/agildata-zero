@@ -70,6 +70,19 @@ impl Decrypt for u64 {
 		}
 	}
 }
+
+impl Decrypt for String {
+	fn decrypt(value: Vec<u8>, scheme: &EncryptionType) -> String {
+		match scheme {
+			&EncryptionType::AES => {
+				let decrypted = decrypt(&get_key(), &value);
+				String::from_utf8(decrypted.unwrap()).expect("Invalid UTF-8")
+			},
+			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
+			_ => panic!("Not implemented")
+		}
+	}
+}
 // u64::from()
 impl Encrypt for u64 {
 	fn encrypt(self, scheme: &EncryptionType) -> Option<Vec<u8>> {
@@ -91,7 +104,10 @@ impl Encrypt for String {
 		match scheme {
 			&EncryptionType::AES => {
 				let mut buf = self.as_bytes();
-				encrypt(&get_key(), &buf)
+				println!("Buf length = {}", buf.len());
+				let e = encrypt(&get_key(), &buf).unwrap();
+				println!("Encrypted length = {}", e.len());
+				Some(e)
 			},
 			&EncryptionType::NA => None,
 			_ => panic!("Not implemented")
@@ -167,7 +183,7 @@ pub fn encrypt(key: &[u8], buf: &[u8]) -> Option<Vec<u8>> {
 }
 
 pub fn decrypt(key: &[u8], buf: &[u8]) -> Option<Vec<u8>> {
-    if buf.len() < 36 { return None; }  // min size w/nonce & k & tag
+    //if buf.len() < 36 { return None; }  // min size w/nonce & k & tag
 
     let n0 = buf[6];
     //let key: [u8; 32] = KEYS[n0 as usize].lock().deref().clone();
