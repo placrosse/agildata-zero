@@ -342,7 +342,7 @@ impl<'a> Connection<'a> {
 
                                     let mut wtr: Vec<u8> = vec![];
                                     wtr.write_u32::<LittleEndian>((slice.len() + 1) as u32).unwrap();
-                                    //assert!(0x00 == wtr.pop().unwrap());
+                                    assert!(0x00 == wtr[3]);
                                     wtr.push(0x03); // packet type for COM_Query
                                     wtr.extend_from_slice(slice);
 

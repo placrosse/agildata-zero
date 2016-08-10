@@ -99,6 +99,7 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 			},
 			&SQLExpr::SQLBinary{box ref left, ref op, box ref right} => {
 				//println!("HERE");
+				// ident = lit
 				match op {
 					// TODO Messy...clean up
 					// TODO should check left and right
