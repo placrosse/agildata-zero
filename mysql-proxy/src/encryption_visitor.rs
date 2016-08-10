@@ -29,16 +29,11 @@ impl<'a> EncryptionVisitor<'a> {
 			_ => false
 		}
 	}
-}
 
-// impl<'a> EncryptionVisitor<'a> {
-// 	fn visit_box(&mut self, boxed_expr: &Box<SQLExpr>) {
-// 		match boxed_expr {
-// 			box expr => self.visit_sql_expr(expr),
-// 			_ => panic!("Illegal state")
-// 		}
-// 	}
-// }
+	pub fn get_value_map(&self) -> &HashMap<u32, Option<Vec<u8>>> {
+		&self.valuemap
+	}
+}
 
 impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 	fn visit_sql_expr(&mut self, expr: &SQLExpr) {
@@ -102,8 +97,8 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 							panic!("Syntax literal = identifier not currently supported")
 						}
 
-						// self.visit_sql_expr(*left);
-						// self.visit_sql_expr(*right);
+						// self.visit_sql_expr(left);
+						// self.visit_sql_expr(right);
 					},
 					_ => {}
 				}

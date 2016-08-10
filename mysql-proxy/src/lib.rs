@@ -333,7 +333,7 @@ impl<'a> Connection<'a> {
                                     }
                                     // encryption_visitor::walk(&mut encrypt_vis, &parsed.unwrap());
 
-                                    let rewritten = sql_writer::write(parsed.unwrap());
+                                    let rewritten = sql_writer::write(parsed.unwrap(), encrypt_vis.get_value_map());
                                     println!("REWRITTEN {:?}", rewritten);
 
                                     // write packed with new query
