@@ -52,15 +52,6 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 					&Some(box ref expr) => self.visit_sql_expr(expr),
 					&None => {}
 				}
-				// if !relation.is_none() {
-				// 	self.visit_sql_expr(relation.unwrap());
-				// }
-				// if !selection.is_none() {
-				// 	self.visit_sql_expr(&*selection.unwrap());
-				// }
-				// if !order.is_none() {
-				// 	self.visit_sql_expr(&*order.unwrap());
-				// }
 			},
 			&SQLExpr::SQLInsert{ref table, ref column_list, ref values_list} => {
 				panic!("Not implemented");

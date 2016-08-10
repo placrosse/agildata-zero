@@ -334,21 +334,24 @@ impl<'a> Connection<'a> {
                                     // encryption_visitor::walk(&mut encrypt_vis, &parsed.unwrap());
 
                                     let rewritten = sql_writer::write(parsed.unwrap(), encrypt_vis.get_value_map());
-                                    println!("REWRITTEN {:?}", rewritten);
+                                    println!("REWRITTEN {}", rewritten);
 
                                     // write packed with new query
                                     //let n_buf: Vec<u8> = Vec::new();
                                     let slice: &[u8] = rewritten.as_bytes();
 
                                     let mut wtr: Vec<u8> = vec![];
-                                    wtr.write_u32::<LittleEndian>(slice.len() as u32).unwrap();
-                                    assert!(0x00 == wtr.pop().unwrap());
+                                    wtr.write_u32::<LittleEndian>((slice.len() + 1) as u32).unwrap();
+                                    //assert!(0x00 == wtr.pop().unwrap());
                                     wtr.push(0x03); // packet type for COM_Query
                                     wtr.extend_from_slice(slice);
 
+                                    println!("SENDING {:?}", wtr);
                                     self.mysql_send(&wtr);
 
                                 } else {
+                                    let send = &buf[0 .. packet_len+4];
+                                    println!("SENDING {:?}", send);
                                     self.mysql_send(&buf[0 .. packet_len+4]);
                                 }
 
