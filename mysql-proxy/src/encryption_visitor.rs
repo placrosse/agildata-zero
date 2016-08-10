@@ -73,7 +73,6 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 															self.valuemap.insert(i.clone(), val.encrypt(&col.unwrap().encryption));
 														},
 														&LiteralExpr::LiteralString(ref i, ref val) => {
-															println!("VAL IS {}", val);
 															self.valuemap.insert(i.clone(), val.clone().encrypt(&col.unwrap().encryption));
 														}
 														_ => panic!("Unsupported value type {:?}", l)
@@ -128,12 +127,12 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 						} else if (self.is_identifier(&right) && self.is_literal(&left)) {
 							panic!("Syntax literal = identifier not currently supported")
 						}
-
-						// self.visit_sql_expr(left);
-						// self.visit_sql_expr(right);
 					},
 					_ => {}
 				}
+
+				self.visit_sql_expr(left);
+				self.visit_sql_expr(right);
 			},
 			&SQLExpr::SQLLiteral(ref lit) => {
 				self.visit_sql_lit_expr(lit);
@@ -175,11 +174,11 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 	}
 
 	fn visit_sql_lit_expr(&mut self, lit: &LiteralExpr) {
-		panic!("visit_sql_lit_expr() not implemented");
+		//do nothing
 	}
 
 	fn visit_sql_operator(&mut self, op: &SQLOperator) {
-		panic!("visit_sql_operator() not implemented");
+		// do nothing
 	}
 }
 

@@ -85,9 +85,9 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 						&Some(ref e) => {
 							write!(builder, "X'{}'", to_hex_string(e)).unwrap();
 						},
-						&None => write!(builder, " {}", s).unwrap()
+						&None => write!(builder, " '{}'", s).unwrap()
 					},
-					None => write!(builder, " {}", s).unwrap()
+					None => write!(builder, " '{}'", s).unwrap()
 				}
 			}
 			//_ => panic!("Unsupported literal for writing {:?}", lit)
