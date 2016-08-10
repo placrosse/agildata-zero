@@ -85,6 +85,27 @@ impl MySQLPacketReader {
 
     }
 
+    fn read_len_bytes(&mut self) -> Vec<u8> {
+        println!("read_lenenc_str BEGIN pos={}", self.pos);
+
+        //TODO: HACK: assume single byte for length for now
+        let n = self.payload[self.pos] as usize;
+        self.pos += 1;
+
+        match n {
+            0xfb => vec![0xfb], // MySQL NULL value
+            _ => {
+                println!("read_lenenc_str str_len={}", n);
+
+                self.payload[self.pos..self.pos+n].to_vec()
+
+                // let s = parse_string(&self.payload[self.pos..self.pos+n]);
+                // self.pos += n;
+                // Some(s)
+            }
+        }
+    }
+
     // fn read_bytes(len: usize) -> [u8] {
     //     panic!("not implemented");
     // }
@@ -422,6 +443,29 @@ impl<'a> Connection<'a> {
                 write_buf.extend_from_slice(&packet.payload);
             },
             0xfb => panic!("not implemented"),
+            0x03 => {
+                println!("Got COM_QUERY packet");
+                write_buf.extend_from_slice(&packet.header);
+                write_buf.extend_from_slice(&packet.payload);
+
+                loop {
+                    let row_packet = self.remote.read_packet().unwrap();
+                    match row_packet.packet_type() {
+                        // break on receiving Err_Packet, or EOF_Packet
+                        0xfe | 0xff => {
+
+                            println!("End of result rows");
+                            write_buf.extend_from_slice(&row_packet.header);
+                            write_buf.extend_from_slice(&row_packet.payload);
+                            break
+                        },
+                        _ => {
+                            write_buf.extend_from_slice(&row_packet.header);
+                            write_buf.extend_from_slice(&row_packet.payload);
+                        }
+                    }
+                }
+            },
             _ => {
 
                 println!("Got field_count packet");
@@ -453,13 +497,17 @@ impl<'a> Connection<'a> {
                     let name = r.read_lenenc_str().unwrap();
                     let org_name = r.read_lenenc_str().unwrap();
 
+                    println!("ALL catalog {}, schema {}, table {}, org_table {}, name {}, org_name {}",
+                        catalog, schema, table, org_table, name, org_name);
+
                     let md = ColumnMetaData {
-                        schema: catalog,
+                        schema: schema,
                         table_name: table,
                         column_name: name
                     };
 
                     println!("column {} = {:?}", i, md);
+
 
                     column_meta.push(md);
 
@@ -504,22 +552,22 @@ impl<'a> Connection<'a> {
 
                             for i in 0 .. field_count {
                                 let is_encrypted = false;
-                                let orig_value = r.read_lenenc_str();
 
-                                println!("Value {} is {:?}", i, orig_value);
+                                //println!("Value {} is {:?}", i, orig_value);
 
                                 let column_config = self.config.get_column_config(
                                     &(column_meta[i as usize].schema),
                                     &(column_meta[i as usize].table_name),
                                     &(column_meta[i as usize].column_name));
 
+                                println!("config is {:?}", column_config);
+
                                 let value = match column_config {
 
-                                    None => orig_value,
+                                    None => r.read_lenenc_str(),
                                     Some(cc) => match cc {
                                         &ColumnConfig {ref name, ref encryption, ref native_type} => {
-                                            //let bytes = orig_value.unwrap().as_bytes().iter().cloned().collect();
-                                            let bytes = orig_value.unwrap().as_bytes().to_vec();
+                                            let bytes = r.read_len_bytes();
                                             match native_type {
                                                 &NativeType::U64 => {
                                                     Some(format!("{}", u64::decrypt(bytes, encryption)))
