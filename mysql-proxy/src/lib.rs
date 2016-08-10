@@ -215,6 +215,12 @@ impl MySQLConnection for std::net::TcpStream {
     }
 }
 
+#[derive(Debug)]
+struct ColumnMetaData {
+    schema: String,
+    table_name: String,
+    column_name: String
+}
 
 #[derive(Debug)]
 struct Connection<'a> {
@@ -426,6 +432,8 @@ impl<'a> Connection<'a> {
 
                 println!("Result set has {} columns", field_count);
 
+                let mut column_meta: Vec<ColumnMetaData> = vec![];
+
                 for i in 0 .. field_count {
 
                     let field_packet = self.remote.read_packet().unwrap();
@@ -442,7 +450,15 @@ impl<'a> Connection<'a> {
                     let name = r.read_lenenc_str().unwrap();
                     let org_name = r.read_lenenc_str().unwrap();
 
-                    println!("column {}: table={}, column={}", i, table, name);
+                    let md = ColumnMetaData {
+                        schema: catalog,
+                        table_name: table,
+                        column_name: name
+                    };
+
+                    println!("column {} = {:?}", i, md);
+
+                    column_meta.push(md);
 
                 }
 
@@ -485,15 +501,25 @@ impl<'a> Connection<'a> {
 
                             for i in 0 .. field_count {
                                 let is_encrypted = false;
-                                let value = r.read_lenenc_str();
+                                let orig_value = r.read_lenenc_str();
 
-                                println!("Value {} is {:?}", i, value);
+                                println!("Value {} is {:?}", i, orig_value);
 
-                                if is_encrypted {
+                                let column_config = self.config.get_column_config(
+                                    &(column_meta[i as usize].schema),
+                                    &(column_meta[i as usize].table_name),
+                                    &(column_meta[i as usize].column_name));
 
-                                } else {
+                                let value = match column_config {
 
-                                }
+                                    None => orig_value,
+                                    Some(ref cc) => orig_value
+
+                                    /*match cc.encryption {
+                                        EncryptionType::AES => orig_value,
+                                        _ => orig_value
+                                    }*/
+                                };
 
                                 // encode this field in the new packet
                                 match value {
