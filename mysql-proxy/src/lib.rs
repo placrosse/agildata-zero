@@ -62,17 +62,23 @@ struct MySQLPacketReader {
 
 impl MySQLPacketReader {
 
-    fn read_lenenc_str(&mut self) -> String {
+    fn read_lenenc_str(&mut self) -> Option<String> {
         println!("read_lenenc_str BEGIN pos={}", self.pos);
+
         //TODO: HACK: assume single byte for length for now
         let n = self.payload[self.pos] as usize;
         self.pos += 1;
 
-        println!("read_lenenc_str str_len={}", n);
+        match n {
+            0xfb => None, // MySQL NULL value
+            _ => {
+                println!("read_lenenc_str str_len={}", n);
 
-        let s = parse_string(&self.payload[self.pos..self.pos+n]);
-        self.pos += n;
-        s
+                let s = parse_string(&self.payload[self.pos..self.pos+n]);
+                self.pos += n;
+                Some(s)
+            }
+        }
 
     }
 
@@ -428,12 +434,13 @@ impl<'a> Connection<'a> {
 
                     let mut r = MySQLPacketReader { payload: field_packet.payload, pos: 0 };
 
-                    let catalog = r.read_lenenc_str();
-                    let schema = r.read_lenenc_str();
-                    let table = r.read_lenenc_str();
-                    let org_table = r.read_lenenc_str();
-                    let name = r.read_lenenc_str();
-                    let org_name = r.read_lenenc_str();
+                    //TODO: assumes these values can never be NULL
+                    let catalog = r.read_lenenc_str().unwrap();
+                    let schema = r.read_lenenc_str().unwrap();
+                    let table = r.read_lenenc_str().unwrap();
+                    let org_table = r.read_lenenc_str().unwrap();
+                    let name = r.read_lenenc_str().unwrap();
+                    let org_name = r.read_lenenc_str().unwrap();
 
                     println!("column {}: table={}, column={}", i, table, name);
 
@@ -464,10 +471,55 @@ impl<'a> Connection<'a> {
                         _ => {
                             println!("Received row");
 
-                            //TODO do decryption here if required
+                            //TODO: if this result set does not contain any encrypted values
+                            // then we can just write the packet straight to the client and
+                            // skip all of this processing
 
-                            write_buf.extend_from_slice(&row_packet.header);
-                            write_buf.extend_from_slice(&row_packet.payload);
+                            println!("Original Header: {:?}", &row_packet.header);
+                            println!("Original Payload: {:?}", &row_packet.payload);
+
+                            //TODO do decryption here if required
+                            let mut r = MySQLPacketReader { payload: row_packet.payload, pos: 0 };
+
+                            let mut wtr: Vec<u8> = vec![];
+
+                            for i in 0 .. field_count {
+                                let is_encrypted = false;
+                                let value = r.read_lenenc_str();
+
+                                println!("Value {} is {:?}", i, value);
+
+                                if is_encrypted {
+
+                                } else {
+
+                                }
+
+                                // encode this field in the new packet
+                                match value {
+                                    None => wtr.push(0xfb),
+                                    Some(v) => {
+                                        let slice = v.as_bytes();
+                                        //TODO: hacked to assume single byte for string length
+                                        wtr.write_u8(slice.len() as u8).unwrap();
+                                        wtr.extend_from_slice(&slice);
+                                    }
+                                }
+
+                            }
+
+                            let mut new_header: Vec<u8> = vec![];
+                            let sequence_id = row_packet.header[3];
+                            new_header.write_u32::<LittleEndian>(wtr.len() as u32).unwrap();
+                            new_header.pop();
+                            new_header.push(sequence_id);
+
+                            println!("Modified Header: {:?}", &new_header);
+                            println!("Modified Payload: {:?}", &wtr);
+
+                            write_buf.extend_from_slice(&new_header);
+                            write_buf.extend_from_slice(&wtr);
+
                         }
                     }
                 }
