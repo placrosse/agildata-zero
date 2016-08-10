@@ -27,7 +27,7 @@ extern crate config;
 use config::*;
 
 extern crate encrypt;
-use encrypt::Decrypt;
+use encrypt::{Decrypt, NativeType};
 
 const SERVER: mio::Token = mio::Token(0);
 
@@ -518,7 +518,11 @@ impl<'a> Connection<'a> {
                                     None => orig_value,
                                     Some(cc) => match cc {
                                         &ColumnConfig {ref name, ref encryption, ref native_type} => {
-                                            let val: u64 = u64::decrypt(orig_value.unwrap(), encryption, native_type);
+                                            let bytes = orig_value.unwrap().as_bytes().iter().cloned().collect();
+                                            let val = match native_type {
+                                                &NativeType::U64 => u64::decrypt(bytes, encryption),
+                                                _ => panic!("Native type {:?} not implemented", native_type)
+                                            };
                                             //let val: u64 = orig_value.unwrap().decrypt(encryption, native_type);
                                             panic!("HERE")
                                         }

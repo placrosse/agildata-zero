@@ -25,6 +25,7 @@ use std::sync::mpsc::channel;
 
 extern crate byteorder;
 use byteorder::{WriteBytesExt,ReadBytesExt,BigEndian,LittleEndian};
+use std::io::Cursor;
 
 // lazy_static! {
 //     static ref KEYS: Vec<Mutex<[u8; 32]>> = {
@@ -53,20 +54,20 @@ pub trait Encrypt {
 	fn encrypt(self, scheme: &EncryptionType) -> Option<Vec<u8>>;
 }
 
-pub trait Decrypt<T> {
-	fn decrypt(self, value: String, scheme: &EncryptionType, native: &NativeType) -> Self;
+pub trait Decrypt {
+	fn decrypt(value: Vec<u8>, scheme: &EncryptionType) -> Self;
 }
 
-// impl Decrypt for String {
-// 	fn decrypt<T>(self, scheme: &EncryptionType, native: &NativeType) -> T {
-// 		//panic!("HERE")
-// 		65_u64
-// 	}
-// }
-
-impl<T> Decrypt<T> for u64 {
-	fn decrypt(self, value: String, scheme: &EncryptionType, native: &NativeType) -> Self {
-		65_u64
+impl Decrypt for u64 {
+	fn decrypt(value: Vec<u8>, scheme: &EncryptionType) -> u64 {
+		match scheme {
+			&EncryptionType::AES => {
+				let mut decrypted = Cursor::new(decrypt(&get_key(), &value).unwrap());
+				decrypted.read_u64::<BigEndian>().unwrap()
+			},
+			&EncryptionType::NA => panic!("What to do...?"),
+			_ => panic!("Not implemented")
+		}
 	}
 }
 // u64::from()
