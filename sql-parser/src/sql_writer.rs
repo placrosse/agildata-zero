@@ -61,10 +61,10 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 			LiteralExpr::LiteralLong(i, l) => {
 				match literals.get(&i) {
 					Some(value) => match value {
-						&Some(ref e) => write!(builder, " S'{}''", to_hex_string(e)).unwrap(),
+						// TODO write! escapes the single quotes...
+						&Some(ref e) => write!(builder, " X{}{}{}", '\'', to_hex_string(e), r#"'"#).unwrap(),
 						&None => write!(builder, " {}", "NULL").unwrap()
 					},
-					//Some(None) => write!(builder, " {}", "NULL"), // ?
 					None => write!(builder, " {}", l).unwrap()
 				}
 			},
