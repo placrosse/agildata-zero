@@ -26,6 +26,9 @@ use sql_parser::sql_writer;
 extern crate config;
 use config::*;
 
+extern crate encrypt;
+use encrypt::Decrypt;
+
 const SERVER: mio::Token = mio::Token(0);
 
 use std::collections::HashMap;
@@ -513,7 +516,13 @@ impl<'a> Connection<'a> {
                                 let value = match column_config {
 
                                     None => orig_value,
-                                    Some(ref cc) => orig_value
+                                    Some(cc) => match cc {
+                                        &ColumnConfig {ref name, ref encryption, ref native_type} => {
+                                            let val: u64 = u64::decrypt(orig_value.unwrap(), encryption, native_type);
+                                            //let val: u64 = orig_value.unwrap().decrypt(encryption, native_type);
+                                            panic!("HERE")
+                                        }
+                                    }
 
                                     /*match cc.encryption {
                                         EncryptionType::AES => orig_value,

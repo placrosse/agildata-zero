@@ -42,10 +42,34 @@ pub enum EncryptionType {
 	NA,
 }
 
+#[derive(Debug)]
+pub enum NativeType {
+	U64,
+	Varchar(u32),
+	F64,
+}
+
 pub trait Encrypt {
 	fn encrypt(self, scheme: &EncryptionType) -> Option<Vec<u8>>;
 }
 
+pub trait Decrypt<T> {
+	fn decrypt(self, value: String, scheme: &EncryptionType, native: &NativeType) -> Self;
+}
+
+// impl Decrypt for String {
+// 	fn decrypt<T>(self, scheme: &EncryptionType, native: &NativeType) -> T {
+// 		//panic!("HERE")
+// 		65_u64
+// 	}
+// }
+
+impl<T> Decrypt<T> for u64 {
+	fn decrypt(self, value: String, scheme: &EncryptionType, native: &NativeType) -> Self {
+		65_u64
+	}
+}
+// u64::from()
 impl Encrypt for u64 {
 	fn encrypt(self, scheme: &EncryptionType) -> Option<Vec<u8>> {
 		match scheme {
