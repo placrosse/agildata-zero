@@ -178,6 +178,6 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 			SQLUnionType::ALL => "UNION ALL",
 			SQLUnionType::DISTINCT => "UNION DISTINCT"
 		};
-		write!(builder, " {}", text).unwrap();
+		write!(builder, " {} ", text).unwrap();
 	}
 }
