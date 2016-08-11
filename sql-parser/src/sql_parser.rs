@@ -25,6 +25,11 @@ pub enum SQLExpr {
 		column_list: Box<SQLExpr>,
 		values_list: Box<SQLExpr>
 	},
+	SQLUpdate {
+		table: Box<SQLExpr>,
+		assignments: Box<SQLExpr>,
+		selection: Option<Box<SQLExpr>>
+	},
 	SQLUnion{left: Box<SQLExpr>, union_type: SQLUnionType, right: Box<SQLExpr>},
 	SQLJoin{left: Box<SQLExpr>, join_type: SQLJoinType, right: Box<SQLExpr>, on_expr: Option<Box<SQLExpr>>}
 }
@@ -111,7 +116,8 @@ impl AnsiSQLParser {
 			Some(t) => match t {
 				Token::Keyword(ref v) => match &v as &str {
 					"SELECT" => Ok(Some(try!(self.parse_select(tokens)))),
-					"INSERT" => Ok(Some(try!(self.parse_insert(tokens)))), // TODO wrap in option?
+					"INSERT" => Ok(Some(try!(self.parse_insert(tokens)))),
+					"UPDATE" => Ok(Some(try!(self.parse_update(tokens)))),
 					_ => Err(format!("Unsupported prefix {:?}", v))
 				},
 				Token::Literal(v) => match v {
@@ -272,6 +278,28 @@ impl AnsiSQLParser {
 		};
 
 		Ok(SQLExpr::SQLSelect{expr_list: proj, relation: from, selection: whr, order: ob})
+	}
+
+	fn parse_update(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr, String> {
+		self.consume_keyword("UPDATE", tokens);
+
+		let table = try!(self.parse_identifier(tokens));
+
+		self.consume_keyword("SET", tokens);
+
+		let assignments = try!(self.parse_expr_list(tokens));
+
+		let selection = if self.consume_keyword("WHERE", tokens) {
+			Some(Box::new(try!(self.parse_expr(tokens, 0))))
+		} else {
+			None
+		};
+
+		Ok(SQLExpr::SQLUpdate {
+			table: Box::new(table),
+			assignments: Box::new(assignments),
+			selection: selection
+		})
 	}
 
 	// TODO real parse_relation
@@ -586,18 +614,18 @@ mod tests {
 
 	}
 
-	// #[test]
-	// fn update() {
-	// 	let parser = AnsiSQLParser {};
-	// 	let sql = "UPDATE foo SET a = 'hello', b = 12345 WHERE c > 10)";
-	//
-	// 	let parsed = parser.parse(sql).unwrap();
-	//
-	// 	println!("{:#?}", parser.parse(sql));
-	//
-	// 	let rewritten = sql_writer::write(parsed, &HashMap::new());
-	//
-	// 	println!("Rewritten: {:?}", rewritten);
-	//
-	// }
+	#[test]
+	fn update() {
+		let parser = AnsiSQLParser {};
+		let sql = "UPDATE foo SET a = 'hello', b = 12345 WHERE c > 10)";
+
+		let parsed = parser.parse(sql).unwrap();
+
+		println!("{:#?}", parser.parse(sql));
+
+		let rewritten = sql_writer::write(parsed, &HashMap::new());
+
+		println!("Rewritten: {}", rewritten);
+
+	}
 }

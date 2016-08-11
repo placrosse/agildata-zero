@@ -337,7 +337,7 @@ impl<'a> Connection<'a> {
                                 println!("0x03");
 
                                 let query = parse_string(&buf[5 as usize .. (packet_len+4) as usize]);
-                                println!("QUERY : {:?}", query);
+                                println!("QUERY : {}", query);
 
                                 // parse query
                                 let parser = AnsiSQLParser {};
@@ -386,7 +386,12 @@ impl<'a> Connection<'a> {
 
                                 } else {
                                     let send = &buf[0 .. packet_len+4];
-                                    println!("SENDING {:?}", send);
+                                    println!("SENDING:");
+                                    for i in 0..send.len() {
+                                        if i%8==0 { println!(""); }
+                                        print!("{:#04x} ",send[i]);
+                                    }
+                                    //println!("SENDING {:?}", send);
                                     self.mysql_send(&buf[0 .. packet_len+4]);
                                 }
 

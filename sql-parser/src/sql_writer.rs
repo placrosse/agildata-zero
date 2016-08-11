@@ -43,6 +43,16 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 			_write(builder, *values_list, literals);
 			write!(builder, " {}", ")");
 		},
+        SQLExpr::SQLUpdate{table, assignments, selection} => {
+            write!(builder, "{}", "UPDATE").unwrap();
+            _write(builder, *table, literals);
+            write!(builder, " {}", "SET").unwrap();
+            _write(builder, *assignments, literals);
+            if selection.is_some() {
+                write!(builder, " {}", "WHERE").unwrap();
+                _write(builder, *selection.unwrap(), literals);
+            }
+        },
 		SQLExpr::SQLExprList(vector) => {
 			let mut sep = "";
 			for e in vector {
