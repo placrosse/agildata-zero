@@ -54,7 +54,13 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 				}
 			},
 			&SQLExpr::SQLUpdate{box ref table, box ref assignments, ref selection} => {
-				panic!("Not implemented")
+				self.visit_sql_expr(table);
+				self.visit_sql_expr(assignments);
+
+				match selection {
+					&Some(box ref expr) => self.visit_sql_expr(expr),
+					&None => {}
+				}
 			},
 			&SQLExpr::SQLInsert{box ref table, box ref column_list, box ref values_list} => {
 				let table = match table {
@@ -194,6 +200,7 @@ mod tests {
 	use super::sql_parser::sql_parser::AnsiSQLParser;
 	use super::*;
 	use std::collections::HashMap;
+	use super::sql_parser::sql_writer;
 
 	#[test]
 	fn test_visitor() {
@@ -241,8 +248,13 @@ mod tests {
 			config: &config,
 			valuemap: valueMap
 		};
-		 walk(&mut encrypt_vis, &parsed);
+		walk(&mut encrypt_vis, &parsed);
 
-		 println!("HERE {:#?}", encrypt_vis);
+		println!("HERE {:#?}", encrypt_vis);
+
+		let rewritten = sql_writer::write(parsed, &encrypt_vis.get_value_map());
+
+		println!("Rewritten: {}", rewritten);
+
 	}
 }
