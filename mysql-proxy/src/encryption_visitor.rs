@@ -53,6 +53,9 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 					&None => {}
 				}
 			},
+			&SQLExpr::SQLUpdate{box ref table, box ref assignments, ref selection} => {
+				panic!("Not implemented")
+			},
 			&SQLExpr::SQLInsert{box ref table, box ref column_list, box ref values_list} => {
 				let table = match table {
 					&SQLExpr::SQLIdentifier(ref v) => v,
@@ -213,6 +216,23 @@ mod tests {
 	fn test_vis_insert() {
 		let parser = AnsiSQLParser {};
 		let sql = "INSERT INTO users (id, first_name, last_name, ssn, age, sex) VALUES(1, 'Janis', 'Joplin', '123456789', 27, 'F')";
+		let parsed = parser.parse(sql).unwrap();
+
+		let config = super::config::parse_config("../src/example-babel-config.xml");
+		let mut valueMap: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
+		let mut encrypt_vis = EncryptionVisitor {
+			config: &config,
+			valuemap: valueMap
+		};
+		 walk(&mut encrypt_vis, &parsed);
+
+		 println!("HERE {:#?}", encrypt_vis);
+	}
+
+	#[test]
+	fn test_vis_update() {
+		let parser = AnsiSQLParser {};
+		let sql = "UPDATE users SET age = 31, ssn = '987654321' WHERE first_name = 'Janis' AND last_name = 'Joplin'";
 		let parsed = parser.parse(sql).unwrap();
 
 		let config = super::config::parse_config("../src/example-babel-config.xml");
