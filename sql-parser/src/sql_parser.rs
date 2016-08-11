@@ -2,6 +2,7 @@ use super::tokenizer::*;
 use std::iter::Peekable;
 use std::str::FromStr;
 use std::ascii::AsciiExt;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum SQLExpr {
@@ -141,6 +142,7 @@ impl AnsiSQLParser {
 				},
 				Token::Operator(v) => match &v as &str {
 					"+" | "-" => Ok(Some(try!(self.parse_unary(tokens)))),
+					"*" => Ok(Some(try!(self.parse_identifier(tokens)))),
 					_ => Err(format!("Unsupported operator as prefix {:?}", &v))
 				},
 				_ => Err(format!("parse_prefix() {:?}", &t))
@@ -350,6 +352,10 @@ impl AnsiSQLParser {
 		println!("parse_identifier()");
 		match tokens.next().unwrap() {
 			Token::Identifier(v) => Ok(SQLExpr::SQLIdentifier(v)),
+			Token::Operator(o) => match &o as &str {
+				"*" => Ok(SQLExpr::SQLIdentifier(o)),
+				_ => Err(format!("Unsupported operator as identifier {}", o))
+			},
 			_ => Err(format!("Illegal state"))
 		}
 	}
@@ -488,6 +494,7 @@ impl AnsiSQLParser {
 mod tests {
 	use super::{AnsiSQLParser, SQLExpr, LiteralExpr};
 	use super::super::sql_writer;
+	use std::collections::HashMap;
 
 	#[test]
 	fn sqlparser() {
@@ -508,7 +515,7 @@ mod tests {
 
 		println!("{:#?}", parser.parse(sql));
 
-		let rewritten = sql_writer::write(parsed);
+		let rewritten = sql_writer::write(parsed, &HashMap::new());
 
 		println!("Rewritten: {:?}", rewritten);
 
@@ -530,7 +537,7 @@ mod tests {
 
 		println!("{:#?}", parser.parse(sql));
 
-		let rewritten = sql_writer::write(parsed);
+		let rewritten = sql_writer::write(parsed, &HashMap::new());
 
 		println!("Rewritten: {:?}", rewritten);
 	}
@@ -544,7 +551,7 @@ mod tests {
 
 		println!("{:#?}", parser.parse(sql));
 
-		let rewritten = sql_writer::write(parsed);
+		let rewritten = sql_writer::write(parsed, &HashMap::new());
 
 		println!("Rewritten: {:?}", rewritten);
 	}
@@ -558,9 +565,39 @@ mod tests {
 
 		println!("{:#?}", parser.parse(sql));
 
-		let rewritten = sql_writer::write(parsed);
+		let rewritten = sql_writer::write(parsed, &HashMap::new());
 
 		println!("Rewritten: {:?}", rewritten);
 
 	}
+
+	#[test]
+	fn select_wildcard() {
+		let parser = AnsiSQLParser {};
+		let sql = "SELECT * FROM foo)";
+
+		let parsed = parser.parse(sql).unwrap();
+
+		println!("{:#?}", parser.parse(sql));
+
+		let rewritten = sql_writer::write(parsed, &HashMap::new());
+
+		println!("Rewritten: {:?}", rewritten);
+
+	}
+
+	// #[test]
+	// fn update() {
+	// 	let parser = AnsiSQLParser {};
+	// 	let sql = "UPDATE foo SET a = 'hello', b = 12345 WHERE c > 10)";
+	//
+	// 	let parsed = parser.parse(sql).unwrap();
+	//
+	// 	println!("{:#?}", parser.parse(sql));
+	//
+	// 	let rewritten = sql_writer::write(parsed, &HashMap::new());
+	//
+	// 	println!("Rewritten: {:?}", rewritten);
+	//
+	// }
 }
