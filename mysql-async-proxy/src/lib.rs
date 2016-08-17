@@ -1,4 +1,4 @@
-
+use std::str;
 
 #[derive(Debug)]
 struct MySQLPacket<'a> {
@@ -37,14 +37,14 @@ impl<'a> MySQLPacketReader<'a> {
         n
     }
 
-    fn read_lenenc_str(&mut self) -> Option<String> {
+    fn read_lenenc_str(&mut self) -> Option<&'a str> {
         println!("read_lenenc_str BEGIN pos={}", self.pos);
 
         match self.read_len() {
             0xfb => None, // MySQL NULL value
             n @ _ => {
                 println!("read_lenenc_str str_len={}", n);
-                let s = parse_string(&self.payload.bytes[self.pos..self.pos+n]);
+                let s = str::from_utf8(&self.payload.bytes[self.pos..self.pos+n]).unwrap();
                 self.pos += n;
                 Some(s)
             }
