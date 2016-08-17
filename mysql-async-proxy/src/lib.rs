@@ -67,10 +67,6 @@ impl<'a> MySQLPacketReader<'a> {
 
 }
 
-fn parse_string(bytes: &[u8]) -> String {
-    String::from_utf8(bytes.to_vec()).expect("Invalid UTF-8")
-}
-
 fn read_packet_length(header: &[u8]) -> usize {
     (((header[2] as u32) << 16) |
         ((header[1] as u32) << 8) |
