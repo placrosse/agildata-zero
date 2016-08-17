@@ -51,20 +51,19 @@ impl<'a> MySQLPacketReader<'a> {
         }
     }
 
-    fn read_lenenc_bytes(&mut self) -> Vec<u8> {
+    fn read_lenenc_bytes(&mut self) -> Option<&[u8]> {
         println!("read_len_bytes BEGIN pos={}", self.pos);
 
         match self.read_len() {
-            0xfb => vec![0xfb], // MySQL NULL value
+            0xfb => None,
             n @ _ => {
                 println!("read_len_bytes str_len={}", n);
-                let s = self.payload.bytes[self.pos..self.pos+n].to_vec();
+                let s = &self.payload.bytes[self.pos..self.pos+n];
                 self.pos += n;
-                s
+                Some(s)
             }
         }
     }
-
 
 }
 
