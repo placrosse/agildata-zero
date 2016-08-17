@@ -11,6 +11,12 @@ impl<'a> MySQLPacket<'a> {
         MySQLPacket { bytes: b }
     }
 
+    fn packet_len(&self) -> usize {
+        (((self.bytes[2] as u32) << 16) |
+         ((self.bytes[1] as u32) << 8)  |
+           self.bytes[0] as u32) as usize
+    }
+
     fn seq(&self) -> u8 { self.bytes[3] }
 }
 
@@ -67,12 +73,6 @@ impl<'a> MySQLPacketReader<'a> {
 
 }
 
-fn read_packet_length(header: &[u8]) -> usize {
-    (((header[2] as u32) << 16) |
-        ((header[1] as u32) << 8) |
-        header[0] as u32) as usize
-}
-
 #[cfg(test)]
 mod tests {
 
@@ -93,6 +93,7 @@ mod tests {
 
         print!("Packet = {:?}", packet);
 
+        assert_eq!(0x21, packet.packet_len());
         assert_eq!(0x00, packet.seq());
 
         let mut reader = MySQLPacketReader::new(&packet);
