@@ -17,7 +17,13 @@ impl<'a> MySQLPacket<'a> {
            self.bytes[0] as u32) as usize
     }
 
-    fn seq(&self) -> u8 { self.bytes[3] }
+    fn sequence_id(&self) -> u8 { self.bytes[3] }
+
+    fn packet_type(&self) -> u8 { self.bytes[4] }
+
+    fn payload(&self) -> &[u8] { &self.bytes[4..] }
+
+
 }
 
 #[derive(Debug)]
@@ -94,7 +100,8 @@ mod tests {
         print!("Packet = {:?}", packet);
 
         assert_eq!(0x21, packet.packet_len());
-        assert_eq!(0x00, packet.seq());
+        assert_eq!(0x00, packet.sequence_id());
+        assert_eq!(0x03, packet.packet_type());
 
         let mut reader = MySQLPacketReader::new(&packet);
 
