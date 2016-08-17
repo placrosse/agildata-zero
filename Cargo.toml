@@ -1,5 +1,5 @@
 [workspace]
-members = ["mysql-protocol", "sql-parser", "mysql-proxy", "config", "encrypt"]
+members = ["mysql-protocol", "sql-parser", "mysql-proxy", "config", "encrypt", "mysql-async-proxy" ]
 
 [package]
 authors = ["Paul LaCrosse <paul.lacrosse@gmail.com>"]
@@ -21,3 +21,4 @@ sql-parser = { path = "sql-parser", version = "*"}
 encrypt = { path = "encrypt", version = "*" }
 config = { path = "config", version = "*"}
 mysql-proxy = { path = "mysql-proxy", version = "*" }
+mysql-async-proxy = { path = "mysql-async-proxy", version = "*" }
