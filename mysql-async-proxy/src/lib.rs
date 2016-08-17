@@ -14,13 +14,6 @@ impl<'a> MySQLPacket<'a> {
     fn seq(&self) -> u8 { self.bytes[3] }
 }
 
-trait PacketHandler<'a> {
-    fn transform_request(p: &MySQLPacket) -> Option<MySQLPacket<'a>>;
-    fn transform_response(p: &MySQLPacket) -> Option<MySQLPacket<'a>>;
-}
-
-
-
 #[cfg(test)]
 mod tests {
 
@@ -46,14 +39,4 @@ mod tests {
 }
 
 // BELOW THIS LINE IS PROTOTYPING HOW A USER WOULD USE THE PROXY
-
-struct Query {
-    sql: String,
-    // other stuff ... like instructions on how to decrypt corresponding result set
-}
-
-struct ConnState {
-    queries: Vec<Query> // stack of queries sent to the server ... we can
-}
-
 
