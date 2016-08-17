@@ -5,8 +5,35 @@ struct MySQLPacket<'a> {
 }
 
 impl<'a> MySQLPacket<'a> {
-    fn seq(&self) -> u8 { self.bytes[3] }
 
+    fn new(b: &'a [u8]) -> Self {
+        MySQLPacket { bytes: b }
+    }
+
+    fn seq(&self) -> u8 { self.bytes[3] }
 }
+
+
+#[test]
+fn create_packet() {
+
+    // COM_QUERY: select @@version_comment limit 1
+    let bytes: &[u8] = &[
+        0x21, 0x00, 0x00, 0x00, 0x03, 0x73, 0x65, 0x6c,
+        0x65, 0x63, 0x74, 0x20, 0x40, 0x40, 0x76, 0x65,
+        0x72, 0x73, 0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f,
+        0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69,
+        0x6d, 0x69, 0x74, 0x20, 0x31
+    ];
+
+    let packet = MySQLPacket::new(bytes);
+
+    print!("Packet = {:?}", packet);
+
+    assert_eq!(0x02, packet.seq());
+}
+
+
+// BELOW THIS LINE IS PROTOTYPING HOW A USER WOULD USE THE PROXY
 
 
