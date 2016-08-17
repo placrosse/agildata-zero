@@ -14,10 +14,74 @@ impl<'a> MySQLPacket<'a> {
     fn seq(&self) -> u8 { self.bytes[3] }
 }
 
+#[derive(Debug)]
+struct MySQLPacketReader<'a> {
+    payload: &'a MySQLPacket<'a>,
+    pos: usize
+}
+
+impl<'a> MySQLPacketReader<'a> {
+
+    fn new(p: &'a MySQLPacket) -> Self {
+        MySQLPacketReader { payload: p, pos: 4 }
+    }
+
+    fn skip(&mut self, n: usize) {
+        self.pos += n;
+    }
+
+    fn read_len(&mut self) -> usize {
+        //TODO: HACK: assume single byte for length for now
+        let n = self.payload.bytes[self.pos] as usize;
+        self.pos += 1;
+        n
+    }
+
+    fn read_lenenc_str(&mut self) -> Option<String> {
+        println!("read_lenenc_str BEGIN pos={}", self.pos);
+
+        match self.read_len() {
+            0xfb => None, // MySQL NULL value
+            n @ _ => {
+                println!("read_lenenc_str str_len={}", n);
+                let s = parse_string(&self.payload.bytes[self.pos..self.pos+n]);
+                self.pos += n;
+                Some(s)
+            }
+        }
+    }
+
+    fn read_lenenc_bytes(&mut self) -> Vec<u8> {
+        println!("read_len_bytes BEGIN pos={}", self.pos);
+
+        match self.read_len() {
+            0xfb => vec![0xfb], // MySQL NULL value
+            n @ _ => {
+                println!("read_len_bytes str_len={}", n);
+                let s = self.payload.bytes[self.pos..self.pos+n].to_vec();
+                self.pos += n;
+                s
+            }
+        }
+    }
+
+
+}
+
+fn parse_string(bytes: &[u8]) -> String {
+    String::from_utf8(bytes.to_vec()).expect("Invalid UTF-8")
+}
+
+fn read_packet_length(header: &[u8]) -> usize {
+    (((header[2] as u32) << 16) |
+        ((header[1] as u32) << 8) |
+        header[0] as u32) as usize
+}
+
 #[cfg(test)]
 mod tests {
 
-    use super::MySQLPacket;
+    use super::{MySQLPacket, MySQLPacketReader};
 
     #[test]
     fn create_packet() {
@@ -35,6 +99,12 @@ mod tests {
         print!("Packet = {:?}", packet);
 
         assert_eq!(0x00, packet.seq());
+
+        let mut reader = MySQLPacketReader::new(&packet);
+
+        //TODO: this test is incorrect .. COM_QUERY does not use length-encoded strings
+//        reader.skip(1); // packet type
+//        assert_eq!(String::from("select @@version_comment limit 1"), reader.read_lenenc_str().unwrap());
     }
 }
 
