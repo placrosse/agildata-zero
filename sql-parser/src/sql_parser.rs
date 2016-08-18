@@ -31,9 +31,23 @@ pub enum SQLExpr {
 		selection: Option<Box<SQLExpr>>
 	},
 	SQLUnion{left: Box<SQLExpr>, union_type: SQLUnionType, right: Box<SQLExpr>},
-	SQLJoin{left: Box<SQLExpr>, join_type: SQLJoinType, right: Box<SQLExpr>, on_expr: Option<Box<SQLExpr>>}
+	SQLJoin{left: Box<SQLExpr>, join_type: SQLJoinType, right: Box<SQLExpr>, on_expr: Option<Box<SQLExpr>>},
+	SQLCreateTable{table: Box<SQLExpr>, column_list: Vec<SQLExpr>},
+	SQLColumnDef{column: Box<SQLExpr>, data_type: DataType}
 }
 
+#[derive(Debug, PartialEq)]
+pub enum DataType {
+	Bit{display: Option<u32>},
+	TinyInt{display: Option<u32>},
+	SmallInt{display: Option<u32>},
+	MediumInt{display: Option<u32>},
+	Int{display: Option<u32>},
+	BigInt{display: Option<u32>},
+	Decimal{precision: Option<u32>, scale: Option<u32>},
+	Float{precision: Option<u32>, scale: Option<u32>},
+	Double{precision: Option<u32>, scale: Option<u32>}
+}
 
 #[derive(Debug, PartialEq)]
 pub enum LiteralExpr {
@@ -114,6 +128,7 @@ impl AnsiSQLParser {
 					"SELECT" => Ok(Some(try!(self.parse_select(tokens)))),
 					"INSERT" => Ok(Some(try!(self.parse_insert(tokens)))),
 					"UPDATE" => Ok(Some(try!(self.parse_update(tokens)))),
+					"CREATE" => Ok(Some(try!(self.parse_create(tokens)))),
 					_ => Err(format!("Unsupported prefix {:?}", v))
 				},
 				Token::Literal(v) => match v {
@@ -201,6 +216,69 @@ impl AnsiSQLParser {
 			},
 			None => 0
 		}
+	}
+
+	fn parse_create(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr, String> {
+		self.consume_keyword("CREATE", tokens);
+
+		if self.consume_keyword("TABLE", tokens) {
+			let table = try!(self.parse_identifier(tokens));
+			self.consume_punctuator("(", tokens);
+
+			let mut columns: Vec<SQLExpr> = Vec::new();
+			columns.push(try!(self.parse_column_def(tokens)));
+			while self.consume_punctuator(",", tokens) {
+				columns.push(try!(self.parse_column_def(tokens)));
+			}
+
+			//let column_list = try!(self.parse_expr_list(tokens));
+			self.consume_punctuator(")", tokens);
+
+			Ok(SQLExpr::SQLCreateTable{table: Box::new(table), column_list: columns })
+		} else {
+			Err(String::from(format!("Unexpected token after CREATE {:?}", tokens.peek())))
+		}
+
+	}
+
+	fn parse_column_def(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr, String> {
+		let column = try!(self.parse_identifier(tokens));
+		let data_type: DataType = match tokens.peek().cloned() {
+			Some(Token::Keyword(t)) | Some(Token::Identifier(t)) => match &t.to_uppercase() as &str {
+				"BIT" => {
+					tokens.next();
+					DataType::Bit{display: try!(self.parse_optional_display(tokens))}
+				},
+				"TINYINT" => {
+					tokens.next();
+					DataType::TinyInt{display: try!(self.parse_optional_display(tokens))}
+				},
+				"MEDIUMINT" => {
+					tokens.next();
+					DataType::MediumInt{display: try!(self.parse_optional_display(tokens))}
+				},
+				_ => return Err(format!("Data type not recognized {}", t))
+			},
+			_ => return Err(format!("Expected data type, received token {:?}", tokens.peek()))
+		};
+
+		Ok(SQLExpr::SQLColumnDef{column: Box::new(column), data_type: data_type})
+	}
+
+	fn parse_optional_display(&self, tokens: &mut Peekable<Tokens>) -> Result<Option<u32>, String> {
+		if self.consume_punctuator("(", tokens) {
+			match tokens.peek().cloned() {
+				Some(Token::Literal(LiteralToken::LiteralLong(i, v))) => {
+					let ret = Ok(Some(u32::from_str(&v).unwrap()));
+					self.consume_punctuator(")", tokens);
+					ret
+				},
+				_ => Err(String::from(format!("Expected LiteralLong token, received {:?}", tokens.peek())))
+			}
+		} else {
+			Ok(None)
+		}
+
 	}
 
 	fn parse_insert(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
@@ -928,6 +1006,53 @@ mod tests {
 			},
 			parsed
 		);
+
+		println!("{:#?}", parser.parse(sql));
+
+		let rewritten = sql_writer::write(parsed, &HashMap::new());
+
+		println!("Rewritten: {}", rewritten);
+
+	}
+
+	#[test]
+	fn create() {
+		let parser = AnsiSQLParser {};
+		let sql = "CREATE TABLE foo (
+		      a BIT,
+		      b BIT(2),
+		      c TINYINT,
+		      d TINYINT(10),
+		      e BOOL,
+		      f BOOLEAN,
+		      g SMALLINT,
+		      h SMALLINT(100),
+		      i INT,
+		      j INT(64),
+		      k INTEGER,
+		      l INTEGER(64),
+		      m BIGINT,
+		      n BIGINT(100),
+		      o DECIMAL,
+		      p DECIMAL(10),
+		      q DECIMAL(10,2),
+		      r DEC,
+		      s DEC(10),
+		      t DEC(10, 2),
+		      u FLOAT,
+		      v FLOAT(10),
+		      w FLOAT(10,2),
+		      x DOUBLE,
+		      y DOUBLE(10),
+		      z DOUBLE(10,2),
+		      aa DOUBLE PRECISION,
+		      ab DOUBLE PRECISION (10),
+		      ac DOUBLE PRECISION (10, 2)
+		      )";
+
+		let parsed = parser.parse(sql).unwrap();
+
+		//assert_eq!();
 
 		println!("{:#?}", parser.parse(sql));
 

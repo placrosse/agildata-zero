@@ -53,6 +53,12 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
                 _write(builder, *selection.unwrap(), literals);
             }
         },
+        SQLExpr::SQLCreateTable{..} => {
+            panic!("Not implemented")
+        },
+        SQLExpr::SQLColumnDef{..} => {
+            panic!("Not implemented")
+        },
 		SQLExpr::SQLExprList(vector) => {
 			let mut sep = "";
 			for e in vector {
