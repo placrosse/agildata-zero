@@ -43,10 +43,13 @@ impl<'a> MySQLPacketReader<'a> {
     }
 
     fn read_len(&mut self) -> usize {
-        //TODO: HACK: assume single byte for length for now
         let n = self.payload.bytes[self.pos] as usize;
         self.pos += 1;
-        n
+
+        match n {
+            0xfc | 0xfd | 0xfe => panic!("no support yet for length >= 251"),
+            _ => n
+        }
     }
 
     fn read_lenenc_str(&'a mut self) -> Option<&'a str> {
