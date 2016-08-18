@@ -52,7 +52,21 @@ pub enum DataType {
 	DateTime{fsp: Option<u32>},
 	Timestamp{fsp: Option<u32>},
 	Time{fsp: Option<u32>},
-	Year{display: Option<u32>}
+	Year{display: Option<u32>},
+	Char{length: Option<u32>},
+	Varchar{length: Option<u32>},
+	Binary{length: Option<u32>},
+	VarBinary{length: Option<u32>},
+	TinyBlob,
+	TinyText,
+	Blob{length: Option<u32>},
+	Text{length: Option<u32>},
+	MediumBlob,
+	MediumText,
+	LongBlob,
+	LongText,
+	Enum{values: Box<SQLExpr>},
+	Set{values: Box<SQLExpr>}
 }
 
 #[derive(Debug, PartialEq)]
@@ -249,43 +263,7 @@ impl AnsiSQLParser {
 
 	fn parse_column_def(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr, String> {
 		let column = try!(self.parse_identifier(tokens));
-		let data_token = tokens.next();
-		let data_type: DataType = match data_token {
-			Some(Token::Keyword(t)) | Some(Token::Identifier(t)) => match &t.to_uppercase() as &str {
-				"BIT" => DataType::Bit{display: try!(self.parse_optional_display(tokens))},
-				"TINYINT" => DataType::TinyInt{display: try!(self.parse_optional_display(tokens))},
-				"SMALLINT" => DataType::SmallInt{display: try!(self.parse_optional_display(tokens))},
-				"MEDIUMINT" => DataType::MediumInt{display: try!(self.parse_optional_display(tokens))},
-				"INT" | "INTEGER" => DataType::Int{display: try!(self.parse_optional_display(tokens))},
-				"BIGINT" => DataType::BigInt{display: try!(self.parse_optional_display(tokens))},
-				"DECIMAL" | "DEC" => {
-					match try!(self.parse_optional_precision_and_scale(tokens)) {
-						Some((p, s)) => DataType::Decimal{precision: Some(p), scale: s},
-						None => DataType::Decimal{precision: None, scale: None}
-					}
-				},
-				"FLOAT" => {
-					match try!(self.parse_optional_precision_and_scale(tokens)) {
-						Some((p, s)) => DataType::Float{precision: Some(p), scale: s},
-						None => DataType::Float{precision: None, scale: None}
-					}
-				},
-				"DOUBLE" => {
-					match try!(self.parse_optional_precision_and_scale(tokens)) {
-						Some((p, s)) => DataType::Double{precision: Some(p), scale: s},
-						None => DataType::Double{precision: None, scale: None}
-					}
-				},
-				"BOOL" | "BOOLEAN" => DataType::Bool,
-				"DATE" => DataType::Date,
-				"DATETIME" => DataType::DateTime{fsp: try!(self.parse_optional_display(tokens))},
-				"TIMESTAMP" => DataType::Timestamp{fsp: try!(self.parse_optional_display(tokens))},
-				"TIME" => DataType::Time{fsp: try!(self.parse_optional_display(tokens))},
-				"YEAR" => DataType::Year{display: try!(self.parse_optional_display(tokens))},
-				_ => return Err(format!("Data type not recognized {}", t))
-			},
-			_ => return Err(format!("Expected data type, received token {:?}", tokens.peek()))
-		};
+		let data_type: DataType = try!(self.parse_data_type(tokens));
 
 		match tokens.peek().cloned() {
 			Some(Token::Punctuator(p)) => match &p as &str {
@@ -296,6 +274,84 @@ impl AnsiSQLParser {
 		}
 
 		Ok(SQLExpr::SQLColumnDef{column: Box::new(column), data_type: data_type})
+	}
+
+	fn parse_data_type(&self, tokens: &mut Peekable<Tokens>) ->  Result<DataType, String> {
+		let data_token = tokens.next();
+		match data_token {
+			Some(Token::Keyword(t)) | Some(Token::Identifier(t)) => match &t.to_uppercase() as &str {
+				"BIT" => Ok(DataType::Bit{display: try!(self.parse_optional_display(tokens))}),
+				"TINYINT" => Ok(DataType::TinyInt{display: try!(self.parse_optional_display(tokens))}),
+				"SMALLINT" => Ok(DataType::SmallInt{display: try!(self.parse_optional_display(tokens))}),
+				"MEDIUMINT" => Ok(DataType::MediumInt{display: try!(self.parse_optional_display(tokens))}),
+				"INT" | "INTEGER" => Ok(DataType::Int{display: try!(self.parse_optional_display(tokens))}),
+				"BIGINT" => Ok(DataType::BigInt{display: try!(self.parse_optional_display(tokens))}),
+				"DECIMAL" | "DEC" => {
+					match try!(self.parse_optional_precision_and_scale(tokens)) {
+						Some((p, s)) => Ok(DataType::Decimal{precision: Some(p), scale: s}),
+						None => Ok(DataType::Decimal{precision: None, scale: None})
+					}
+				},
+				"FLOAT" => {
+					match try!(self.parse_optional_precision_and_scale(tokens)) {
+						Some((p, s)) => Ok(DataType::Float{precision: Some(p), scale: s}),
+						None => Ok(DataType::Float{precision: None, scale: None})
+					}
+				},
+				"DOUBLE" => {
+					match try!(self.parse_optional_precision_and_scale(tokens)) {
+						Some((p, s)) => Ok(DataType::Double{precision: Some(p), scale: s}),
+						None => Ok(DataType::Double{precision: None, scale: None})
+					}
+				},
+				"BOOL" | "BOOLEAN" => Ok(DataType::Bool),
+				"DATE" => Ok(DataType::Date),
+				"DATETIME" => Ok(DataType::DateTime{fsp: try!(self.parse_optional_display(tokens))}),
+				"TIMESTAMP" => Ok(DataType::Timestamp{fsp: try!(self.parse_optional_display(tokens))}),
+				"TIME" => Ok(DataType::Time{fsp: try!(self.parse_optional_display(tokens))}),
+				"YEAR" => Ok(DataType::Year{display: try!(self.parse_optional_display(tokens))}),
+				// TODO do something with NATIONAL, NCHAR, etc
+				"NATIONAL" => self.parse_data_type(tokens),
+				"CHAR" | "NCHAR" => {
+					let ret = Ok(DataType::Char{length: try!(self.parse_optional_display(tokens))});
+					// TODO do something with CHAR BYTE
+					self.consume_keyword("BYTE", tokens);
+					ret
+				},
+				"CHARACTER" => {
+					if self.consume_keyword("VARYING", tokens) {
+						Ok(DataType::Varchar{length: try!(self.parse_optional_display(tokens))})
+					} else {
+						Ok(DataType::Char{length: try!(self.parse_optional_display(tokens))})
+					}
+				},
+				"VARCHAR" | "NVARCHAR" => Ok(DataType::Varchar{length: try!(self.parse_optional_display(tokens))}),
+				"BINARY" => Ok(DataType::Binary{length: try!(self.parse_optional_display(tokens))}),
+				"VARBINARY" => Ok(DataType::VarBinary{length: try!(self.parse_optional_display(tokens))}),
+				"TINYBLOB" => Ok(DataType::TinyBlob),
+				"TINYTEXT" => Ok(DataType::TinyText),
+				"MEDIUMBLOB" => Ok(DataType::MediumBlob),
+				"MEDIUMTEXT" => Ok(DataType::MediumText),
+				"LONGBLOB" => Ok(DataType::LongBlob),
+				"LONGTEXT" => Ok(DataType::LongText),
+				"BLOB" => Ok(DataType::Blob{length: try!(self.parse_optional_display(tokens))}),
+				"TEXT" => Ok(DataType::Text{length: try!(self.parse_optional_display(tokens))}),
+				"ENUM" => {
+					self.consume_punctuator("(", tokens);
+					let values = try!(self.parse_expr_list(tokens));
+					self.consume_punctuator(")", tokens);
+					Ok(DataType::Enum{values: Box::new(values)})
+				},
+				"SET" => {
+					self.consume_punctuator("(", tokens);
+					let values = try!(self.parse_expr_list(tokens));
+					self.consume_punctuator(")", tokens);
+					Ok(DataType::Set{values: Box::new(values)})
+				},
+				_ => Err(format!("Data type not recognized {}", t))
+			},
+			_ => Err(format!("Expected data type, received token {:?}", tokens.peek()))
+		}
 	}
 
 	fn parse_optional_display(&self, tokens: &mut Peekable<Tokens>) -> Result<Option<u32>, String> {
@@ -625,7 +681,7 @@ impl AnsiSQLParser {
 	// TODO more helper methods like consume_keyword_sequence, required_keyword_sequence, etc
 	fn consume_keyword(&self, text: &str, tokens: &mut Peekable<Tokens>) -> bool {
 		match tokens.peek().cloned() {
-			Some(Token::Keyword(v)) => {
+			Some(Token::Keyword(v)) | Some(Token::Identifier(v)) => {
 				if text.eq_ignore_ascii_case(&v) {
 					tokens.next();
 					true

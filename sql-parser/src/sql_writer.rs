@@ -64,7 +64,7 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
         },
         SQLExpr::SQLColumnDef{column, data_type} => {
             _write(builder, *column, literals);
-            _write_data_type(builder, data_type);
+            _write_data_type(builder, data_type, literals);
         },
 		SQLExpr::SQLExprList(vector) => {
 			let mut sep = "";
@@ -194,17 +194,7 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 		write!(builder, " {} ", text).unwrap();
 	}
 
-    fn _write_data_type(builder: &mut String, data_type: DataType) {
-        // 	Bit{display: Option<u32>},
-        	// TinyInt{display: Option<u32>},
-        	// SmallInt{display: Option<u32>},
-        	// MediumInt{display: Option<u32>},
-        	// Int{display: Option<u32>},
-        	// BigInt{display: Option<u32>},
-        	// Decimal{precision: Option<u32>, scale: Option<u32>},
-        	// Float{precision: Option<u32>, scale: Option<u32>},
-        	// Double{precision: Option<u32>, scale: Option<u32>},
-        	// Bool,
+    fn _write_data_type(builder: &mut String, data_type: DataType, literals: &HashMap<u32, Option<Vec<u8>>>) {
         match data_type {
             DataType::Bit{display} => {
                 write!(builder, " {}", "BIT");
@@ -263,6 +253,58 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
             DataType::Year{display} => {
                 write!(builder, " {}", "DATETIME");
                 _write_optional_display(builder, display);
+            },
+            DataType::Char{length} => {
+                write!(builder, " {}", "CHAR");
+                _write_optional_display(builder, length);
+            },
+            DataType::Varchar{length} => {
+                write!(builder, " {}", "VARCHAR");
+                _write_optional_display(builder, length);
+            },
+            DataType::Binary{length} => {
+                write!(builder, " {}", "BINARY");
+                _write_optional_display(builder, length);
+            },
+            DataType::VarBinary{length} => {
+                write!(builder, " {}", "VARBINARY");
+                _write_optional_display(builder, length);
+            },
+            DataType::Blob{length} => {
+                write!(builder, " {}", "BLOB");
+                _write_optional_display(builder, length);
+            },
+            DataType::Text{length} => {
+                write!(builder, " {}", "TEXT");
+                _write_optional_display(builder, length);
+            },
+            DataType::TinyBlob => {
+                write!(builder, " {}", "TINYBLOB");
+            },
+            DataType::TinyText => {
+                write!(builder, " {}", "TINYTEXT");
+            },
+            DataType::MediumBlob => {
+                write!(builder, " {}", "MEDIUMBLOB");
+            },
+            DataType::MediumText => {
+                write!(builder, " {}", "MEDIUMTEXT");
+            },
+            DataType::LongBlob => {
+                write!(builder, " {}", "LONGBLOB");
+            },
+            DataType::LongText => {
+                write!(builder, " {}", "LONGTEXT");
+            },
+            DataType::Enum{values} => {
+                write!(builder, " {}(", "ENUM");
+                _write(builder, *values, literals);
+                write!(builder, " {}", ")");
+            },
+            DataType::Set{values} => {
+                write!(builder, " {}(", "ENUM");
+                _write(builder, *values, literals);
+                write!(builder, " {}", ")");
             },
             // _ => panic!("Unsupported data type {:?}", data_type)
 
