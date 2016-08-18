@@ -49,17 +49,10 @@ impl<'a> MySQLPacketReader<'a> {
         n
     }
 
-    fn read_lenenc_str(&mut self) -> Option<&'a str> {
-        println!("read_lenenc_str BEGIN pos={}", self.pos);
-
-        match self.read_len() {
-            0xfb => None, // MySQL NULL value
-            n @ _ => {
-                println!("read_lenenc_str str_len={}", n);
-                let s = str::from_utf8(&self.payload.bytes[self.pos..self.pos+n]).unwrap();
-                self.pos += n;
-                Some(s)
-            }
+    fn read_lenenc_str(&'a mut self) -> Option<&'a str> {
+        match self.read_lenenc_bytes() {
+            Some(s) => Some(str::from_utf8(s).unwrap()),
+            None => None
         }
     }
 
