@@ -78,7 +78,6 @@ pub enum SQLJoinType {
 
 pub struct AnsiSQLParser{}
 
-// TODO should switch to Result returns instead of use of panic! ?
 impl AnsiSQLParser {
 
 	pub fn parse(&self, sql: &str) -> Result<SQLExpr,  String> {
@@ -103,29 +102,6 @@ impl AnsiSQLParser {
 			Ok(expr.unwrap())
 		} else {
 			Err(String::from("Failed to parse expr TBD"))
-		}
-
-		// Ok(expr)
-		//
-		//
-		// match expr {
-		// 	Ok(Some(node)) => {},
-		// 	Ok(None) => ,
-		// 	Err(e) => Err(e)
-		// }
-	}
-
-	pub fn get_infix(&self, stream: &mut Peekable<Tokens>, precedence: u32, left: SQLExpr) -> Result<SQLExpr,  String> {
-		println!("get_infix() precedence");
-		if precedence >= self.get_precedence(stream) {
-			println!("return");
-			Ok(left)
-		} else {
-			println!("recurse");
-			let p = self.get_precedence(stream);
-			let r = try!(self.parse_infix(left, stream, p));
-			self.get_infix(stream, precedence, r.unwrap())
-
 		}
 	}
 
