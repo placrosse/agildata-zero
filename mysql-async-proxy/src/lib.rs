@@ -76,6 +76,36 @@ impl<'a> MySQLPacketReader<'a> {
 
 }
 
+// API
+
+trait PacketHandler {
+    fn process(p: &MySQLPacket);
+}
+
+trait Plugin<H: PacketHandler> {
+    fn new_handler() -> Result<H, String>;
+}
+
+// example user code
+
+struct MyPlugin {
+}
+
+struct MyPacketHandler {
+}
+
+impl<H: PacketHandler> Plugin<H> for MyPlugin {
+    fn new_handler() -> Result<H, String> {
+        Err("not implemented".to_string())
+    }
+}
+
+// end example code
+
+impl PacketHandler for MyPacketHandler {
+    fn process(p: &MySQLPacket) { panic!("") }
+}
+
 #[cfg(test)]
 mod tests {
 
