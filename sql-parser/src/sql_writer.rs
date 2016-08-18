@@ -1,4 +1,4 @@
-use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator, SQLUnionType, SQLJoinType};
+use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator, SQLUnionType, SQLJoinType, DataType};
 use std::fmt::Write;
 use std::collections::HashMap;
 
@@ -53,11 +53,18 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
                 _write(builder, *selection.unwrap(), literals);
             }
         },
-        SQLExpr::SQLCreateTable{..} => {
-            panic!("Not implemented")
+        SQLExpr::SQLCreateTable{table, column_list} => {
+            write!(builder, "{}", "CREATE TABLE");
+            let mut sep = "";
+            for c in column_list {
+                write!(builder, "{}", sep);
+                _write(builder, c, literals);
+                sep = ", ";
+            }
         },
-        SQLExpr::SQLColumnDef{..} => {
-            panic!("Not implemented")
+        SQLExpr::SQLColumnDef{column, data_type} => {
+            _write(builder, *column, literals);
+            _write_data_type(builder, data_type);
         },
 		SQLExpr::SQLExprList(vector) => {
 			let mut sep = "";
@@ -186,4 +193,81 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 		};
 		write!(builder, " {} ", text).unwrap();
 	}
+
+    fn _write_data_type(builder: &mut String, data_type: DataType) {
+        // 	Bit{display: Option<u32>},
+        	// TinyInt{display: Option<u32>},
+        	// SmallInt{display: Option<u32>},
+        	// MediumInt{display: Option<u32>},
+        	// Int{display: Option<u32>},
+        	// BigInt{display: Option<u32>},
+        	// Decimal{precision: Option<u32>, scale: Option<u32>},
+        	// Float{precision: Option<u32>, scale: Option<u32>},
+        	// Double{precision: Option<u32>, scale: Option<u32>},
+        	// Bool,
+        match data_type {
+            DataType::Bit{display} => {
+                write!(builder, " {}", "BIT");
+                _write_optional_display(builder, display);
+            },
+            DataType::TinyInt{display} => {
+                write!(builder, " {}", "TINYINT");
+                _write_optional_display(builder, display);
+            },
+            DataType::SmallInt{display} => {
+                write!(builder, " {}", "SMALLINT");
+                _write_optional_display(builder, display);
+            },
+            DataType::MediumInt{display} => {
+                write!(builder, " {}", "MEDIUMINT");
+                _write_optional_display(builder, display);
+            },
+            DataType::Int{display} => {
+                write!(builder, " {}", "INTEGER");
+                _write_optional_display(builder, display);
+            },
+            DataType::BigInt{display} => {
+                write!(builder, " {}", "BIGINT");
+                _write_optional_display(builder, display);
+            },
+            DataType::Decimal{precision, scale} => {
+                write!(builder, " {}", "DECIMAL");
+                _write_optional_precision_and_scale(builder, precision, scale);
+            },
+            DataType::Float{precision, scale} => {
+                write!(builder, " {}", "FLOAT");
+                _write_optional_precision_and_scale(builder, precision, scale);
+            },
+            DataType::Double{precision, scale} => {
+                write!(builder, " {}", "DOUBLE");
+                _write_optional_precision_and_scale(builder, precision, scale);
+            },
+            DataType::Bool => {
+                write!(builder, " {}", "BOOLEAN");
+            }
+
+        }
+    }
+
+    fn _write_optional_display(builder: &mut String, display: Option<u32>) {
+        match display {
+            Some(d) => {write!(builder, "({})", d);},
+            None => {}
+        }
+        ()
+    }
+
+    fn _write_optional_precision_and_scale(builder: &mut String, precision: Option<u32>, scale: Option<u32>) {
+        match precision {
+            Some(p) => {
+                write!(builder, "({}", p);
+                if (scale.is_some()) {
+                    write!(builder, ",{}", scale.unwrap());
+                }
+                write!(builder, "{}", ")");
+            },
+            None => {}
+        }
+        ()
+    }
 }

@@ -46,7 +46,8 @@ pub enum DataType {
 	BigInt{display: Option<u32>},
 	Decimal{precision: Option<u32>, scale: Option<u32>},
 	Float{precision: Option<u32>, scale: Option<u32>},
-	Double{precision: Option<u32>, scale: Option<u32>}
+	Double{precision: Option<u32>, scale: Option<u32>},
+	Bool,
 }
 
 #[derive(Debug, PartialEq)]
@@ -243,20 +244,34 @@ impl AnsiSQLParser {
 
 	fn parse_column_def(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr, String> {
 		let column = try!(self.parse_identifier(tokens));
-		let data_type: DataType = match tokens.peek().cloned() {
+		let data_token = tokens.next();
+		let data_type: DataType = match data_token {
 			Some(Token::Keyword(t)) | Some(Token::Identifier(t)) => match &t.to_uppercase() as &str {
-				"BIT" => {
-					tokens.next();
-					DataType::Bit{display: try!(self.parse_optional_display(tokens))}
+				"BIT" => DataType::Bit{display: try!(self.parse_optional_display(tokens))},
+				"TINYINT" => DataType::TinyInt{display: try!(self.parse_optional_display(tokens))},
+				"SMALLINT" => DataType::SmallInt{display: try!(self.parse_optional_display(tokens))},
+				"MEDIUMINT" => DataType::MediumInt{display: try!(self.parse_optional_display(tokens))},
+				"INT" | "INTEGER" => DataType::Int{display: try!(self.parse_optional_display(tokens))},
+				"BIGINT" => DataType::BigInt{display: try!(self.parse_optional_display(tokens))},
+				"DECIMAL" | "DEC" => {
+					match try!(self.parse_optional_precision_and_scale(tokens)) {
+						Some((p, s)) => DataType::Decimal{precision: Some(p), scale: s},
+						None => DataType::Decimal{precision: None, scale: None}
+					}
 				},
-				"TINYINT" => {
-					tokens.next();
-					DataType::TinyInt{display: try!(self.parse_optional_display(tokens))}
+				"FLOAT" => {
+					match try!(self.parse_optional_precision_and_scale(tokens)) {
+						Some((p, s)) => DataType::Float{precision: Some(p), scale: s},
+						None => DataType::Float{precision: None, scale: None}
+					}
 				},
-				"MEDIUMINT" => {
-					tokens.next();
-					DataType::MediumInt{display: try!(self.parse_optional_display(tokens))}
+				"DOUBLE" => {
+					match try!(self.parse_optional_precision_and_scale(tokens)) {
+						Some((p, s)) => DataType::Float{precision: Some(p), scale: s},
+						None => DataType::Float{precision: None, scale: None}
+					}
 				},
+				"BOOL" | "BOOLEAN" => DataType::Bool,
 				_ => return Err(format!("Data type not recognized {}", t))
 			},
 			_ => return Err(format!("Expected data type, received token {:?}", tokens.peek()))
@@ -269,6 +284,7 @@ impl AnsiSQLParser {
 		if self.consume_punctuator("(", tokens) {
 			match tokens.peek().cloned() {
 				Some(Token::Literal(LiteralToken::LiteralLong(i, v))) => {
+					tokens.next();
 					let ret = Ok(Some(u32::from_str(&v).unwrap()));
 					self.consume_punctuator(")", tokens);
 					ret
@@ -279,6 +295,32 @@ impl AnsiSQLParser {
 			Ok(None)
 		}
 
+	}
+
+	fn parse_optional_precision_and_scale(&self, tokens: &mut Peekable<Tokens>) -> Result<Option<(u32,Option<u32>)>, String> {
+		if self.consume_punctuator("(", tokens) {
+			let p = try!(self.parse_long(tokens));
+			let s = if self.consume_punctuator(",", tokens) {
+				Some(try!(self.parse_long(tokens)))
+			} else {
+				None
+			};
+			self.consume_punctuator(")", tokens);
+			Ok(Some((p, s)))
+		} else {
+			Ok(None)
+		}
+
+	}
+
+	fn parse_long(&self, tokens: &mut Peekable<Tokens>) -> Result<u32, String> {
+		match tokens.peek().cloned() {
+			Some(Token::Literal(LiteralToken::LiteralLong(i, v))) => {
+				tokens.next();
+				Ok(u32::from_str(&v).unwrap())
+			},
+			_ => Err(String::from(format!("Expected LiteralLong token, received {:?}", tokens.peek())))
+		}
 	}
 
 	fn parse_insert(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
@@ -600,6 +642,7 @@ mod tests {
 	use super::SQLOperator::*;
 	use super::SQLJoinType::*;
 	use super::SQLUnionType::*;
+	use super::DataType::*;
 	use super::super::sql_writer;
 	use std::collections::HashMap;
 
@@ -1044,15 +1087,130 @@ mod tests {
 		      w FLOAT(10,2),
 		      x DOUBLE,
 		      y DOUBLE(10),
-		      z DOUBLE(10,2),
-		      aa DOUBLE PRECISION,
-		      ab DOUBLE PRECISION (10),
-		      ac DOUBLE PRECISION (10, 2)
+		      z DOUBLE(10,2)
 		      )";
+
+			  // TODO mysql specific
+			//   aa DOUBLE PRECISION,
+			//   ab DOUBLE PRECISION (10),
+			//   ac DOUBLE PRECISION (10, 2)
+			//   aa DOUBLE PRECISION,
+			//   ab DOUBLE PRECISION (10),
+			//   ac DOUBLE PRECISION (10, 2)
 
 		let parsed = parser.parse(sql).unwrap();
 
-		//assert_eq!();
+		assert_eq!(
+			SQLCreateTable {
+				table: Box::new(SQLIdentifier(String::from("foo"))),
+				column_list: vec![
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("a"))),
+						data_type: Bit { display: None }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("b"))),
+						data_type: Bit { display: Some(2) }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("c"))),
+						data_type: TinyInt { display: None }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("d"))),
+						data_type: TinyInt { display: Some(10) }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("e"))),
+						data_type: Bool
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("f"))),
+						data_type: Bool
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("g"))),
+						data_type: SmallInt { display: None }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("h"))),
+						data_type: SmallInt { display: Some(100) }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("i"))),
+						data_type: Int { display: None }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("j"))),
+						data_type: Int { display: Some(64) }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("k"))),
+						data_type: Int { display: None }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("l"))),
+						data_type: Int { display: Some(64) }
+					}, SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("m"))),
+						data_type: BigInt { display: None }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("n"))),
+						data_type: BigInt { display: Some(100) }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("o"))),
+						data_type: Decimal { precision: None, scale: None }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("p"))),
+						data_type: Decimal { precision: Some(10), scale: None }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("q"))),
+						data_type: Decimal { precision: Some(10), scale: Some(2) }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("r"))),
+						data_type: Decimal { precision: None, scale: None }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("s"))),
+						data_type: Decimal { precision: Some(10), scale: None }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("t"))),
+						data_type: Decimal { precision: Some(10), scale: Some(2) }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("u"))),
+						data_type: Float { precision: None, scale: None }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("v"))),
+						data_type: Float { precision: Some(10), scale: None }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("w"))),
+						data_type: Float { precision: Some(10), scale: Some(2) }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("x"))),
+						data_type: Float { precision: None, scale: None }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("y"))),
+						data_type: Float { precision: Some(10), scale: None }
+					},
+					SQLColumnDef {
+						column: Box::new(SQLIdentifier(String::from("z"))),
+						data_type: Float { precision: Some(10), scale: Some(2) }
+					}
+				]
+			},
+			parsed
+		);
 
 		println!("{:#?}", parser.parse(sql));
 
