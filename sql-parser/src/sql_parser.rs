@@ -4,7 +4,7 @@ use std::str::FromStr;
 use std::ascii::AsciiExt;
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum SQLExpr {
 	SQLExprList(Vec<SQLExpr>),
 	SQLBinary{left: Box<SQLExpr>, op: SQLOperator, right: Box<SQLExpr>},
@@ -35,7 +35,7 @@ pub enum SQLExpr {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum LiteralExpr {
 	LiteralLong(u32, u64),
 	LiteralBool(u32, bool),
@@ -43,7 +43,7 @@ pub enum LiteralExpr {
 	LiteralString(u32, String)
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum SQLOperator {
 	ADD,
 	SUB,
@@ -60,7 +60,7 @@ pub enum SQLOperator {
 	AND
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum SQLUnionType {
 	UNION,
 	ALL,
@@ -78,7 +78,6 @@ pub enum SQLJoinType {
 
 pub struct AnsiSQLParser{}
 
-// TODO should switch to Result returns instead of use of panic! ?
 impl AnsiSQLParser {
 
 	pub fn parse(&self, sql: &str) -> Result<SQLExpr,  String> {
@@ -88,24 +87,21 @@ impl AnsiSQLParser {
 	}
 
 	pub fn parse_expr(&self, stream: &mut Peekable<Tokens>, precedence: u32) -> Result<SQLExpr,  String> {
-		match self.parse_prefix(stream) {
-			Ok(Some(node)) => self.get_infix(stream, precedence, node),
-			Ok(None) => Err(String::from("Failed to parse expr TBD")),
-			Err(e) => Err(e)
-		}
-	}
+		let mut expr = self.parse_prefix(stream).unwrap();
 
-	pub fn get_infix(&self, stream: &mut Peekable<Tokens>, precedence: u32, left: SQLExpr) -> Result<SQLExpr,  String> {
-		println!("get_infix()");
-		if precedence >= self.get_precedence(stream) {
-			println!("return");
-			Ok(left)
+		if expr.is_some() {
+			while let Some(next) = stream.peek().cloned() {
+				let next_precedence = self.get_precedence(stream);
+
+				if precedence >= next_precedence {
+					break;
+				}
+
+				expr = self.parse_infix(expr.unwrap(), stream, next_precedence).unwrap();
+			}
+			Ok(expr.unwrap())
 		} else {
-			println!("recurse");
-			let p = self.get_precedence(stream);
-			let r = try!(self.parse_infix(left, stream, p));
-			self.get_infix(stream, precedence, r.unwrap())
-
+			Err(String::from("Failed to parse expr TBD"))
 		}
 	}
 
@@ -158,12 +154,12 @@ impl AnsiSQLParser {
 	}
 
 	fn parse_infix(&self, left: SQLExpr, stream: &mut Peekable<Tokens>, precedence: u32) -> Result<Option<SQLExpr>,  String>{
-		println!("parse_infix()");
+		println!("parse_infix() {}", precedence);
 		match stream.peek().cloned() {
 			Some(token) => match token {
 				Token::Operator(t) => Ok(Some(try!(self.parse_binary(left, stream)))),//Some(self.parse_binary(left, stream)),
 				Token::Keyword(t) => match &t as &str {
-					"UNION" => Ok(Some(try!(self.parse_union(left, stream)))),//Some(self.parse_union(left, stream)),
+					"UNION" => Ok(Some(try!(self.parse_union(left, stream)))),
 					"JOIN" | "INNER" | "RIGHT" | "LEFT" | "CROSS" | "FULL" => Ok(Some(try!(self.parse_join(left, stream)))),
 					"AS" => Ok(Some(try!(self.parse_alias(left, stream)))),
 					_ => {
@@ -196,9 +192,9 @@ impl AnsiSQLParser {
 					_ => panic!("Unsupported operator {}", t)
 				},
 				Token::Keyword(t) => match &t as &str {
-					"UNION" => 60,
-					"JOIN" | "INNER" | "RIGHT" | "LEFT" | "CROSS" | "FULL" => 50,
-					"AS" => 4,
+					"UNION" => 3,
+					"JOIN" | "INNER" | "RIGHT" | "LEFT" | "CROSS" | "FULL" => 5,
+					"AS" => 6,
 					_ => 0
 				},
 				_ => 0
@@ -304,7 +300,7 @@ impl AnsiSQLParser {
 
 	// TODO real parse_relation
 	fn parse_relation(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
-		self.parse_expr(tokens, 0)
+		self.parse_expr(tokens, 4)
 	}
 
 	fn parse_expr_list(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
@@ -520,17 +516,18 @@ impl AnsiSQLParser {
 
 #[cfg(test)]
 mod tests {
-	use super::{AnsiSQLParser, SQLExpr, LiteralExpr};
+	use super::{AnsiSQLParser};
+	use super::SQLExpr::*;
+	use super::LiteralExpr::*;
+	use super::SQLOperator::*;
+	use super::SQLJoinType::*;
+	use super::SQLUnionType::*;
 	use super::super::sql_writer;
 	use std::collections::HashMap;
 
 	#[test]
 	fn sqlparser() {
 		let parser = AnsiSQLParser {};
-		// assert_eq!(
-		// 	SQLExpr::SQLLiteral(LiteralExpr::LiteralLong(0_u64)),
-		// 	parser.parse("SELECT 1 + 1, a")
-		// );
 		let sql = "SELECT 1 + 1 + 1,
 			a AS alias,
 			(3 * (1 + 2)),
@@ -541,9 +538,128 @@ mod tests {
 			ORDER BY a DESC, (a + b) ASC, c";
 		let parsed = parser.parse(sql).unwrap();
 
+		assert_eq!(
+			SQLSelect {
+				expr_list: Box::new(
+					SQLExprList(vec![
+						SQLBinary {
+							left:  Box::new(SQLBinary{
+								left: Box::new(SQLLiteral(LiteralLong(0, 1_u64))),
+								op: ADD,
+								right:  Box::new(SQLLiteral(LiteralLong(1, 1_u64)))
+							}),
+							op: ADD,
+							right:  Box::new(SQLLiteral(LiteralLong(2, 1_u64)))
+						},
+						SQLAlias{
+							expr:  Box::new(SQLIdentifier(String::from("a"))),
+							alias:  Box::new(SQLIdentifier(String::from("alias")))
+						},
+						SQLNested(
+							 Box::new(SQLBinary {
+								left:  Box::new(SQLLiteral(LiteralLong(3, 3_u64))),
+								op: MULT,
+								right:  Box::new(SQLNested(
+									 Box::new(SQLBinary{
+										left:  Box::new(SQLLiteral(LiteralLong(4, 1_u64))),
+										op: ADD,
+										right:  Box::new(SQLLiteral(LiteralLong(5, 2_u64)))
+									})
+								))
+							})
+						),
+						SQLAlias{
+							expr:  Box::new(SQLUnary{
+								operator: SUB,
+								expr:  Box::new(SQLLiteral(LiteralLong(6, 1_u64)))
+							}),
+							alias:  Box::new(SQLIdentifier(String::from("unary")))
+						},
+						SQLAlias {
+							expr:  Box::new(SQLNested(
+								 Box::new(SQLSelect{
+									expr_list:  Box::new(SQLExprList(
+										vec![
+											SQLIdentifier(String::from("a")),
+											SQLIdentifier(String::from("b")),
+											SQLIdentifier(String::from("c"))
+										]
+									)),
+									relation: Some( Box::new(SQLIdentifier(String::from("tTwo")))),
+									selection: Some( Box::new(SQLBinary{
+										left:  Box::new(SQLIdentifier(String::from("c"))),
+										op: EQ,
+										right:  Box::new(SQLIdentifier(String::from("a")))
+									})),
+									order: None
+								})
+							)),
+							alias:  Box::new(SQLIdentifier(String::from("subselect")))
+						}
+						]
+					)
+				),
+				relation: Some( Box::new(SQLAlias{
+					expr:  Box::new(SQLNested(
+						 Box::new(SQLSelect {
+							expr_list:  Box::new(SQLExprList(
+								vec![
+									SQLIdentifier(String::from("a")),
+									SQLIdentifier(String::from("b")),
+									SQLIdentifier(String::from("c"))
+								]
+							)),
+							relation: Some( Box::new(SQLIdentifier(String::from("tThree")))),
+							selection: None,
+							order: None
+						})
+					)),
+					alias:  Box::new(SQLIdentifier(String::from("l")))
+				})),
+				selection: Some( Box::new(SQLBinary {
+					left:  Box::new(SQLBinary{
+						left:  Box::new(SQLIdentifier(String::from("a"))),
+						op: GT,
+						right:  Box::new(SQLLiteral(LiteralLong(7, 10_u64)))
+					}),
+					op: AND,
+					right:  Box::new(SQLBinary{
+						left:  Box::new(SQLIdentifier(String::from("b"))),
+						op: EQ,
+						right:  Box::new(SQLLiteral(LiteralBool(8, true)))
+					})
+				})),
+				order: Some( Box::new(SQLExprList(
+					vec![
+						SQLOrderBy{
+							expr:  Box::new(SQLIdentifier(String::from("a"))),
+							is_asc: false
+						},
+						SQLOrderBy{
+							expr:  Box::new(SQLNested(
+								 Box::new(SQLBinary{
+									left:  Box::new(SQLIdentifier(String::from("a"))),
+									op: ADD,
+									right:  Box::new(SQLIdentifier(String::from("b")))
+								})
+							)),
+							is_asc: true
+						},
+						SQLOrderBy{
+							expr:  Box::new(SQLIdentifier(String::from("c"))),
+							is_asc: true
+						},
+					]
+				)))
+			},
+			parsed
+		);
+
 		println!("{:#?}", parser.parse(sql));
 
 		let rewritten = sql_writer::write(parsed, &HashMap::new());
+
+		//assert_eq!(rewritten, sql);
 
 		println!("Rewritten: {:?}", rewritten);
 
@@ -552,10 +668,6 @@ mod tests {
 	#[test]
 	fn sql_join() {
 		let parser = AnsiSQLParser {};
-		// assert_eq!(
-		// 	SQLExpr::SQLLiteral(LiteralExpr::LiteralLong(0_u64)),
-		// 	parser.parse("SELECT 1 + 1, a")
-		// );
 		let sql = "SELECT l.a, r.b, l.c FROM tOne AS l
 			JOIN (SELECT a, b, c FROM tTwo WHERE a > 0) AS r
 			ON l.a = r.a
@@ -563,9 +675,74 @@ mod tests {
 			ORDER BY r.c DESC";
 		let parsed = parser.parse(sql).unwrap();
 
+		assert_eq!(
+			SQLSelect {
+				expr_list: Box::new(SQLExprList(
+					vec![
+						SQLIdentifier(String::from("l.a")),
+						SQLIdentifier(String::from("r.b")),
+						SQLIdentifier(String::from("l.c"))
+					]
+				)),
+				relation: Some(Box::new(SQLJoin {
+					left: Box::new(
+						SQLAlias {
+							expr: Box::new(SQLIdentifier(String::from("tOne"))),
+							alias: Box::new(SQLIdentifier(String::from("l")))
+						}
+					),
+					join_type: INNER,
+					right: Box::new(
+						SQLAlias {
+							expr: Box::new(SQLNested(
+								Box::new(SQLSelect{
+									expr_list: Box::new(SQLExprList(
+										vec![
+										SQLIdentifier(String::from("a")),
+										SQLIdentifier(String::from("b")),
+										SQLIdentifier(String::from("c"))
+										]
+									)),
+									relation: Some(Box::new(SQLIdentifier(String::from("tTwo")))),
+									selection: Some(Box::new(SQLBinary{
+										left: Box::new(SQLIdentifier(String::from("a"))),
+										op: GT,
+										right: Box::new(SQLLiteral(LiteralLong(0, 0_u64)))
+									})),
+									order: None
+								})
+							)),
+							alias: Box::new(SQLIdentifier(String::from("r")))
+						}
+					),
+					on_expr: Some(Box::new(SQLBinary {
+						left: Box::new(SQLIdentifier(String::from("l.a"))),
+						op: EQ,
+						right: Box::new(SQLIdentifier(String::from("r.a")))
+					}))
+				})),
+				selection: Some(Box::new(SQLBinary{
+					left: Box::new(SQLIdentifier(String::from("l.b"))),
+					op: GT,
+					right: Box::new(SQLIdentifier(String::from("r.b")))
+				})),
+				order: Some(Box::new(SQLExprList(
+					vec![
+						SQLOrderBy{
+							expr: Box::new(SQLIdentifier(String::from("r.c"))),
+							is_asc: false
+						}
+					]
+				)))
+			},
+			parsed
+		);
+
 		println!("{:#?}", parser.parse(sql));
 
 		let rewritten = sql_writer::write(parsed, &HashMap::new());
+
+		//assert_eq!(rewritten, sql);
 
 		println!("Rewritten: {:?}", rewritten);
 	}
@@ -576,6 +753,79 @@ mod tests {
 		let sql = "((((SELECT a, b, c FROM tOne UNION (SELECT a, b, c FROM tTwo))))) UNION (((SELECT a, b, c FROM tThree) UNION ((SELECT a, b, c FROM tFour))))";
 
 		let parsed = parser.parse(sql).unwrap();
+
+		assert_eq!(
+			SQLUnion{
+				left: Box::new(SQLNested(
+					Box::new(SQLNested(
+						Box::new(SQLNested(
+							Box::new(SQLNested(
+								Box::new(SQLUnion{
+									left: Box::new(SQLSelect{
+										expr_list: Box::new(SQLExprList(vec![
+											SQLIdentifier(String::from("a")),
+											SQLIdentifier(String::from("b")),
+											SQLIdentifier(String::from("c"))
+										])),
+										relation: Some(Box::new(SQLIdentifier(String::from("tOne")))),
+										selection: None,
+										order: None
+									}),
+									union_type: UNION,
+									right: Box::new(SQLNested(
+										Box::new(SQLSelect{
+											expr_list: Box::new(SQLExprList(vec![
+												SQLIdentifier(String::from("a")),
+												SQLIdentifier(String::from("b")),
+												SQLIdentifier(String::from("c"))
+											])),
+											relation: Some(Box::new(SQLIdentifier(String::from("tTwo")))),
+											selection: None,
+											order: None
+										})
+									))
+								})
+							))
+						))
+					))
+				)),
+				union_type: UNION,
+				right: Box::new(SQLNested(
+					Box::new(SQLNested(
+						Box::new(SQLUnion{
+							left: Box::new(SQLNested(
+								Box::new(SQLSelect{
+									expr_list: Box::new(SQLExprList(vec![
+										SQLIdentifier(String::from("a")),
+										SQLIdentifier(String::from("b")),
+										SQLIdentifier(String::from("c"))
+									])),
+									relation: Some(Box::new(SQLIdentifier(String::from("tThree")))),
+									selection: None,
+									order: None
+								})
+							)),
+							union_type: UNION,
+							right: Box::new(SQLNested(
+								Box::new(SQLNested(
+									Box::new(SQLSelect{
+										expr_list: Box::new(SQLExprList(vec![
+											SQLIdentifier(String::from("a")),
+											SQLIdentifier(String::from("b")),
+											SQLIdentifier(String::from("c"))
+										])),
+										relation: Some(Box::new(SQLIdentifier(String::from("tFour")))),
+										selection: None,
+										order: None
+									})
+								))
+							))
+						})
+					))
+				))
+			},
+			parsed
+		);
 
 		println!("{:#?}", parser.parse(sql));
 
@@ -591,6 +841,27 @@ mod tests {
 
 		let parsed = parser.parse(sql).unwrap();
 
+		assert_eq!(
+			SQLInsert{
+				table: Box::new(SQLIdentifier(String::from("foo"))),
+				column_list: Box::new(SQLExprList(
+					vec![
+						SQLIdentifier(String::from("a")),
+						SQLIdentifier(String::from("b")),
+						SQLIdentifier(String::from("c"))
+					]
+				)),
+				values_list: Box::new(SQLExprList(
+					vec![
+						SQLLiteral(LiteralLong(0, 1_u64)),
+						SQLLiteral(LiteralDouble(1, 20.45_f64)),
+						SQLLiteral(LiteralString(2, String::from("abcdefghijk")))
+					]
+				))
+			},
+			parsed
+		);
+
 		println!("{:#?}", parser.parse(sql));
 
 		let rewritten = sql_writer::write(parsed, &HashMap::new());
@@ -602,14 +873,25 @@ mod tests {
 	#[test]
 	fn select_wildcard() {
 		let parser = AnsiSQLParser {};
-		let sql = "SELECT * FROM foo)";
+		let sql = "SELECT * FROM foo";
 
 		let parsed = parser.parse(sql).unwrap();
+
+		assert_eq!(
+			SQLSelect {
+				expr_list: Box::new(SQLExprList(vec![SQLIdentifier(String::from("*"))])),
+				relation: Some(Box::new(SQLIdentifier(String::from("foo")))),
+				selection: None,
+				order: None
+			},
+			parsed
+		);
 
 		println!("{:#?}", parser.parse(sql));
 
 		let rewritten = sql_writer::write(parsed, &HashMap::new());
 
+		assert_eq!(rewritten, sql);
 		println!("Rewritten: {:?}", rewritten);
 
 	}
@@ -620,6 +902,32 @@ mod tests {
 		let sql = "UPDATE foo SET a = 'hello', b = 12345 WHERE c > 10)";
 
 		let parsed = parser.parse(sql).unwrap();
+
+		assert_eq!(
+			SQLUpdate {
+				table: Box::new(SQLIdentifier(String::from("foo"))),
+				assignments: Box::new(SQLExprList(
+					vec![
+						SQLBinary{
+							left: Box::new(SQLIdentifier(String::from("a"))),
+							op: EQ,
+							right: Box::new(SQLLiteral(LiteralString(0, String::from("hello"))))
+						},
+						SQLBinary{
+							left: Box::new(SQLIdentifier(String::from("b"))),
+							op: EQ,
+							right: Box::new(SQLLiteral(LiteralLong(1, 12345_u64)))
+						}
+					]
+				)),
+				selection: Some(Box::new(SQLBinary{
+					left: Box::new(SQLIdentifier(String::from("c"))),
+					op: GT,
+					right : Box::new(SQLLiteral(LiteralLong(2, 10_u64)))
+				}))
+			},
+			parsed
+		);
 
 		println!("{:#?}", parser.parse(sql));
 
