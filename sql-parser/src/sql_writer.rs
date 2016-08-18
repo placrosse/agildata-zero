@@ -244,7 +244,27 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
             },
             DataType::Bool => {
                 write!(builder, " {}", "BOOLEAN");
-            }
+            },
+            DataType::Date => {
+                write!(builder, " {}", "DATE");
+            },
+            DataType::DateTime{fsp} => {
+                write!(builder, " {}", "DATETIME");
+                _write_optional_display(builder, fsp);
+            },
+            DataType::Timestamp{fsp} => {
+                write!(builder, " {}", "TIMESTAMP");
+                _write_optional_display(builder, fsp);
+            },
+            DataType::Time{fsp} => {
+                write!(builder, " {}", "TIME");
+                _write_optional_display(builder, fsp);
+            },
+            DataType::Year{display} => {
+                write!(builder, " {}", "DATETIME");
+                _write_optional_display(builder, display);
+            },
+            // _ => panic!("Unsupported data type {:?}", data_type)
 
         }
     }

@@ -48,6 +48,11 @@ pub enum DataType {
 	Float{precision: Option<u32>, scale: Option<u32>},
 	Double{precision: Option<u32>, scale: Option<u32>},
 	Bool,
+	Date,
+	DateTime{fsp: Option<u32>},
+	Timestamp{fsp: Option<u32>},
+	Time{fsp: Option<u32>},
+	Year{display: Option<u32>}
 }
 
 #[derive(Debug, PartialEq)]
@@ -272,6 +277,11 @@ impl AnsiSQLParser {
 					}
 				},
 				"BOOL" | "BOOLEAN" => DataType::Bool,
+				"DATE" => DataType::Date,
+				"DATETIME" => DataType::DateTime{fsp: try!(self.parse_optional_display(tokens))},
+				"TIMESTAMP" => DataType::Timestamp{fsp: try!(self.parse_optional_display(tokens))},
+				"TIME" => DataType::Time{fsp: try!(self.parse_optional_display(tokens))},
+				"YEAR" => DataType::Year{display: try!(self.parse_optional_display(tokens))},
 				_ => return Err(format!("Data type not recognized {}", t))
 			},
 			_ => return Err(format!("Expected data type, received token {:?}", tokens.peek()))
