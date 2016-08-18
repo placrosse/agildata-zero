@@ -47,6 +47,7 @@ impl<'a> MySQLPacketReader<'a> {
         self.pos += 1;
 
         match n {
+            //NOTE: depending on context, 0xfb could mean null and 0xff could mean error
             0xfc | 0xfd | 0xfe => panic!("no support yet for length >= 251"),
             _ => n
         }
