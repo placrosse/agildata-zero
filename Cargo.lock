@@ -34,6 +34,7 @@ dependencies = [
  "lazy_static 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "log4rs 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "mysql-async-proxy 0.1.0",
  "mysql-protocol 0.1.0",
  "mysql-proxy 0.1.0",
  "notify 2.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -251,6 +252,10 @@ dependencies = [
  "winapi 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "ws2_32-sys 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "mysql-async-proxy"
+version = "0.1.0"
 
 [[package]]
 name = "mysql-protocol"
