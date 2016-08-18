@@ -88,11 +88,31 @@ impl AnsiSQLParser {
 	}
 
 	pub fn parse_expr(&self, stream: &mut Peekable<Tokens>, precedence: u32) -> Result<SQLExpr,  String> {
-		match self.parse_prefix(stream) {
-			Ok(Some(node)) => self.get_infix(stream, precedence, node),
-			Ok(None) => Err(String::from("Failed to parse expr TBD")),
-			Err(e) => Err(e)
+		let mut expr = self.parse_prefix(stream).unwrap();
+
+		if expr.is_some() {
+			while let Some(next) = stream.peek().cloned() {
+				let next_precedence = self.get_precedence(stream);
+
+				if precedence >= next_precedence {
+					break;
+				}
+
+				expr = self.parse_infix(expr.unwrap(), stream, next_precedence).unwrap();
+			}
+			Ok(expr.unwrap())
+		} else {
+			Err(String::from("Failed to parse expr TBD"))
 		}
+
+		// Ok(expr)
+		//
+		//
+		// match expr {
+		// 	Ok(Some(node)) => {},
+		// 	Ok(None) => ,
+		// 	Err(e) => Err(e)
+		// }
 	}
 
 	pub fn get_infix(&self, stream: &mut Peekable<Tokens>, precedence: u32, left: SQLExpr) -> Result<SQLExpr,  String> {
