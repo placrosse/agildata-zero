@@ -1,17 +1,11 @@
-#![feature(recover, std_panic, panic_handler)]
-#![feature(box_syntax, box_patterns)]
-
 mod encryption_visitor;
+use self::encryption_visitor::EncryptionVisitor;
 
-use encryption_visitor::EncryptionVisitor;
-
-extern crate mio;
-extern crate bytes;
-extern crate byteorder;
 use byteorder::*;
 
-use mio::{TryRead, TryWrite};
+use mio::{self, TryRead, TryWrite};
 use mio::tcp::*;
+
 use std::io::{Read, Write};
 use mio::util::Slab;
 use bytes::{Buf, Take};
@@ -19,19 +13,18 @@ use std::mem;
 use std::io::Cursor;
 use std::str::FromStr;
 
-extern crate sql_parser;
-use sql_parser::sql_parser::*;
-use sql_parser::sql_writer;
+// use parser::*;
+use parser::sql_parser::{AnsiSQLParser, SQLExpr};
+use parser::sql_writer;
 
-extern crate config;
-use config::*;
+use config::{Config, TConfig, ColumnConfig};
 
-extern crate encrypt;
 use encrypt::{Decrypt, NativeType, EncryptionType};
 
 const SERVER: mio::Token = mio::Token(0);
 
 use std::collections::HashMap;
+use std::net;
 
 #[derive(Debug)]
 struct MySQLPacket {
@@ -41,9 +34,9 @@ struct MySQLPacket {
 
 impl MySQLPacket {
 
-    fn sequence_id(&self) -> u8 {
-        self.header[3]
-    }
+    // fn sequence_id(&self) -> u8 {
+    //     self.header[3]
+    // }
 
     fn packet_type(&self) -> u8 {
         match self.payload.len() {
@@ -210,7 +203,7 @@ trait MySQLConnection {
     fn read_packet(&mut self) -> Result<MySQLPacket, &'static str>;
 }
 
-impl MySQLConnection for std::net::TcpStream {
+impl MySQLConnection for net::TcpStream {
 
     fn read_packet(&mut self) -> Result<MySQLPacket, &'static str> {
 
@@ -250,7 +243,7 @@ struct Connection<'a> {
     socket: TcpStream,
     token: mio::Token,
     state: State,
-    remote: std::net::TcpStream,
+    remote: net::TcpStream,
     config: &'a Config
     //authenticating: bool
 }
@@ -263,7 +256,7 @@ impl<'a> Connection<'a> {
         // let mut tcps = TcpStream::connect(&saddr).unwrap();
 
         // connect to real MySQL
-        let mut realtcps = std::net::TcpStream::connect("127.0.0.1:3306").unwrap();
+        let mut realtcps = net::TcpStream::connect("127.0.0.1:3306").unwrap();
 
         // read header
         let auth_packet = realtcps.read_packet().unwrap();
@@ -357,7 +350,7 @@ impl<'a> Connection<'a> {
                                 // reqwrite query
                                 if parsed.is_some() {
 
-                                    let mut value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
+                                    let value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
                                     let mut encrypt_vis = EncryptionVisitor {
                                         config: self.config,
                                         valuemap: value_map
@@ -555,7 +548,7 @@ impl<'a> Connection<'a> {
                             let mut wtr: Vec<u8> = vec![];
 
                             for i in 0 .. field_count {
-                                let is_encrypted = false;
+                                // let is_encrypted = false;
 
                                 //println!("Value {} is {:?}", i, orig_value);
 
@@ -570,7 +563,7 @@ impl<'a> Connection<'a> {
 
                                     None => r.read_lenenc_str(),
                                     Some(cc) => match cc {
-                                        &ColumnConfig {ref name, ref encryption, ref native_type} => {
+                                        &ColumnConfig {ref encryption, ref native_type, ..} => {
                                             match native_type {
                                                 &NativeType::U64 => {
                                                     match encryption {
@@ -690,12 +683,12 @@ enum State {
 }
 
 impl State {
-    fn mut_read_buf(&mut self) -> &mut Vec<u8> {
-        match *self {
-            State::Reading(ref mut buf) => buf,
-            _ => panic!("connection not in reading state"),
-        }
-    }
+    // fn mut_read_buf(&mut self) -> &mut Vec<u8> {
+    //     match *self {
+    //         State::Reading(ref mut buf) => buf,
+    //         _ => panic!("connection not in reading state"),
+    //     }
+    // }
 
     fn read_buf(&self) -> &[u8] {
         match *self {

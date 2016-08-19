@@ -2,7 +2,6 @@ use super::tokenizer::*;
 use std::iter::Peekable;
 use std::str::FromStr;
 use std::ascii::AsciiExt;
-use std::collections::HashMap;
 
 #[derive(Debug, PartialEq)]
 pub enum SQLExpr {
@@ -71,18 +70,18 @@ pub enum DataType {
 
 #[derive(Debug, PartialEq)]
 pub enum ColumnQualifier {
-	CharacterSet(Box<SQLExpr>),
-	Collate(Box<SQLExpr>),
-	Default(Box<SQLExpr>),
-	Signed,
-	Unsigned,
-	Null,
-	NotNull,
-	AutoIncrement,
-	PrimaryKey,
-	UniqueKey,
-	OnUpdate(Box<SQLExpr>),
-	Comment(Box<SQLExpr>)
+	// CharacterSet(Box<SQLExpr>),
+	// Collate(Box<SQLExpr>),
+	// Default(Box<SQLExpr>),
+	// Signed,
+	// Unsigned,
+	// Null,
+	// NotNull,
+	// AutoIncrement,
+	// PrimaryKey,
+	// UniqueKey,
+	// OnUpdate(Box<SQLExpr>),
+	// Comment(Box<SQLExpr>)
 }
 
 #[derive(Debug, PartialEq)]
@@ -102,10 +101,10 @@ pub enum SQLOperator {
 	MOD,
 	GT,
 	LT,
-	GTEQ,
-	LTEQ,
+	// GTEQ,
+	// LTEQ,
 	EQ,
-	NEQ,
+	// NEQ,
 	OR,
 	AND
 }
@@ -140,7 +139,7 @@ impl AnsiSQLParser {
 		let mut expr = self.parse_prefix(stream).unwrap();
 
 		if expr.is_some() {
-			while let Some(next) = stream.peek().cloned() {
+			while let Some(_) = stream.peek().cloned() {
 				let next_precedence = self.get_precedence(stream);
 
 				if precedence >= next_precedence {
@@ -186,7 +185,7 @@ impl AnsiSQLParser {
 					}
 					//_ => panic!("Unsupported literal {:?}", v)
 				},
-				Token::Identifier(v) => Ok(Some(try!(self.parse_identifier(tokens)))),//Some(self.parse_identifier(tokens)),
+				Token::Identifier(_) => Ok(Some(try!(self.parse_identifier(tokens)))),//Some(self.parse_identifier(tokens)),
 				Token::Punctuator(v) => match &v as &str {
 					"(" => {
 						Ok(Some(try!(self.parse_nested(tokens))))
@@ -208,7 +207,7 @@ impl AnsiSQLParser {
 		println!("parse_infix() {}", precedence);
 		match stream.peek().cloned() {
 			Some(token) => match token {
-				Token::Operator(t) => Ok(Some(try!(self.parse_binary(left, stream)))),//Some(self.parse_binary(left, stream)),
+				Token::Operator(_) => Ok(Some(try!(self.parse_binary(left, stream)))),//Some(self.parse_binary(left, stream)),
 				Token::Keyword(t) => match &t as &str {
 					"UNION" => Ok(Some(try!(self.parse_union(left, stream)))),
 					"JOIN" | "INNER" | "RIGHT" | "LEFT" | "CROSS" | "FULL" => Ok(Some(try!(self.parse_join(left, stream)))),
@@ -292,7 +291,7 @@ impl AnsiSQLParser {
 		Ok(SQLExpr::SQLColumnDef{column: Box::new(column), data_type: data_type, qualifiers: qualifiers})
 	}
 
-	fn parse_column_qualifiers(&self, tokens: &mut Peekable<Tokens>) ->  Result<Option<Vec<ColumnQualifier>>, String> {
+	fn parse_column_qualifiers(&self, _tokens: &mut Peekable<Tokens>) ->  Result<Option<Vec<ColumnQualifier>>, String> {
 		Ok(None)
 	}
 
@@ -377,7 +376,7 @@ impl AnsiSQLParser {
 	fn parse_optional_display(&self, tokens: &mut Peekable<Tokens>) -> Result<Option<u32>, String> {
 		if self.consume_punctuator("(", tokens) {
 			match tokens.peek().cloned() {
-				Some(Token::Literal(LiteralToken::LiteralLong(i, v))) => {
+				Some(Token::Literal(LiteralToken::LiteralLong(_, v))) => {
 					tokens.next();
 					let ret = Ok(Some(u32::from_str(&v).unwrap()));
 					self.consume_punctuator(")", tokens);
@@ -411,7 +410,7 @@ impl AnsiSQLParser {
 
 	fn parse_long(&self, tokens: &mut Peekable<Tokens>) -> Result<u32, String> {
 		match tokens.peek().cloned() {
-			Some(Token::Literal(LiteralToken::LiteralLong(i, v))) => {
+			Some(Token::Literal(LiteralToken::LiteralLong(_, v))) => {
 				tokens.next();
 				Ok(u32::from_str(&v).unwrap())
 			},

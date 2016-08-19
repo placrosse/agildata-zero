@@ -5,26 +5,7 @@ use self::crypto::aead::{AeadEncryptor, AeadDecryptor};
 
 use std::iter::repeat;
 
-extern crate chrono;
-use chrono::*;
-
-#[macro_use]
-extern crate log;
-extern crate log4rs;
-
-#[macro_use]
-extern crate lazy_static;
-
-extern crate parking_lot;
-use self::parking_lot::Mutex;
-
-
-use std::io::prelude::*;
-use std::ops::Deref;
-use std::sync::mpsc::channel;
-
-extern crate byteorder;
-use byteorder::{WriteBytesExt,ReadBytesExt,BigEndian,LittleEndian};
+use byteorder::{WriteBytesExt,ReadBytesExt,BigEndian};
 use std::io::Cursor;
 
 // lazy_static! {
@@ -38,7 +19,7 @@ use std::io::Cursor;
 #[derive(Debug)]
 pub enum EncryptionType {
 	AES,
-	AES_SALT,
+	// AES_SALT,
 	OPE,
 	NA,
 }
@@ -103,7 +84,7 @@ impl Encrypt for String {
 	fn encrypt(self, scheme: &EncryptionType) -> Option<Vec<u8>> {
 		match scheme {
 			&EncryptionType::AES => {
-				let mut buf = self.as_bytes();
+				let buf = self.as_bytes();
 				println!("Buf length = {}", buf.len());
 				let e = encrypt(&get_key(), &buf).unwrap();
 				println!("Encrypted length = {}", e.len());
@@ -115,26 +96,26 @@ impl Encrypt for String {
 	}
 }
 
-fn mk_nonce(n0: u8, n1: u8) -> [u8; 12] {
-    let now = UTC::now();
-    let mut ts = now.timestamp();
-    let mut tn = now.nanosecond();
-    let mut nonce = [0u8; 12];
+// fn mk_nonce(n0: u8, n1: u8) -> [u8; 12] {
+//     let now = UTC::now();
+//     let mut ts = now.timestamp();
+//     let mut tn = now.nanosecond();
+//     let mut nonce = [0u8; 12];
+//
+//     trace!("mk_nonce: n0={:?}, n1={:?}, now={:?}, ts={:?} tn={:?} ts_hex={:#018x} tn_hex={:#010x}",
+//             n0, n1, now, ts, tn, ts, tn);
+//
+//     for i in 0..6 { nonce[i] = (ts & 0xff) as u8; ts >>= 8; }
+//     nonce[6] = n0;
+//     nonce[7] = n1;
+//     for i in 0..4 { nonce[i + 8] = (tn & 0xff) as u8; tn >>= 8; }
+//
+//     trace!("mk_nonce: nonce={:?}", nonce);
+//
+//     nonce
+// }
 
-    trace!("mk_nonce: n0={:?}, n1={:?}, now={:?}, ts={:?} tn={:?} ts_hex={:#018x} tn_hex={:#010x}",
-            n0, n1, now, ts, tn, ts, tn);
-
-    for i in 0..6 { nonce[i] = (ts & 0xff) as u8; ts >>= 8; }
-    nonce[6] = n0;
-    nonce[7] = n1;
-    for i in 0..4 { nonce[i + 8] = (tn & 0xff) as u8; tn >>= 8; }
-
-    trace!("mk_nonce: nonce={:?}", nonce);
-
-    nonce
-}
-
-const KEY: [u8; 32] = [0_u8; 32];
+// const KEY: [u8; 32] = [0_u8; 32];
 
 fn get_key() -> [u8; 32] {
 	let hex = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985";

@@ -1,6 +1,3 @@
-[workspace]
-members = ["mysql-protocol", "sql-parser", "mysql-proxy", "config", "encrypt", "mysql-async-proxy" ]
-
 [package]
 authors = ["Paul LaCrosse <paul.lacrosse@gmail.com>"]
 publish = false
@@ -16,9 +13,7 @@ notify = "2.6.3"
 lazy_static = "0.2.1"
 rust-crypto = "0.2.36"
 chrono = { version = "0.2.22" }
-mysql-protocol = { path = "mysql-protocol", version = "*"}
-sql-parser = { path = "sql-parser", version = "*"}
-encrypt = { path = "encrypt", version = "*" }
-config = { path = "config", version = "*"}
-mysql-proxy = { path = "mysql-proxy", version = "*" }
-mysql-async-proxy = { path = "mysql-async-proxy", version = "*" }
+byteorder = "*"
+RustyXML = "0.1.1"
+bytes = "0.2.10"
+mio = "0.4.4"

@@ -3,9 +3,6 @@
 #[allow(non_snake_case)] // silence naming convention warnings
 // End remove these
 
-use std::ops::BitAnd;
-
-use std::vec;
 use std::iter::Peekable;
 use std::str::Chars;
 
@@ -15,17 +12,17 @@ use std::convert::AsRef;
 pub enum Token {
     Whitespace,
     Keyword(String),
-    Identifier(String),
+    // Identifier(String),
     LiteralString(String),
     LiteralInt(i32),
     Operator(String),
-    Comma
+    Comma,
 }
 
 #[derive(Debug)]
 pub enum TokenizerError {
     InvalidToken(String),
-    NoMoreTokens
+    // NoMoreTokens
 }
 
 fn parse_token(it: &mut Peekable<Chars>) -> Result<Option<Token>, TokenizerError> {
@@ -71,7 +68,7 @@ impl Tokenizer for String {
 
         let mut tokens: Vec<Token> = Vec::new();
         let mut it = self.chars().peekable();
-        let mut error: Option<TokenizerError> = None;
+        // let mut error: Option<TokenizerError> = None;
 
         // iterate as long as there are tokens left
         loop {
@@ -91,23 +88,23 @@ impl Tokenizer for String {
 
 #[derive(Debug)]
 pub enum SQLExpr {
-    Keyword(String),
-    Identifier(String),
+    // Keyword(String),
+    // Identifier(String),
     LiteralInt(i32),
-    Operator(String),
+    // Operator(String),
     SQLSelect { item: Vec<SQLExpr> },
-    SQLInsert { colName: Vec<String>, colValue: Vec<SQLExpr> },
+    // SQLInsert { colName: Vec<String>, colValue: Vec<SQLExpr> },
     SQLBinaryExpr { left: Box<SQLExpr>, op: String, right: Box<SQLExpr> }
 }
 
-fn parseExpressionList(tokens: &Vec<Token>, offset: usize) -> (usize, Vec<SQLExpr>) {
-    println!("parseExpressionList() BEGIN token={:?}", tokens[offset]);
+fn parse_expression_list(tokens: &Vec<Token>, offset: usize) -> (usize, Vec<SQLExpr>) {
+    println!("parse_expression_list() BEGIN token={:?}", tokens[offset]);
     let mut o: usize = offset;
     let mut ret: Vec<SQLExpr> = Vec::new();
 
     let mut foo = true;
     while o < tokens.len() && foo {
-        println!("parseExpressionList() TOP_OF_LOOP token={:?}", tokens[o]);
+        println!("parse_expression_list() TOP_OF_LOOP token={:?}", tokens[o]);
 
         let (index, expr) = parse(tokens, o).unwrap();
         ret.push(expr);
@@ -126,23 +123,23 @@ fn parseExpressionList(tokens: &Vec<Token>, offset: usize) -> (usize, Vec<SQLExp
             foo = false;
         }
     }
-    println!("parseExpressionList() END returning {:?}", ret);
+    println!("parse_expression_list() END returning {:?}", ret);
     (o, ret)
 }
 
-fn parseSelect(tokens: &Vec<Token>, offset: usize) -> (usize, SQLExpr) {
-    println!("parseSelect()");
-    let (a, b) = parseExpressionList(tokens, offset);
+fn parse_select(tokens: &Vec<Token>, offset: usize) -> (usize, SQLExpr) {
+    println!("parse_select()");
+    let (a, b) = parse_expression_list(tokens, offset);
     (a, SQLExpr::SQLSelect { item: b })
 }
 
-fn parsePrefix(tokens: &Vec<Token>, offset: usize) -> Result<(usize, SQLExpr), String> {
-    println!("parsePrefix() token={:?}", tokens[offset]);
+fn parse_prefix(tokens: &Vec<Token>, offset: usize) -> Result<(usize, SQLExpr), String> {
+    println!("parse_prefix() token={:?}", tokens[offset]);
     let token: &Token = &tokens[offset];
     match token {
         &Token::Keyword(ref s) => {
 	    	match s.as_ref() {
-	            "SELECT" => Ok(parseSelect(tokens, offset+1)),
+	            "SELECT" => Ok(parse_select(tokens, offset+1)),
 	            _ => Err(String::from("TBD"))
 	        }
         }
@@ -151,8 +148,8 @@ fn parsePrefix(tokens: &Vec<Token>, offset: usize) -> Result<(usize, SQLExpr), S
     }
 }
 
-fn getPrecedence(tokens: &Vec<Token>, offset: usize) -> u32 {
-    println!("getPrecedence() token={:?}", tokens[offset]);
+fn get_precedence(tokens: &Vec<Token>, offset: usize) -> u32 {
+    println!("get_precedence() token={:?}", tokens[offset]);
     match &tokens[offset] {
         &Token::Operator(ref op) => match op.as_ref() {
             "=" => 5,
@@ -168,8 +165,8 @@ fn getPrecedence(tokens: &Vec<Token>, offset: usize) -> u32 {
     }
 }
 
-fn parseInfix(_left: SQLExpr, tokens: &Vec<Token>, offset: usize) -> Result<(usize, SQLExpr), String> {
-    println!("parseInfix() token={:?}", tokens[offset]);
+fn parse_infix(_left: SQLExpr, tokens: &Vec<Token>, offset: usize) -> Result<(usize, SQLExpr), String> {
+    println!("parse_infix() token={:?}", tokens[offset]);
     match &tokens[offset] {
         &Token::Operator(ref _op) => {
             let (index, _right) = parse(tokens, offset + 1).unwrap();
@@ -187,17 +184,17 @@ fn parseInfix(_left: SQLExpr, tokens: &Vec<Token>, offset: usize) -> Result<(usi
 pub fn parse(tokens: &Vec<Token>, offset: usize) -> Result<(usize, SQLExpr), String> {
     println!("parse() token={:?}", tokens[offset]);
 
-    let (index, expr) = parsePrefix(tokens, offset).unwrap();
+    let (index, expr) = parse_prefix(tokens, offset).unwrap();
 
     let mut o = index;
     let mut e = expr;
 
     //TODO: not complete
     let precedence = 0;
-    while o < tokens.len() && precedence < getPrecedence(tokens, index) {
-        println!("Before parseInfix and expr = {:?}", e);
-        let (index, foo) = parseInfix(e, tokens, index).unwrap();
-        println!("After parseInfix and expr = {:?}", foo);
+    while o < tokens.len() && precedence < get_precedence(tokens, index) {
+        println!("Before parse_infix and expr = {:?}", e);
+        let (index, foo) = parse_infix(e, tokens, index).unwrap();
+        println!("After parse_infix and expr = {:?}", foo);
 
         o = index;
         e = foo;
@@ -211,7 +208,7 @@ pub fn parse(tokens: &Vec<Token>, offset: usize) -> Result<(usize, SQLExpr), Str
 
 #[cfg(test)]
 mod tests {
-    use super::{Token, Tokenizer, parse};
+    use super::{Tokenizer, parse};
     use super::Token::*;
 
     #[test]
@@ -233,8 +230,9 @@ mod tests {
             LiteralInt(3)
         );
 
-        let (foo, ast) = parse(&t, 0).unwrap();
+        let (_foo, _ast) = parse(&t, 0).unwrap();
         // what is foo?
+        // it's the predecessor to bar
         // put assert here to compare ast with expected
     }
 

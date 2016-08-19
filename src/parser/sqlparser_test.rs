@@ -1,14 +1,6 @@
 #[cfg(test)]
 
 use super::sql_parser::{AnsiSQLParser};
-use super::sql_parser::SQLExpr::*;
-use super::sql_parser::LiteralExpr::*;
-use super::sql_parser::SQLOperator::*;
-use super::sql_parser::SQLJoinType::*;
-use super::sql_parser::SQLUnionType::*;
-use super::sql_parser::DataType::*;
-use super::sql_writer;
-use std::collections::HashMap;
 
 #[test]
 fn sqlparser() {

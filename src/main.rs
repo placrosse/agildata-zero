@@ -1,5 +1,5 @@
-#![feature(custom_derive, const_fn, inclusive_range_syntax, question_mark, box_syntax,
-           stmt_expr_attributes, plugin)]
+#![feature(custom_derive, const_fn, inclusive_range_syntax, question_mark,
+           box_syntax, box_patterns, stmt_expr_attributes, plugin, integer_atomics)]
 
 #[macro_use]
 extern crate lazy_static;
@@ -8,26 +8,32 @@ extern crate lazy_static;
 extern crate log;
 extern crate log4rs;
 
+extern crate parking_lot;
+
+extern crate byteorder;
+
+extern crate mio;
+extern crate bytes;
 extern crate chrono;
 use chrono::*;
 
 use std::thread::{sleep, spawn};
 use std::{env, panic};
 use std::sync::atomic::{Ordering, AtomicBool, ATOMIC_BOOL_INIT};
-use std::str::FromStr;
 
 mod crypt;
 use crypt::*;
 
-extern crate config;
-use config::*;
+mod encrypt;
 
-extern crate mysql_protocol;
-use mysql_protocol::*;
+mod config;
 
-extern crate mysql_proxy;
-use mysql_proxy::*;
+mod protocol;
 
+mod proxy;
+use proxy::*;
+
+mod parser;
 
 static STOP: AtomicBool = ATOMIC_BOOL_INIT;
 fn ask_stop() { STOP.store(true, Ordering::SeqCst) }

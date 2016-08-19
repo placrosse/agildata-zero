@@ -6,7 +6,7 @@ pub fn to_hex_string(bytes: &Vec<u8>) -> String {
   let strs: Vec<String> = bytes.iter()
                                .map(|b| format!("{:02X}", b))
                                .collect();
-  strs.connect("")
+  strs.join("")
 }
 
 pub fn write(node:SQLExpr, literals: &HashMap<u32, Option<Vec<u8>>>) -> String {
@@ -18,43 +18,43 @@ pub fn write(node:SQLExpr, literals: &HashMap<u32, Option<Vec<u8>>>) -> String {
 fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Vec<u8>>>) {
 	match node {
 		SQLExpr::SQLSelect{expr_list, relation, selection, order} => {
-			write!(builder, "{}", "SELECT").unwrap();
+			write!(builder, "{}", "SELECT");
 			_write(builder, *expr_list, literals);
 			if !relation.is_none() {
-				write!(builder, " {}", "FROM").unwrap();
+				write!(builder, " {}", "FROM");
 				_write(builder, *relation.unwrap(), literals)
 			}
 			if !selection.is_none() {
-				write!(builder, " {}", "WHERE").unwrap();
+				write!(builder, " {}", "WHERE");
 				_write(builder, *selection.unwrap(), literals)
 			}
 			if !order.is_none() {
-				write!(builder, " {}", "ORDER BY").unwrap();
+				write!(builder, " {}", "ORDER BY");
 				_write(builder, *order.unwrap(), literals)
 			}
 
 		},
 		SQLExpr::SQLInsert{table, column_list, values_list} => {
-			write!(builder, "{}", "INSERT INTO").unwrap();
+			write!(builder, "{}", "INSERT INTO");
 			_write(builder, *table, literals);
-			write!(builder, " {}", "(");
+			write!(builder, " (");
 			_write(builder, *column_list, literals);
-			write!(builder, "{}", ") VALUES(");
+			write!(builder, ") VALUES(");
 			_write(builder, *values_list, literals);
-			write!(builder, " {}", ")");
+			write!(builder, ")");
 		},
         SQLExpr::SQLUpdate{table, assignments, selection} => {
-            write!(builder, "{}", "UPDATE").unwrap();
+            write!(builder, "UPDATE");
             _write(builder, *table, literals);
-            write!(builder, " {}", "SET").unwrap();
+            write!(builder, "SET");
             _write(builder, *assignments, literals);
             if selection.is_some() {
-                write!(builder, " {}", "WHERE").unwrap();
+                write!(builder, "WHERE");
                 _write(builder, *selection.unwrap(), literals);
             }
         },
-        SQLExpr::SQLCreateTable{table, column_list} => {
-            write!(builder, "{}", "CREATE TABLE");
+        SQLExpr::SQLCreateTable{column_list, ..} => {
+            write!(builder, "CREATE TABLE");
             let mut sep = "";
             for c in column_list {
                 write!(builder, "{}", sep);
@@ -62,14 +62,14 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
                 sep = ", ";
             }
         },
-        SQLExpr::SQLColumnDef{column, data_type, qualifiers} => {
+        SQLExpr::SQLColumnDef{column, data_type, ..} => {
             _write(builder, *column, literals);
             _write_data_type(builder, data_type, literals);
         },
 		SQLExpr::SQLExprList(vector) => {
 			let mut sep = "";
 			for e in vector {
-				write!(builder, "{}", sep).unwrap();
+				write!(builder, "{}", sep);
 				_write(builder, e, literals);
 				sep = ",";
 			}
@@ -87,18 +87,18 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 						// TODO write! escapes the single quotes...
 						// X'...'
 						&Some(ref e) => {
-							write!(builder, "X'{}'", to_hex_string(e)).unwrap();
+							write!(builder, "X'{}'", to_hex_string(e));
 						},
-						&None => write!(builder, " {}", l).unwrap()
+						&None => {write!(builder, " {}", l);},
 					},
-					None => write!(builder, " {}", l).unwrap()
+					None => write!(builder, " {}", l)
 				}
 			},
-			LiteralExpr::LiteralBool(i, b) => {
-				write!(builder, " {}", b).unwrap();
+			LiteralExpr::LiteralBool(_, b) => {
+				write!(builder, " {}", b);
 			},
-			LiteralExpr::LiteralDouble(i, d) => {
-				write!(builder, " {}", d).unwrap();
+			LiteralExpr::LiteralDouble(_, d) => {
+				write!(builder, " {}", d);
 			},
 			LiteralExpr::LiteralString(i, s) => {
 				match literals.get(&i) {
@@ -106,25 +106,25 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 						// TODO write! escapes the single quotes...
 						// X'...'
 						&Some(ref e) => {
-							write!(builder, "X'{}'", to_hex_string(e)).unwrap();
+							write!(builder, "X'{}'", to_hex_string(e));
 						},
-						&None => write!(builder, " '{}'", s).unwrap()
+						&None => write!(builder, " '{}'", s)
 					},
-					None => write!(builder, " '{}'", s).unwrap()
+					None => write!(builder, " '{}'", s)
 				}
 			}
 			//_ => panic!("Unsupported literal for writing {:?}", lit)
 		},
 		SQLExpr::SQLAlias{expr, alias} => {
 			_write(builder, *expr, literals);
-			write!(builder, " {}", "AS").unwrap();
+			write!(builder, " {}", "AS");
 			_write(builder, *alias, literals);
 		},
 		SQLExpr::SQLIdentifier(id) => {
-			write!(builder, " {}", id).unwrap();
+			write!(builder, " {}", id);
 		},
 		SQLExpr::SQLNested(expr) => {
-			write!(builder, " {}", "(").unwrap();
+			write!(builder, " {}", "(");
 			_write(builder, *expr, literals);
 			write!(builder, "{}", ")").unwrap();
 		},
@@ -164,10 +164,10 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 			SQLOperator::MOD => "%",
 			SQLOperator::GT => ">",
 			SQLOperator::LT => "<",
-			SQLOperator::GTEQ => ">=",
-			SQLOperator::LTEQ => "<=",
+			// SQLOperator::GTEQ => ">=",
+			// SQLOperator::LTEQ => "<=",
 			SQLOperator::EQ => "=",
-			SQLOperator::NEQ => "!=",
+			// SQLOperator::NEQ => "!=",
 			SQLOperator::OR => "OR",
 			SQLOperator::AND  => "AND"
 		};
@@ -323,7 +323,7 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
         match precision {
             Some(p) => {
                 write!(builder, "({}", p);
-                if (scale.is_some()) {
+                if scale.is_some() {
                     write!(builder, ",{}", scale.unwrap());
                 }
                 write!(builder, "{}", ")");
