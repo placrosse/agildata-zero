@@ -1,6 +1,15 @@
 #[cfg(test)]
 
-use super::sql_parser::{AnsiSQLParser};
+use std::collections::HashMap;
+// TODO: Is there a better way to import all of this???
+
+use super::sql_parser::AnsiSQLParser;
+use super::sql_parser::SQLExpr::*;
+use super::sql_parser::SQLOperator::*;
+use super::sql_parser::SQLUnionType::*;
+use super::sql_parser::SQLJoinType::*;
+use super::sql_parser::LiteralExpr::*;
+use super::sql_parser::DataType::*;
 
 #[test]
 fn sqlparser() {
@@ -134,7 +143,7 @@ fn sqlparser() {
 
 	println!("{:#?}", parser.parse(sql));
 
-	let rewritten = sql_writer::write(parsed, &HashMap::new());
+	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
 
 	//assert_eq!(rewritten, sql);
 
@@ -217,7 +226,7 @@ fn sql_join() {
 
 	println!("{:#?}", parser.parse(sql));
 
-	let rewritten = sql_writer::write(parsed, &HashMap::new());
+	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
 
 	//assert_eq!(rewritten, sql);
 
@@ -306,7 +315,7 @@ fn nasty() {
 
 	println!("{:#?}", parser.parse(sql));
 
-	let rewritten = sql_writer::write(parsed, &HashMap::new());
+	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
 
 	println!("Rewritten: {:?}", rewritten);
 }
@@ -341,7 +350,7 @@ fn insert() {
 
 	println!("{:#?}", parser.parse(sql));
 
-	let rewritten = sql_writer::write(parsed, &HashMap::new());
+	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
 
 	println!("Rewritten: {:?}", rewritten);
 
@@ -366,7 +375,7 @@ fn select_wildcard() {
 
 	println!("{:#?}", parser.parse(sql));
 
-	let rewritten = sql_writer::write(parsed, &HashMap::new());
+	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
 
 	assert_eq!(rewritten, sql);
 	println!("Rewritten: {:?}", rewritten);
@@ -408,7 +417,7 @@ fn update() {
 
 	println!("{:#?}", parser.parse(sql));
 
-	let rewritten = sql_writer::write(parsed, &HashMap::new());
+	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
 
 	println!("Rewritten: {}", rewritten);
 
@@ -606,7 +615,7 @@ fn create_numeric() {
 
 	println!("{:#?}", parser.parse(sql));
 
-	let rewritten = sql_writer::write(parsed, &HashMap::new());
+	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
 
 	println!("Rewritten: {}", rewritten);
 
@@ -686,7 +695,7 @@ fn create_temporal() {
 
 	println!("{:#?}", parsed);
 
-	let rewritten = sql_writer::write(parsed, &HashMap::new());
+	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
 
 	println!("Rewritten: {}", rewritten);
 }
@@ -897,7 +906,7 @@ fn create_character() {
 
 	println!("{:#?}", parsed);
 
-	let rewritten = sql_writer::write(parsed, &HashMap::new());
+	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
 
 	println!("Rewritten: {}", rewritten);
 }
@@ -923,7 +932,7 @@ fn create_character() {
 //
 // 	println!("{:#?}", parsed);
 //
-// 	let rewritten = sql_writer::write(parsed, &HashMap::new());
+// 	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
 //
 // 	println!("Rewritten: {}", rewritten);
 // }

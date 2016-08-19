@@ -18,46 +18,46 @@ pub fn write(node:SQLExpr, literals: &HashMap<u32, Option<Vec<u8>>>) -> String {
 fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Vec<u8>>>) {
 	match node {
 		SQLExpr::SQLSelect{expr_list, relation, selection, order} => {
-			write!(builder, "{}", "SELECT");
+			builder.push_str("SELECT");
 			_write(builder, *expr_list, literals);
 			if !relation.is_none() {
-				write!(builder, " {}", "FROM");
+				builder.push_str("FROM");
 				_write(builder, *relation.unwrap(), literals)
 			}
 			if !selection.is_none() {
-				write!(builder, " {}", "WHERE");
+				builder.push_str("WHERE");
 				_write(builder, *selection.unwrap(), literals)
 			}
 			if !order.is_none() {
-				write!(builder, " {}", "ORDER BY");
+				builder.push_str("ORDER BY");
 				_write(builder, *order.unwrap(), literals)
 			}
 
 		},
 		SQLExpr::SQLInsert{table, column_list, values_list} => {
-			write!(builder, "{}", "INSERT INTO");
+			builder.push_str("INSERT INTO");
 			_write(builder, *table, literals);
-			write!(builder, " (");
+			builder.push_str(" (");
 			_write(builder, *column_list, literals);
-			write!(builder, ") VALUES(");
+			builder.push_str(") VALUES(");
 			_write(builder, *values_list, literals);
-			write!(builder, ")");
+			builder.push_str(")");
 		},
         SQLExpr::SQLUpdate{table, assignments, selection} => {
-            write!(builder, "UPDATE");
+            builder.push_str("UPDATE");
             _write(builder, *table, literals);
-            write!(builder, "SET");
+            builder.push_str("SET");
             _write(builder, *assignments, literals);
             if selection.is_some() {
-                write!(builder, "WHERE");
+                builder.push_str("WHERE");
                 _write(builder, *selection.unwrap(), literals);
             }
         },
         SQLExpr::SQLCreateTable{column_list, ..} => {
-            write!(builder, "CREATE TABLE");
+            builder.push_str("CREATE TABLE");
             let mut sep = "";
             for c in column_list {
-                write!(builder, "{}", sep);
+                builder.push_str(sep);
                 _write(builder, c, literals);
                 sep = ", ";
             }
@@ -69,7 +69,7 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 		SQLExpr::SQLExprList(vector) => {
 			let mut sep = "";
 			for e in vector {
-				write!(builder, "{}", sep);
+				builder.push_str(sep);
 				_write(builder, e, literals);
 				sep = ",";
 			}
@@ -87,18 +87,18 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 						// TODO write! escapes the single quotes...
 						// X'...'
 						&Some(ref e) => {
-							write!(builder, "X'{}'", to_hex_string(e));
+							write!(builder, "X'{}'", to_hex_string(e)).unwrap(); // must_use
 						},
-						&None => {write!(builder, " {}", l);},
+						&None => write!(builder, " {}", l).unwrap(),
 					},
-					None => write!(builder, " {}", l)
+					None => write!(builder, " {}", l).unwrap(),
 				}
 			},
 			LiteralExpr::LiteralBool(_, b) => {
-				write!(builder, " {}", b);
+				write!(builder, "{}", b).unwrap();
 			},
 			LiteralExpr::LiteralDouble(_, d) => {
-				write!(builder, " {}", d);
+				write!(builder, "{}", d).unwrap();
 			},
 			LiteralExpr::LiteralString(i, s) => {
 				match literals.get(&i) {
@@ -106,27 +106,27 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 						// TODO write! escapes the single quotes...
 						// X'...'
 						&Some(ref e) => {
-							write!(builder, "X'{}'", to_hex_string(e));
+							write!(builder, "X'{}'", to_hex_string(e)).unwrap(); // must_use
 						},
-						&None => write!(builder, " '{}'", s)
+						&None => write!(builder, " '{}'", s).unwrap(),
 					},
-					None => write!(builder, " '{}'", s)
+					None => write!(builder, " '{}'", s).unwrap(),
 				}
 			}
 			//_ => panic!("Unsupported literal for writing {:?}", lit)
 		},
 		SQLExpr::SQLAlias{expr, alias} => {
 			_write(builder, *expr, literals);
-			write!(builder, " {}", "AS");
+			builder.push_str("AS");
 			_write(builder, *alias, literals);
 		},
 		SQLExpr::SQLIdentifier(id) => {
-			write!(builder, " {}", id);
+			write!(builder, "{}", id).unwrap();
 		},
 		SQLExpr::SQLNested(expr) => {
-			write!(builder, " {}", "(");
+			builder.push_str("(");
 			_write(builder, *expr, literals);
-			write!(builder, "{}", ")").unwrap();
+			builder.push_str(")");
 		},
 		SQLExpr::SQLUnary{operator, expr} => {
 			_write_operator(builder, operator);
@@ -135,7 +135,7 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 		SQLExpr::SQLOrderBy{expr, is_asc} => {
 			_write(builder, *expr, literals);
 			if !is_asc {
-				write!(builder, " {}", "DESC").unwrap();
+				builder.push_str("DESC");
 			}
 		},
 		SQLExpr::SQLJoin{left, join_type, right, on_expr} => {
@@ -143,7 +143,7 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 			_write_join_type(builder, join_type);
 			_write(builder, *right, literals);
 			if !on_expr.is_none() {
-				write!(builder, " {}", "ON").unwrap();
+				builder.push_str("ON");
 				_write(builder, *on_expr.unwrap(), literals);
 			}
 		},
@@ -197,114 +197,114 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
     fn _write_data_type(builder: &mut String, data_type: DataType, literals: &HashMap<u32, Option<Vec<u8>>>) {
         match data_type {
             DataType::Bit{display} => {
-                write!(builder, " {}", "BIT");
+                builder.push_str("BIT");
                 _write_optional_display(builder, display);
             },
             DataType::TinyInt{display} => {
-                write!(builder, " {}", "TINYINT");
+                builder.push_str("TINYINT");
                 _write_optional_display(builder, display);
             },
             DataType::SmallInt{display} => {
-                write!(builder, " {}", "SMALLINT");
+                builder.push_str("SMALLINT");
                 _write_optional_display(builder, display);
             },
             DataType::MediumInt{display} => {
-                write!(builder, " {}", "MEDIUMINT");
+                builder.push_str("MEDIUMINT");
                 _write_optional_display(builder, display);
             },
             DataType::Int{display} => {
-                write!(builder, " {}", "INTEGER");
+                builder.push_str("INTEGER");
                 _write_optional_display(builder, display);
             },
             DataType::BigInt{display} => {
-                write!(builder, " {}", "BIGINT");
+                builder.push_str("BIGINT");
                 _write_optional_display(builder, display);
             },
             DataType::Decimal{precision, scale} => {
-                write!(builder, " {}", "DECIMAL");
+                builder.push_str("DECIMAL");
                 _write_optional_precision_and_scale(builder, precision, scale);
             },
             DataType::Float{precision, scale} => {
-                write!(builder, " {}", "FLOAT");
+                builder.push_str("FLOAT");
                 _write_optional_precision_and_scale(builder, precision, scale);
             },
             DataType::Double{precision, scale} => {
-                write!(builder, " {}", "DOUBLE");
+                builder.push_str("DOUBLE");
                 _write_optional_precision_and_scale(builder, precision, scale);
             },
             DataType::Bool => {
-                write!(builder, " {}", "BOOLEAN");
+                builder.push_str("BOOLEAN");
             },
             DataType::Date => {
-                write!(builder, " {}", "DATE");
+                builder.push_str("DATE");
             },
             DataType::DateTime{fsp} => {
-                write!(builder, " {}", "DATETIME");
+                builder.push_str("DATETIME");
                 _write_optional_display(builder, fsp);
             },
             DataType::Timestamp{fsp} => {
-                write!(builder, " {}", "TIMESTAMP");
+                builder.push_str("TIMESTAMP");
                 _write_optional_display(builder, fsp);
             },
             DataType::Time{fsp} => {
-                write!(builder, " {}", "TIME");
+                builder.push_str("TIME");
                 _write_optional_display(builder, fsp);
             },
             DataType::Year{display} => {
-                write!(builder, " {}", "DATETIME");
+                builder.push_str("DATETIME");
                 _write_optional_display(builder, display);
             },
             DataType::Char{length} => {
-                write!(builder, " {}", "CHAR");
+                builder.push_str("CHAR");
                 _write_optional_display(builder, length);
             },
             DataType::Varchar{length} => {
-                write!(builder, " {}", "VARCHAR");
+                builder.push_str("VARCHAR");
                 _write_optional_display(builder, length);
             },
             DataType::Binary{length} => {
-                write!(builder, " {}", "BINARY");
+                builder.push_str("BINARY");
                 _write_optional_display(builder, length);
             },
             DataType::VarBinary{length} => {
-                write!(builder, " {}", "VARBINARY");
+                builder.push_str("VARBINARY");
                 _write_optional_display(builder, length);
             },
             DataType::Blob{length} => {
-                write!(builder, " {}", "BLOB");
+                builder.push_str("BLOB");
                 _write_optional_display(builder, length);
             },
             DataType::Text{length} => {
-                write!(builder, " {}", "TEXT");
+                builder.push_str("TEXT");
                 _write_optional_display(builder, length);
             },
             DataType::TinyBlob => {
-                write!(builder, " {}", "TINYBLOB");
+                builder.push_str("TINYBLOB");
             },
             DataType::TinyText => {
-                write!(builder, " {}", "TINYTEXT");
+                builder.push_str("TINYTEXT");
             },
             DataType::MediumBlob => {
-                write!(builder, " {}", "MEDIUMBLOB");
+                builder.push_str("MEDIUMBLOB");
             },
             DataType::MediumText => {
-                write!(builder, " {}", "MEDIUMTEXT");
+                builder.push_str("MEDIUMTEXT");
             },
             DataType::LongBlob => {
-                write!(builder, " {}", "LONGBLOB");
+                builder.push_str("LONGBLOB");
             },
             DataType::LongText => {
-                write!(builder, " {}", "LONGTEXT");
+                builder.push_str("LONGTEXT");
             },
             DataType::Enum{values} => {
-                write!(builder, " {}(", "ENUM");
+                builder.push_str("ENUM");
                 _write(builder, *values, literals);
-                write!(builder, " {}", ")");
+                builder.push_str(")");
             },
             DataType::Set{values} => {
-                write!(builder, " {}(", "ENUM");
+                builder.push_str("ENUM");
                 _write(builder, *values, literals);
-                write!(builder, " {}", ")");
+                builder.push_str(")");
             },
             // _ => panic!("Unsupported data type {:?}", data_type)
 
@@ -313,7 +313,7 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 
     fn _write_optional_display(builder: &mut String, display: Option<u32>) {
         match display {
-            Some(d) => {write!(builder, "({})", d);},
+            Some(d) => {write!(builder, "({})", d).unwrap();},
             None => {}
         }
         ()
@@ -322,11 +322,11 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
     fn _write_optional_precision_and_scale(builder: &mut String, precision: Option<u32>, scale: Option<u32>) {
         match precision {
             Some(p) => {
-                write!(builder, "({}", p);
+                write!(builder, "({}", p).unwrap();
                 if scale.is_some() {
-                    write!(builder, ",{}", scale.unwrap());
+                    write!(builder, ",{}", scale.unwrap()).unwrap();
                 }
-                write!(builder, "{}", ")");
+                builder.push_str(")");
             },
             None => {}
         }

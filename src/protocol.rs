@@ -16,13 +16,10 @@ trait ProtocolHandler {
     fn parse(&self, bytes: &[u8]) -> Result<MySQLPacket, &'static str>;
 }
 
-// fn parse_string(bytes: &[u8]) -> String {
-//     String::from_utf8(bytes.to_vec()).expect("Invalid UTF-8")
-// }
-
-
 #[cfg(test)]
 mod tests {
+
+    use super::{MySQLPacket, ProtocolHandler};
 
     struct MockProtocolHandler {
 
@@ -56,6 +53,10 @@ mod tests {
             }
 
         }
+    }
+
+    fn parse_string(bytes: &[u8]) -> String {
+        String::from_utf8(bytes.to_vec()).expect("Invalid UTF-8")
     }
 
     #[test]
