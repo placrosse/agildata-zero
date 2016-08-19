@@ -178,7 +178,7 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 				// TODO union type
 				self.visit_sql_expr(right);
 			},
-			//_ => panic!("Unsupported expr {:?}", expr)
+			_ => panic!("Unsupported expr {:?}", expr)
 		}
 	}
 
@@ -208,7 +208,7 @@ mod tests {
 		let sql = "SELECT age, first_name, last_name FROM users WHERE age = 1";
 		let parsed = parser.parse(sql).unwrap();
 
-		let config = super::config::parse_config("../config/src/demo-client-config.xml");
+		let config = super::config::parse_config("../src/example-babel-config.xml");
 		let mut valueMap: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
 		let mut encrypt_vis = EncryptionVisitor {
 			config: &config,
