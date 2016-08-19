@@ -33,7 +33,7 @@ pub enum SQLExpr {
 	SQLUnion{left: Box<SQLExpr>, union_type: SQLUnionType, right: Box<SQLExpr>},
 	SQLJoin{left: Box<SQLExpr>, join_type: SQLJoinType, right: Box<SQLExpr>, on_expr: Option<Box<SQLExpr>>},
 	SQLCreateTable{table: Box<SQLExpr>, column_list: Vec<SQLExpr>},
-	SQLColumnDef{column: Box<SQLExpr>, data_type: DataType}
+	SQLColumnDef{column: Box<SQLExpr>, data_type: DataType, qualifiers: Option<Vec<ColumnQualifier>>}
 }
 
 #[derive(Debug, PartialEq)]
@@ -67,6 +67,22 @@ pub enum DataType {
 	LongText,
 	Enum{values: Box<SQLExpr>},
 	Set{values: Box<SQLExpr>}
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ColumnQualifier {
+	CharacterSet(Box<SQLExpr>),
+	Collate(Box<SQLExpr>),
+	Default(Box<SQLExpr>),
+	Signed,
+	Unsigned,
+	Null,
+	NotNull,
+	AutoIncrement,
+	PrimaryKey,
+	UniqueKey,
+	OnUpdate(Box<SQLExpr>),
+	Comment(Box<SQLExpr>)
 }
 
 #[derive(Debug, PartialEq)]
@@ -273,7 +289,7 @@ impl AnsiSQLParser {
 			_ => return Err(String::from(format!("Unsupported token in column definition: {:?}", tokens.peek())))
 		}
 
-		Ok(SQLExpr::SQLColumnDef{column: Box::new(column), data_type: data_type})
+		Ok(SQLExpr::SQLColumnDef{column: Box::new(column), data_type: data_type, qualifiers: None})
 	}
 
 	fn parse_data_type(&self, tokens: &mut Peekable<Tokens>) ->  Result<DataType, String> {

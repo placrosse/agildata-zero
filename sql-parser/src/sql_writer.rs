@@ -62,7 +62,7 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
                 sep = ", ";
             }
         },
-        SQLExpr::SQLColumnDef{column, data_type} => {
+        SQLExpr::SQLColumnDef{column, data_type, qualifiers} => {
             _write(builder, *column, literals);
             _write_data_type(builder, data_type, literals);
         },
