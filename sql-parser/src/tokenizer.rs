@@ -82,7 +82,7 @@ fn next_token(it: &mut Peekable<Chars>, lit_index: &AtomicU32) -> Result<Option<
                 let mut text = String::new();
                 while let Some(&c) = it.peek() { // will break when it.peek() => None
 
-                    if c.is_alphabetic() || c == '.' || c =='_' {
+                    if c.is_alphabetic() || c.is_numeric() || c == '.' || c == '_' {
                         text.push(c);
                     } else {
                         break; // leave the loop early

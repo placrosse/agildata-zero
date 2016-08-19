@@ -280,7 +280,7 @@ impl AnsiSQLParser {
 	fn parse_column_def(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr, String> {
 		let column = try!(self.parse_identifier(tokens));
 		let data_type: DataType = try!(self.parse_data_type(tokens));
-
+		let qualifiers = try!(self.parse_column_qualifiers(tokens));
 		match tokens.peek().cloned() {
 			Some(Token::Punctuator(p)) => match &p as &str {
 				"," | ")" => {},
@@ -289,7 +289,11 @@ impl AnsiSQLParser {
 			_ => return Err(String::from(format!("Unsupported token in column definition: {:?}", tokens.peek())))
 		}
 
-		Ok(SQLExpr::SQLColumnDef{column: Box::new(column), data_type: data_type, qualifiers: None})
+		Ok(SQLExpr::SQLColumnDef{column: Box::new(column), data_type: data_type, qualifiers: qualifiers})
+	}
+
+	fn parse_column_qualifiers(&self, tokens: &mut Peekable<Tokens>) ->  Result<Option<Vec<ColumnQualifier>>, String> {
+		Ok(None)
 	}
 
 	fn parse_data_type(&self, tokens: &mut Peekable<Tokens>) ->  Result<DataType, String> {

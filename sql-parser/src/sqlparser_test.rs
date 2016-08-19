@@ -909,3 +909,29 @@ fn create_character() {
 
 	println!("Rewritten: {}", rewritten);
 }
+
+// #[test]
+// fn create_column_qualifiers() {
+// 	let parser = AnsiSQLParser {};
+//
+// 	let sql = "CREATE TABLE foo (
+// 	      id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+// 	      a VARCHAR(50) CHARACTER SET utf8 COLLATE utf8_general_ci NULL UNIQUE,
+// 	      b BIGINT SIGNED NOT NULL DEFAULT 123456789,
+// 	      c TINYINT UNSIGNED NULL DEFAULT NULL,
+// 	      d TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+//     )";
+//
+// 	let parsed = parser.parse(sql).unwrap();
+//
+// 	// assert_eq!(
+// 	// 	None,
+// 	// 	parsed
+// 	// );
+//
+// 	println!("{:#?}", parsed);
+//
+// 	let rewritten = sql_writer::write(parsed, &HashMap::new());
+//
+// 	println!("Rewritten: {}", rewritten);
+// }
