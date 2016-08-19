@@ -1,4 +1,4 @@
-use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator, SQLUnionType, SQLJoinType};
+use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator, SQLUnionType, SQLJoinType, DataType};
 use std::fmt::Write;
 use std::collections::HashMap;
 
@@ -52,6 +52,19 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
                 write!(builder, " {}", "WHERE").unwrap();
                 _write(builder, *selection.unwrap(), literals);
             }
+        },
+        SQLExpr::SQLCreateTable{table, column_list} => {
+            write!(builder, "{}", "CREATE TABLE");
+            let mut sep = "";
+            for c in column_list {
+                write!(builder, "{}", sep);
+                _write(builder, c, literals);
+                sep = ", ";
+            }
+        },
+        SQLExpr::SQLColumnDef{column, data_type, qualifiers} => {
+            _write(builder, *column, literals);
+            _write_data_type(builder, data_type, literals);
         },
 		SQLExpr::SQLExprList(vector) => {
 			let mut sep = "";
@@ -180,4 +193,143 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 		};
 		write!(builder, " {} ", text).unwrap();
 	}
+
+    fn _write_data_type(builder: &mut String, data_type: DataType, literals: &HashMap<u32, Option<Vec<u8>>>) {
+        match data_type {
+            DataType::Bit{display} => {
+                write!(builder, " {}", "BIT");
+                _write_optional_display(builder, display);
+            },
+            DataType::TinyInt{display} => {
+                write!(builder, " {}", "TINYINT");
+                _write_optional_display(builder, display);
+            },
+            DataType::SmallInt{display} => {
+                write!(builder, " {}", "SMALLINT");
+                _write_optional_display(builder, display);
+            },
+            DataType::MediumInt{display} => {
+                write!(builder, " {}", "MEDIUMINT");
+                _write_optional_display(builder, display);
+            },
+            DataType::Int{display} => {
+                write!(builder, " {}", "INTEGER");
+                _write_optional_display(builder, display);
+            },
+            DataType::BigInt{display} => {
+                write!(builder, " {}", "BIGINT");
+                _write_optional_display(builder, display);
+            },
+            DataType::Decimal{precision, scale} => {
+                write!(builder, " {}", "DECIMAL");
+                _write_optional_precision_and_scale(builder, precision, scale);
+            },
+            DataType::Float{precision, scale} => {
+                write!(builder, " {}", "FLOAT");
+                _write_optional_precision_and_scale(builder, precision, scale);
+            },
+            DataType::Double{precision, scale} => {
+                write!(builder, " {}", "DOUBLE");
+                _write_optional_precision_and_scale(builder, precision, scale);
+            },
+            DataType::Bool => {
+                write!(builder, " {}", "BOOLEAN");
+            },
+            DataType::Date => {
+                write!(builder, " {}", "DATE");
+            },
+            DataType::DateTime{fsp} => {
+                write!(builder, " {}", "DATETIME");
+                _write_optional_display(builder, fsp);
+            },
+            DataType::Timestamp{fsp} => {
+                write!(builder, " {}", "TIMESTAMP");
+                _write_optional_display(builder, fsp);
+            },
+            DataType::Time{fsp} => {
+                write!(builder, " {}", "TIME");
+                _write_optional_display(builder, fsp);
+            },
+            DataType::Year{display} => {
+                write!(builder, " {}", "DATETIME");
+                _write_optional_display(builder, display);
+            },
+            DataType::Char{length} => {
+                write!(builder, " {}", "CHAR");
+                _write_optional_display(builder, length);
+            },
+            DataType::Varchar{length} => {
+                write!(builder, " {}", "VARCHAR");
+                _write_optional_display(builder, length);
+            },
+            DataType::Binary{length} => {
+                write!(builder, " {}", "BINARY");
+                _write_optional_display(builder, length);
+            },
+            DataType::VarBinary{length} => {
+                write!(builder, " {}", "VARBINARY");
+                _write_optional_display(builder, length);
+            },
+            DataType::Blob{length} => {
+                write!(builder, " {}", "BLOB");
+                _write_optional_display(builder, length);
+            },
+            DataType::Text{length} => {
+                write!(builder, " {}", "TEXT");
+                _write_optional_display(builder, length);
+            },
+            DataType::TinyBlob => {
+                write!(builder, " {}", "TINYBLOB");
+            },
+            DataType::TinyText => {
+                write!(builder, " {}", "TINYTEXT");
+            },
+            DataType::MediumBlob => {
+                write!(builder, " {}", "MEDIUMBLOB");
+            },
+            DataType::MediumText => {
+                write!(builder, " {}", "MEDIUMTEXT");
+            },
+            DataType::LongBlob => {
+                write!(builder, " {}", "LONGBLOB");
+            },
+            DataType::LongText => {
+                write!(builder, " {}", "LONGTEXT");
+            },
+            DataType::Enum{values} => {
+                write!(builder, " {}(", "ENUM");
+                _write(builder, *values, literals);
+                write!(builder, " {}", ")");
+            },
+            DataType::Set{values} => {
+                write!(builder, " {}(", "ENUM");
+                _write(builder, *values, literals);
+                write!(builder, " {}", ")");
+            },
+            // _ => panic!("Unsupported data type {:?}", data_type)
+
+        }
+    }
+
+    fn _write_optional_display(builder: &mut String, display: Option<u32>) {
+        match display {
+            Some(d) => {write!(builder, "({})", d);},
+            None => {}
+        }
+        ()
+    }
+
+    fn _write_optional_precision_and_scale(builder: &mut String, precision: Option<u32>, scale: Option<u32>) {
+        match precision {
+            Some(p) => {
+                write!(builder, "({}", p);
+                if (scale.is_some()) {
+                    write!(builder, ",{}", scale.unwrap());
+                }
+                write!(builder, "{}", ")");
+            },
+            None => {}
+        }
+        ()
+    }
 }
