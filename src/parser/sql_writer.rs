@@ -1,4 +1,4 @@
-use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator, SQLUnionType, SQLJoinType, DataType};
+use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator, SQLUnionType, SQLJoinType, DataType, ColumnQualifier};
 use std::fmt::Write;
 use std::collections::HashMap;
 
@@ -62,9 +62,15 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
                 sep = ", ";
             }
         },
-        SQLExpr::SQLColumnDef{column, data_type, ..} => {
+        SQLExpr::SQLColumnDef{column, data_type, qualifiers} => {
             _write(builder, *column, literals);
             _write_data_type(builder, data_type, literals);
+            if qualifiers.is_some() {
+                for q in qualifiers.unwrap() {
+                    _write_column_qualifier(builder, q, literals);
+                }
+            }
+
         },
 		SQLExpr::SQLExprList(vector) => {
 			let mut sep = "";
@@ -306,6 +312,38 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
             },
             // _ => panic!("Unsupported data type {:?}", data_type)
 
+        }
+    }
+
+    fn _write_column_qualifier(builder:  &mut String, q: ColumnQualifier, literals: &HashMap<u32, Option<Vec<u8>>>) {
+        match q {
+            ColumnQualifier::CharacterSet(box e) => {
+                builder.push_str(&" CHARACTER SET");
+                _write(builder, e, literals);
+            },
+            ColumnQualifier::Collate(box e) => {
+                builder.push_str(&" COLLATE");
+                _write(builder, e, literals);
+            },
+            ColumnQualifier::Default(box e) => {
+                builder.push_str(&" DEFAULT");
+                _write(builder, e, literals);
+            },
+            ColumnQualifier::Signed => builder.push_str(&" SIGNED"),
+            ColumnQualifier::Unsigned => builder.push_str(&" UNSIGNED"),
+            ColumnQualifier::Null => builder.push_str(&" NULL"),
+            ColumnQualifier::NotNull => builder.push_str(&" NOT NULL"),
+            ColumnQualifier::AutoIncrement => builder.push_str(&" AUTO_INCREMENT"),
+            ColumnQualifier::PrimaryKey => builder.push_str(&" PRIMARY KEY"),
+            ColumnQualifier::UniqueKey => builder.push_str(&" UNIQUE"),
+            ColumnQualifier::OnUpdate(box e) => {
+                builder.push_str(&" ON UPDATE");
+                _write(builder, e, literals);
+            },
+            ColumnQualifier::Comment(box e) => {
+                builder.push_str(&" COMMENT");
+                _write(builder, e, literals);
+            }
         }
     }
 
