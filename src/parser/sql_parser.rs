@@ -31,7 +31,12 @@ pub enum SQLExpr {
 	},
 	SQLUnion{left: Box<SQLExpr>, union_type: SQLUnionType, right: Box<SQLExpr>},
 	SQLJoin{left: Box<SQLExpr>, join_type: SQLJoinType, right: Box<SQLExpr>, on_expr: Option<Box<SQLExpr>>},
-	SQLCreateTable{table: Box<SQLExpr>, column_list: Vec<SQLExpr>, keys: Vec<SQLKeyDef>},
+	SQLCreateTable{
+		table: Box<SQLExpr>,
+		column_list: Vec<SQLExpr>,
+		keys: Vec<SQLKeyDef>,
+		table_options: Vec<TableOption>
+	},
 	SQLColumnDef{column: Box<SQLExpr>, data_type: DataType, qualifiers: Option<Vec<ColumnQualifier>>}
 }
 
@@ -93,6 +98,13 @@ pub enum ColumnQualifier {
 	PrimaryKey,
 	UniqueKey,
 	OnUpdate(Box<SQLExpr>),
+	Comment(Box<SQLExpr>)
+}
+
+#[derive(Debug, PartialEq)]
+pub enum TableOption {
+	Engine(Box<SQLExpr>),
+	Charset(Box<SQLExpr>),
 	Comment(Box<SQLExpr>)
 }
 
@@ -290,11 +302,59 @@ impl AnsiSQLParser {
 				return Err(String::from(format!("Expected token ) received token {:?}", tokens.peek())))
 			}
 
-			Ok(SQLExpr::SQLCreateTable{table: Box::new(table), column_list: columns, keys: keys })
+			let mut table_options = self.parse_table_options(tokens)?;
+
+			match tokens.peek() {
+				None => Ok(SQLExpr::SQLCreateTable{
+					table: Box::new(table),
+					column_list: columns,
+					keys: keys,
+					table_options: table_options
+				 }),
+				_ => Err(String::from(format!("Expected end of statement, received {:?}", tokens.peek())))
+			}
+
 		} else {
 			Err(String::from(format!("Unexpected token after CREATE {:?}", tokens.peek())))
 		}
 
+	}
+
+	fn parse_table_options(&self, tokens: &mut Peekable<Tokens>) -> Result<Vec<TableOption>, String> {
+		let mut ret: Vec<TableOption> = Vec::new();
+
+		while let Some(o) = self.parse_table_option(tokens)? {
+			ret.push(o);
+		}
+		Ok(ret)
+	}
+
+	fn parse_table_option(&self, tokens: &mut Peekable<Tokens>) -> Result<Option<TableOption>, String> {
+		match tokens.peek().cloned() {
+			Some(Token::Keyword(v)) | Some(Token::Identifier(v)) => match &v.to_uppercase() as &str {
+				"ENGINE" => {
+					tokens.next();
+					self.consume_operator("=", tokens);
+					Ok(Some(TableOption::Engine(Box::new(self.parse_expr(tokens, 0)?))))
+				},
+				"DEFAULT" => { // [DEFAULT] [CHARACTER SET | COLLATE]
+					tokens.next();
+					self.parse_table_option(tokens)
+				},
+				"CHARACTER" | "CHARSET" => {
+					tokens.next();
+					self.consume_keyword("SET", tokens);
+					Ok(Some(TableOption::Charset(Box::new(self.parse_expr(tokens, 0)?))))
+				},
+				"COMMENT" => {
+					tokens.next();
+					Ok(Some(TableOption::Comment(Box::new(self.parse_expr(tokens, 0)?))))
+				}
+				// "COLLATE"
+				_ => Err(String::from(format!("Unsupported Table Option {}", v)))
+			},
+			_ => Ok(None)
+		}
 	}
 
 	fn parse_key_def(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLKeyDef, String> {
@@ -924,6 +984,20 @@ impl AnsiSQLParser {
 	fn consume_punctuator(&self, text: &str, tokens: &mut Peekable<Tokens>) -> bool {
 		match tokens.peek().cloned() {
 			Some(Token::Punctuator(v)) => {
+				if text.eq_ignore_ascii_case(&v) {
+					tokens.next();
+					true
+				} else {
+					false
+				}
+			},
+			_ => false
+		}
+	}
+
+	fn consume_operator(&self, text: &str, tokens: &mut Peekable<Tokens>) -> bool {
+		match tokens.peek().cloned() {
+			Some(Token::Operator(v)) => {
 				if text.eq_ignore_ascii_case(&v) {
 					tokens.next();
 					true

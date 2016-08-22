@@ -1,4 +1,6 @@
-use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator, SQLUnionType, SQLJoinType, DataType, ColumnQualifier, SQLKeyDef};
+use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator,
+    SQLUnionType, SQLJoinType, DataType, ColumnQualifier,
+    SQLKeyDef, TableOption};
 use std::fmt::Write;
 use std::collections::HashMap;
 
@@ -53,7 +55,7 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
                 _write(builder, *selection.unwrap(), literals);
             }
         },
-        SQLExpr::SQLCreateTable{table, column_list, keys} => {
+        SQLExpr::SQLCreateTable{table, column_list, keys, table_options} => {
             builder.push_str("CREATE TABLE");
             _write(builder, *table, literals);
 
@@ -72,6 +74,12 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
             }
 
             builder.push_str(&")");
+
+            sep = " ";
+            for o in table_options {
+                builder.push_str(sep);
+                _write_table_option(builder, o, literals);
+            }
         },
         SQLExpr::SQLColumnDef{column, data_type, qualifiers} => {
             _write(builder, *column, literals);
@@ -385,7 +393,7 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
                     builder.push_str(&" CONSTRAINT");
                     _write(builder, *symbol.unwrap(), literals);
                 }
-                
+
                 builder.push_str(&" FOREIGN KEY");
                 if name.is_some() {
                     _write(builder, *name.unwrap(), literals);
@@ -395,6 +403,23 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
                 builder.push_str(&" REFERENCES");
                 _write(builder, *reference_table, literals);
                 _write_key_column_list(builder, reference_columns, literals);
+            }
+        }
+    }
+
+    fn _write_table_option(builder:  &mut String, option: TableOption, literals: &HashMap<u32, Option<Vec<u8>>>) {
+        match option {
+            TableOption::Comment(e) => {
+                builder.push_str(" COMMENT");
+                _write(builder, *e, literals);
+            },
+            TableOption::Charset(e) => {
+                builder.push_str(" DEFAULT CHARSET");
+                _write(builder, *e, literals);
+            },
+            TableOption::Engine(e) => {
+                builder.push_str(" ENGINE");
+                _write(builder, *e, literals);
             }
         }
     }

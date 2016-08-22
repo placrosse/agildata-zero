@@ -9,6 +9,7 @@ use super::sql_parser::SQLUnionType::*;
 use super::sql_parser::DataType::*;
 use super::sql_parser::ColumnQualifier::*;
 use super::sql_parser::SQLKeyDef::*;
+use super::sql_parser::TableOption;
 use super::sql_writer;
 use std::collections::HashMap;
 
@@ -613,7 +614,8 @@ fn create_numeric() {
 					qualifiers: None
 				}
 			],
-			keys: vec![]
+			keys: vec![],
+			table_options: vec![]
 		},
 		parsed
 	);
@@ -696,7 +698,8 @@ fn create_temporal() {
 					qualifiers: None
 		        }
 		    ],
-			keys: vec![]
+			keys: vec![],
+			table_options: vec![]
 		},
 		parsed
 	);
@@ -910,7 +913,8 @@ fn create_character() {
 		            qualifiers: None
 		        }
 		    ],
-			keys: vec![]
+			keys: vec![],
+			table_options: vec![]
 		},
 		parsed
 	);
@@ -995,7 +999,8 @@ fn create_column_qualifiers() {
 		            )
 		        }
 		    ],
-			keys: vec![]
+			keys: vec![],
+			table_options: vec![]
 		},
 		parsed
 	);
@@ -1075,7 +1080,8 @@ fn create_tail_keys() {
 		            reference_table: Box::new(SQLIdentifier(String::from("bar"))),
 		            reference_columns: vec![SQLIdentifier(String::from("id"))],
 		        }
-		    ]
+		    ],
+			table_options: vec![]
 		},
 		parsed
 	);
@@ -1146,7 +1152,8 @@ fn create_tail_constraints() {
 					reference_table: Box::new(SQLIdentifier(String::from("bar"))),
 					reference_columns: vec![SQLIdentifier(String::from("id"))],
 				}
-			]
+			],
+			table_options: vec![]
 		},
 		parsed
 	);
@@ -1158,6 +1165,50 @@ fn create_tail_constraints() {
 	println!("Rewritten: {}", rewritten);
 }
 
+#[test]
+fn create_table_options() {
+	let parser = AnsiSQLParser {};
+
+	let sql = "CREATE TABLE foo (
+	      id BIGINT,
+	      a VARCHAR(50)
+	) Engine InnoDB DEFAULT CHARSET utf8 COMMENT 'Table Comment'";
+
+	let parsed = parser.parse(sql).unwrap();
+
+	println!("{:#?}", parsed);
+
+	assert_eq!(
+		SQLCreateTable {
+		    table: Box::new(SQLIdentifier(String::from("foo"))),
+		    column_list: vec![
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("id"))),
+		            data_type: BigInt {display: None},
+		            qualifiers: None
+		        },
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("a"))),
+		            data_type: Varchar {length: Some(50)},
+		            qualifiers: None
+		        }
+		    ],
+		    keys: vec![],
+			table_options: vec![
+		        TableOption::Engine(Box::new(SQLIdentifier(String::from("InnoDB")))),
+		        TableOption::Charset(Box::new(SQLIdentifier(String::from("utf8")))),
+		        TableOption::Comment(Box::new(SQLLiteral(LiteralString(1,String::from("Table Comment")))))
+		    ]
+		},
+		parsed
+	);
+
+	let rewritten = sql_writer::write(parsed, &HashMap::new());
+
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {}", rewritten);
+}
 
 // used for fomatting sql strings for assertions
 fn format_sql(sql: &str) -> String {
