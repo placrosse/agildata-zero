@@ -568,13 +568,13 @@ impl<'a> Connection<'a> {
                                                 &NativeType::U64 => {
                                                     match encryption {
                                                         &EncryptionType::NA => r.read_lenenc_str(),
-                                                        _ => Some(format!("{}", u64::decrypt(r.read_len_bytes(), encryption)))
+                                                        _ => Some(format!("{}", u64::decrypt(&(r.read_len_bytes()), encryption)))
                                                     }
                                                 },
                                                 &NativeType::Varchar(_) => {
                                                     match encryption {
                                                         &EncryptionType::NA => r.read_lenenc_str(),
-                                                        _ => Some(String::decrypt(r.read_len_bytes(), encryption))
+                                                        _ => Some(String::decrypt(&(r.read_len_bytes()), encryption))
                                                     }
                                                 }
                                                 _ => panic!("Native type {:?} not implemented", native_type)
