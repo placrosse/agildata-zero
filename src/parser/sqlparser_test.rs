@@ -891,12 +891,12 @@ fn create_character() {
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("ab"))),
-		            data_type: Char {length: None},
+		            data_type: CharByte {length: None},
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("ac"))),
-		            data_type: Char {length: Some(50)},
+		            data_type: CharByte {length: Some(50)},
 		            qualifiers: None
 		        }
 		    ]

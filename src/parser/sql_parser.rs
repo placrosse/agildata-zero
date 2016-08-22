@@ -54,6 +54,7 @@ pub enum DataType {
 	Year{display: Option<u32>},
 	Char{length: Option<u32>},
 	NChar{length: Option<u32>},
+	CharByte{length: Option<u32>},
 	Varchar{length: Option<u32>},
 	NVarchar{length: Option<u32>},
 	Binary{length: Option<u32>},
@@ -431,10 +432,12 @@ impl AnsiSQLParser {
 					}
 				},
 				"CHAR" => {
-					let ret = Ok(DataType::Char{length: try!(self.parse_optional_display(tokens))});
-					// TODO do something with CHAR BYTE
-					self.consume_keyword("BYTE", tokens);
-					ret
+					let length = try!(self.parse_optional_display(tokens));
+					if self.consume_keyword(&"BYTE", tokens) {
+						Ok(DataType::CharByte{length: length})
+					} else {
+						Ok(DataType::Char{length: length})
+					}
 				},
 				"NCHAR" => {
 					let ret = Ok(DataType::NChar{length: try!(self.parse_optional_display(tokens))});
