@@ -53,14 +53,19 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
                 _write(builder, *selection.unwrap(), literals);
             }
         },
-        SQLExpr::SQLCreateTable{column_list, ..} => {
+        SQLExpr::SQLCreateTable{table, column_list} => {
             builder.push_str("CREATE TABLE");
+            _write(builder, *table, literals);
+
+            builder.push_str(&" (");
             let mut sep = "";
             for c in column_list {
                 builder.push_str(sep);
                 _write(builder, c, literals);
                 sep = ", ";
             }
+
+            builder.push_str(&")");
         },
         SQLExpr::SQLColumnDef{column, data_type, qualifiers} => {
             _write(builder, *column, literals);
@@ -255,7 +260,7 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
                 _write_optional_display(builder, fsp);
             },
             DataType::Year{display} => {
-                builder.push_str(" DATETIME");
+                builder.push_str(" YEAR");
                 _write_optional_display(builder, display);
             },
             DataType::Char{length} => {

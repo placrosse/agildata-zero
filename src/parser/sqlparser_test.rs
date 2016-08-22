@@ -352,6 +352,7 @@ fn insert() {
 
 	let rewritten = sql_writer::write(parsed, &HashMap::new());
 
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 	println!("Rewritten: {:?}", rewritten);
 
 }
@@ -377,7 +378,7 @@ fn select_wildcard() {
 
 	let rewritten = sql_writer::write(parsed, &HashMap::new());
 
-	assert_eq!(rewritten, sql);
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 	println!("Rewritten: {:?}", rewritten);
 
 }
@@ -385,7 +386,7 @@ fn select_wildcard() {
 #[test]
 fn update() {
 	let parser = AnsiSQLParser {};
-	let sql = "UPDATE foo SET a = 'hello', b = 12345 WHERE c > 10)";
+	let sql = "UPDATE foo SET a = 'hello', b = 12345 WHERE c > 10";
 
 	let parsed = parser.parse(sql).unwrap();
 
@@ -418,6 +419,8 @@ fn update() {
 	println!("{:#?}", parser.parse(sql));
 
 	let rewritten = sql_writer::write(parsed, &HashMap::new());
+
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
 	println!("Rewritten: {}", rewritten);
 
@@ -454,8 +457,8 @@ fn create_numeric() {
 	      y DOUBLE(10),
 	      z DOUBLE(10,2),
 		  aa DOUBLE PRECISION,
-			  ab DOUBLE PRECISION (10),
-			  ac DOUBLE PRECISION (10, 2)
+		  ab DOUBLE PRECISION (10),
+		  ac DOUBLE PRECISION (10, 2)
 	      )";
 
 	let parsed = parser.parse(sql).unwrap();
@@ -617,6 +620,8 @@ fn create_numeric() {
 
 	let rewritten = sql_writer::write(parsed, &HashMap::new());
 
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
 	println!("Rewritten: {}", rewritten);
 
 }
@@ -696,6 +701,8 @@ fn create_temporal() {
 	println!("{:#?}", parsed);
 
 	let rewritten = sql_writer::write(parsed, &HashMap::new());
+
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
 	println!("Rewritten: {}", rewritten);
 }
@@ -908,6 +915,8 @@ fn create_character() {
 
 	let rewritten = sql_writer::write(parsed, &HashMap::new());
 
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
 	println!("Rewritten: {}", rewritten);
 }
 
@@ -990,5 +999,29 @@ fn create_column_qualifiers() {
 
 	let rewritten = sql_writer::write(parsed, &HashMap::new());
 
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
 	println!("Rewritten: {}", rewritten);
+}
+
+// used for fomatting sql strings for assertions
+fn format_sql(sql: &str) -> String {
+
+	sql.to_uppercase()
+
+		// unify datatype synonymns
+		.replace("BOOLEAN", "BOOL").replace("BOOL", "BOOLEAN") // done twice intentionally
+		.replace("INTEGER", "INT").replace(" INT", " INTEGER")
+		.replace("PRECISION", "")
+		.replace("DECIMAL", "DEC").replace("DEC", "DECIMAL")
+		.replace("CHARACTER VARYING", "VARCHAR")
+		.replace("NATIONAL CHARACTER", "NCHAR")
+		.replace("NATIONAL CHAR", "NCHAR")
+		.replace("NATIONAL VARCHAR", "NVARCHAR")
+		.replace("CHARACTER", "CHAR")
+
+		// strip whitespace
+		.replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "")
+
+
 }
