@@ -103,8 +103,6 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 			LiteralExpr::LiteralString(i, s) => {
 				match literals.get(&i) {
 					Some(value) => match value {
-						// TODO write! escapes the single quotes...
-						// X'...'
 						&Some(ref e) => {
 							write!(builder, "X'{}'", to_hex_string(e)).unwrap(); // must_use
 						},
