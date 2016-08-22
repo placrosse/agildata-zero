@@ -34,6 +34,12 @@ struct MySQLPacket {
 
 impl MySQLPacket {
 
+    fn parse_packet_length(header: &[u8]) -> usize {
+        (((header[2] as u32) << 16) |
+            ((header[1] as u32) << 8) |
+            header[0] as u32) as usize
+    }
+
     fn sequence_id(&self) -> u8 {
         self.header[3]
     }
@@ -94,12 +100,6 @@ impl<'a> MySQLPacketReader<'a> {
         }
     }
 
-}
-
-fn read_packet_length(header: &[u8]) -> usize {
-    (((header[2] as u32) << 16) |
-    ((header[1] as u32) << 8) |
-    header[0] as u32) as usize
 }
 
 pub struct Proxy<'a> {
@@ -208,7 +208,7 @@ impl MySQLConnection for net::TcpStream {
             Ok(n) => {
                 assert!(n==4);
 
-                let payload_len = read_packet_length(&header_vec);
+                let payload_len = MySQLPacket::parse_packet_length(&header_vec);
 
                 // read payload
                 let mut payload_vec = vec![0_u8; payload_len];
@@ -311,7 +311,7 @@ impl<'a> Connection<'a> {
                 // do we have the complete request packet yet?
                 if buf.len() > 3 {
 
-                    let packet_len = read_packet_length(&buf);
+                    let packet_len = MySQLPacket::parse_packet_length(&buf);
 
                     println!("incoming packet_len = {}", packet_len);
                     println!("Buf len {}", buf.len());
