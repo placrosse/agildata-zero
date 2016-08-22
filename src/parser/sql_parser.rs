@@ -368,6 +368,10 @@ impl AnsiSQLParser {
 						Err(format!("Expected ON UPDATE, received ON {:?}", tokens.peek()))
 					}
 				},
+				"COMMENT" => {
+					tokens.next();
+					Ok(Some(ColumnQualifier::Comment(Box::new(try!(self.parse_expr(tokens, 0))))))
+				}
 				_ => Ok(None)
 			},
 			_ => Ok(None)

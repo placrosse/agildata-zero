@@ -919,7 +919,7 @@ fn create_column_qualifiers() {
 	      id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
 	      a VARCHAR(50) CHARACTER SET utf8 COLLATE utf8_general_ci NULL UNIQUE,
 	      b BIGINT SIGNED NOT NULL DEFAULT 123456789,
-	      c TINYINT UNSIGNED NULL DEFAULT NULL,
+	      c TINYINT UNSIGNED NULL DEFAULT NULL COMMENT 'Some Comment',
 	      d TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )";
 
@@ -967,7 +967,8 @@ fn create_column_qualifiers() {
 		            qualifiers: Some(vec![
 		                    Unsigned,
 		                    Null,
-		                    Default(Box::new(SQLIdentifier(String::from("NULL")))) // TODO should be literal null ?
+		                    Default(Box::new(SQLIdentifier(String::from("NULL")))), // TODO should be literal null ?
+							Comment(Box::new(SQLLiteral(LiteralString(2,String::from("Some Comment")))))
 		                ]
 		            )
 		        },
