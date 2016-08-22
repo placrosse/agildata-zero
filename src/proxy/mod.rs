@@ -62,49 +62,37 @@ impl<'a> MySQLPacketReader<'a> {
         MySQLPacketReader { payload: &packet.payload, pos: 0 }
     }
 
-    fn read_lenenc_str(&mut self) -> Option<String> {
-        println!("read_lenenc_str BEGIN pos={}", self.pos);
-
-        //TODO: HACK: assume single byte for length for now
+    /// read the length of a length-encoded field
+    fn read_len(&mut self) -> usize {
         let n = self.payload[self.pos] as usize;
         self.pos += 1;
 
         match n {
-            0xfb => None, // MySQL NULL value
-            _ => {
-                println!("read_lenenc_str str_len={}", n);
-
-                let s = parse_string(&self.payload[self.pos..self.pos+n]);
-                self.pos += n;
-                Some(s)
-            }
-        }
-
-    }
-
-    fn read_len_bytes(&mut self) -> Vec<u8> {
-        println!("read_len_bytes BEGIN pos={}", self.pos);
-
-        //TODO: HACK: assume single byte for length for now
-        let n = self.payload[self.pos] as usize;
-        self.pos += 1;
-
-        match n {
-            0xfb => vec![0xfb], // MySQL NULL value
-            _ => {
-                println!("read_len_bytes str_len={}", n);
-
-
-                let s = self.payload[self.pos..self.pos+n].to_vec();
-                self.pos += n;
-                s
-            }
+            //NOTE: depending on context, 0xfb could mean null and 0xff could mean error
+            0xfc | 0xfd | 0xfe => panic!("no support yet for length >= 251"),
+            _ => n
         }
     }
 
-    // fn read_bytes(len: usize) -> [u8] {
-    //     panic!("not implemented");
-    // }
+    fn read_string(&mut self) -> Option<String> {
+        match self.read_bytes() {
+            Some(s) => Some(parse_string(&s)),
+            None => None
+        }
+    }
+
+    fn read_bytes(&mut self) -> Option<Vec<u8>> {
+        match self.read_len() {
+            0xfb => None,
+            n @ _ => {
+                let s = &self.payload[self.pos..self.pos+n];
+                self.pos += n;
+                let mut v : Vec<u8> = vec![];
+                v.extend_from_slice(s);
+                Some(v)
+            }
+        }
+    }
 
 }
 
@@ -491,12 +479,12 @@ impl<'a> Connection<'a> {
                     let mut r = MySQLPacketReader::new(&field_packet);
 
                     //TODO: assumes these values can never be NULL
-                    let catalog = r.read_lenenc_str().unwrap();
-                    let schema = r.read_lenenc_str().unwrap();
-                    let table = r.read_lenenc_str().unwrap();
-                    let org_table = r.read_lenenc_str().unwrap();
-                    let name = r.read_lenenc_str().unwrap();
-                    let org_name = r.read_lenenc_str().unwrap();
+                    let catalog = r.read_string().unwrap();
+                    let schema = r.read_string().unwrap();
+                    let table = r.read_string().unwrap();
+                    let org_table = r.read_string().unwrap();
+                    let name = r.read_string().unwrap();
+                    let org_name = r.read_string().unwrap();
 
                     println!("ALL catalog {}, schema {}, table {}, org_table {}, name {}, org_name {}",
                         catalog, schema, table, org_table, name, org_name);
@@ -565,20 +553,20 @@ impl<'a> Connection<'a> {
 
                                 let value = match column_config {
 
-                                    None => r.read_lenenc_str(),
+                                    None => r.read_string(),
                                     Some(cc) => match cc {
                                         &ColumnConfig {ref encryption, ref native_type, ..} => {
                                             match native_type {
                                                 &NativeType::U64 => {
                                                     match encryption {
-                                                        &EncryptionType::NA => r.read_lenenc_str(),
-                                                        _ => Some(format!("{}", u64::decrypt(&(r.read_len_bytes()), encryption)))
+                                                        &EncryptionType::NA => r.read_string(),
+                                                        _ => Some(format!("{}", u64::decrypt(&r.read_bytes().unwrap(), encryption)))
                                                     }
                                                 },
                                                 &NativeType::Varchar(_) => {
                                                     match encryption {
-                                                        &EncryptionType::NA => r.read_lenenc_str(),
-                                                        _ => Some(String::decrypt(&(r.read_len_bytes()), encryption))
+                                                        &EncryptionType::NA => r.read_string(),
+                                                        _ => Some(String::decrypt(&r.read_bytes().unwrap(), encryption))
                                                     }
                                                 }
                                                 _ => panic!("Native type {:?} not implemented", native_type)
