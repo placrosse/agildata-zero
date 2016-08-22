@@ -63,7 +63,7 @@ fn main() {
         ph(pi);
     }));
 
-    let config_path = "src/example-babel-config.xml";
+    let config_path = "example-babel-config.xml";
     let config = config::parse_config(config_path);
 
     {
