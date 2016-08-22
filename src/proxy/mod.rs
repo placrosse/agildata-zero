@@ -51,6 +51,13 @@ impl MySQLPacket {
         }
     }
 
+    fn as_bytes(&self) -> Vec<u8> {
+        let mut b: Vec<u8> = Vec::with_capacity(&self.header.len() + &self.payload.len());
+        b.extend_from_slice(&self.header);
+        b.extend_from_slice(&self.payload);
+        b
+    }
+
 }
 
 fn parse_string(bytes: &[u8]) -> String {
@@ -248,16 +255,12 @@ impl<'a> Connection<'a> {
         // let mut tcps = TcpStream::connect(&saddr).unwrap();
 
         // connect to real MySQL
-        let mut realtcps = net::TcpStream::connect("127.0.0.1:3306").unwrap();
+        let mut mysql = net::TcpStream::connect("127.0.0.1:3306").unwrap();
 
         // read header
-        let auth_packet = realtcps.read_packet().unwrap();
+        let auth_packet = mysql.read_packet().unwrap();
 
-        let mut response: Vec<u8> = Vec::new();
-        response.extend_from_slice(&auth_packet.header);
-        response.extend_from_slice(&auth_packet.payload);
-
-        let buf = Cursor::new(response);
+        let buf = Cursor::new(auth_packet.as_bytes());
 
         println!("Created new connection in Writing state");
 
@@ -265,7 +268,7 @@ impl<'a> Connection<'a> {
             socket: socket,
             token: token,
             state: State::Writing(Take::new(buf, auth_packet.payload.len()+4)),
-            remote: realtcps,
+            remote: mysql,
             config: &config
             // authenticating: true
         }
