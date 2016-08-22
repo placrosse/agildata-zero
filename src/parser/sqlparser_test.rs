@@ -8,6 +8,7 @@ use super::sql_parser::SQLJoinType::*;
 use super::sql_parser::SQLUnionType::*;
 use super::sql_parser::DataType::*;
 use super::sql_parser::ColumnQualifier::*;
+use super::sql_parser::SQLKeyDef::*;
 use super::sql_writer;
 use std::collections::HashMap;
 
@@ -1025,10 +1026,56 @@ fn create_tail_keys() {
 
 	let parsed = parser.parse(sql).unwrap();
 
-	// assert_eq!(
-	// 	None,
-	// 	parsed
-	// );
+	assert_eq!(
+		SQLCreateTable {
+		    table: Box::new(SQLIdentifier(String::from("foo"))),
+		    column_list: vec![
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("id"))),
+		            data_type: BigInt {display: None},
+		            qualifiers: Some(vec![AutoIncrement])
+		        },
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("a"))),
+		            data_type: Varchar {length: Some(50)},
+		            qualifiers: Some(vec![NotNull])
+		        },
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("b"))),
+		            data_type: Timestamp {fsp: None},
+		            qualifiers: Some(vec![NotNull])
+		        }
+		    ],
+		    keys: vec![
+		        Primary {
+		            name: None,
+		            columns: vec![SQLIdentifier(String::from("id"))]
+		        },
+		        Unique {
+		            name: Some(Box::new(SQLIdentifier(String::from("keyName1")))),
+		            columns: vec![
+		                SQLIdentifier(String::from("id")),
+		                SQLIdentifier(String::from("b"))
+		            ]
+		        },
+		        Index {
+		            name:  Some(Box::new(SQLIdentifier(String::from("keyName2")))),
+		            columns: vec![SQLIdentifier(String::from("b"))]
+		        },
+		        FullText {
+		            name: Some(Box::new(SQLIdentifier(String::from("keyName")))),
+		            columns: vec![SQLIdentifier(String::from("a"))]
+		        },
+		        Foreign {
+		            name: Some(Box::new(SQLIdentifier(String::from("fkeyName")))),
+		            columns: vec![SQLIdentifier(String::from("a"))],
+		            reference_table: Box::new(SQLIdentifier(String::from("bar"))),
+		            reference_columns: vec![SQLIdentifier(String::from("id"))],
+		        }
+		    ]
+		},
+		parsed
+	);
 
 	println!("{:#?}", parsed);
 
