@@ -341,14 +341,25 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 
     fn _write_key_definition(builder:  &mut String, key: SQLKeyDef, literals: &HashMap<u32, Option<Vec<u8>>>) {
         match key {
-            SQLKeyDef::Primary{name, columns} => {
+            SQLKeyDef::Primary{symbol, name, columns} => {
+
+                if symbol.is_some() {
+                    builder.push_str(&" CONSTRAINT");
+                    _write(builder, *symbol.unwrap(), literals);
+                }
+
                 builder.push_str(&" PRIMARY KEY");
                 if name.is_some() {
                     _write(builder, *name.unwrap(), literals);
                 }
                 _write_key_column_list(builder, columns, literals);
             },
-            SQLKeyDef::Unique{name, columns} => {
+            SQLKeyDef::Unique{symbol, name, columns} => {
+                if symbol.is_some() {
+                    builder.push_str(&" CONSTRAINT");
+                    _write(builder, *symbol.unwrap(), literals);
+                }
+
                 builder.push_str(&" UNIQUE KEY");
                 if name.is_some() {
                     _write(builder, *name.unwrap(), literals);
@@ -369,7 +380,12 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
                 }
                 _write_key_column_list(builder, columns, literals);
             },
-            SQLKeyDef::Foreign{name, columns, reference_table, reference_columns} => {
+            SQLKeyDef::Foreign{symbol, name, columns, reference_table, reference_columns} => {
+                if symbol.is_some() {
+                    builder.push_str(&" CONSTRAINT");
+                    _write(builder, *symbol.unwrap(), literals);
+                }
+                
                 builder.push_str(&" FOREIGN KEY");
                 if name.is_some() {
                     _write(builder, *name.unwrap(), literals);

@@ -1048,10 +1048,12 @@ fn create_tail_keys() {
 		    ],
 		    keys: vec![
 		        Primary {
+					symbol: None,
 		            name: None,
 		            columns: vec![SQLIdentifier(String::from("id"))]
 		        },
 		        Unique {
+					symbol: None,
 		            name: Some(Box::new(SQLIdentifier(String::from("keyName1")))),
 		            columns: vec![
 		                SQLIdentifier(String::from("id")),
@@ -1067,6 +1069,7 @@ fn create_tail_keys() {
 		            columns: vec![SQLIdentifier(String::from("a"))]
 		        },
 		        Foreign {
+					symbol: None,
 		            name: Some(Box::new(SQLIdentifier(String::from("fkeyName")))),
 		            columns: vec![SQLIdentifier(String::from("a"))],
 		            reference_table: Box::new(SQLIdentifier(String::from("bar"))),
@@ -1085,6 +1088,76 @@ fn create_tail_keys() {
 
 	println!("Rewritten: {}", rewritten);
 }
+
+#[test]
+fn create_tail_constraints() {
+	let parser = AnsiSQLParser {};
+
+	let sql = "CREATE TABLE foo (
+	      id BIGINT AUTO_INCREMENT,
+	      a VARCHAR(50) NOT NULL,
+	      b TIMESTAMP NOT NULL,
+	      CONSTRAINT symbol1 PRIMARY KEY (id),
+	      CONSTRAINT symbol2 UNIQUE KEY keyName1 (a),
+	      CONSTRAINT symbol3 FOREIGN KEY fkeyName (a) REFERENCES bar(id)
+	)";
+
+	let parsed = parser.parse(sql).unwrap();
+
+	println!("{:#?}", parsed);
+
+	assert_eq!(
+		SQLCreateTable {
+		    table: Box::new(SQLIdentifier(String::from("foo"))),
+		    column_list: vec![
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("id"))),
+		            data_type: BigInt {display: None},
+		            qualifiers: Some(vec![AutoIncrement])
+		        },
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("a"))),
+		            data_type: Varchar {length: Some(50)},
+		            qualifiers: Some(vec![NotNull])
+		        },
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("b"))),
+		            data_type: Timestamp {fsp: None},
+		            qualifiers: Some(vec![NotNull])
+		        }
+		    ],
+		    keys: vec![
+				Primary {
+					symbol: Some(Box::new(SQLIdentifier(String::from("symbol1")))),
+					name: None,
+					columns: vec![SQLIdentifier(String::from("id"))]
+				},
+				Unique {
+					symbol: Some(Box::new(SQLIdentifier(String::from("symbol2")))),
+					name: Some(Box::new(SQLIdentifier(String::from("keyName1")))),
+					columns: vec![
+						SQLIdentifier(String::from("a"))
+					]
+				},
+				Foreign {
+					symbol: Some(Box::new(SQLIdentifier(String::from("symbol3")))),
+					name: Some(Box::new(SQLIdentifier(String::from("fkeyName")))),
+					columns: vec![SQLIdentifier(String::from("a"))],
+					reference_table: Box::new(SQLIdentifier(String::from("bar"))),
+					reference_columns: vec![SQLIdentifier(String::from("id"))],
+				}
+			]
+		},
+		parsed
+	);
+
+	let rewritten = sql_writer::write(parsed, &HashMap::new());
+
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {}", rewritten);
+}
+
 
 // used for fomatting sql strings for assertions
 fn format_sql(sql: &str) -> String {

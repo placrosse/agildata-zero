@@ -37,9 +37,9 @@ pub enum SQLExpr {
 
 #[derive(Debug, PartialEq)]
 pub enum SQLKeyDef {
-	Primary{name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>},
-	Unique{name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>},
-	Foreign{name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>, reference_table: Box<SQLExpr>, reference_columns: Vec<SQLExpr>},
+	Primary{symbol: Option<Box<SQLExpr>>, name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>},
+	Unique{symbol: Option<Box<SQLExpr>>, name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>},
+	Foreign{symbol: Option<Box<SQLExpr>>, name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>, reference_table: Box<SQLExpr>, reference_columns: Vec<SQLExpr>},
 	FullText{name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>},
 	Index{name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>}
 }
@@ -279,7 +279,7 @@ impl AnsiSQLParser {
 			while self.consume_punctuator(",", tokens) {
 				match tokens.peek().cloned() {
 					Some(Token::Keyword(v)) => match &v as &str {
-						"PRIMARY" | "KEY" | "UNIQUE" | "FULLTEXT" | "FOREIGN" => keys.push(try!(self.parse_key_def(tokens))),
+						"PRIMARY" | "KEY" | "UNIQUE" | "FULLTEXT" | "FOREIGN" | "CONSTRAINT" => keys.push(try!(self.parse_key_def(tokens))),
 						_ => columns.push(try!(self.parse_column_def(tokens)))
 					},
 					_ => columns.push(try!(self.parse_column_def(tokens)))
@@ -299,12 +299,21 @@ impl AnsiSQLParser {
 
 	fn parse_key_def(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLKeyDef, String> {
 		println!("parse_key_def()");
+
+		let symbol = if self.consume_keyword("CONSTRAINT", tokens) {
+			Some(Box::new(self.parse_identifier(tokens)?))
+		} else {
+			None
+		};
+
 		let t = tokens.next();
+
 		match t {
 			Some(Token::Keyword(v)) => match &v as &str {
 				"PRIMARY" => {
 					self.consume_keyword("KEY", tokens);
 					Ok(SQLKeyDef::Primary{
+						symbol: symbol,
 						name: self.parse_optional_key_name(tokens)?,
 						columns: self.parse_key_column_list(tokens)?
 					})
@@ -312,6 +321,7 @@ impl AnsiSQLParser {
 				"UNIQUE" => {
 					self.consume_keyword("KEY", tokens);
 					Ok(SQLKeyDef::Unique{
+						symbol: symbol,
 						name: self.parse_optional_key_name(tokens)?,
 						columns: self.parse_key_column_list(tokens)?
 					})
@@ -323,6 +333,7 @@ impl AnsiSQLParser {
 					self.consume_keyword("REFERENCES", tokens);
 
 					Ok(SQLKeyDef::Foreign{
+						symbol: symbol,
 						name: name,
 						columns: columns,
 						reference_table: Box::new(self.parse_identifier(tokens)?),
