@@ -1,4 +1,4 @@
-use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator, SQLUnionType, SQLJoinType};
+use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator};
 
 pub trait SQLExprVisitor {
 	fn visit_sql_expr(&mut self, &SQLExpr);

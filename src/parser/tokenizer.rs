@@ -1,11 +1,10 @@
 use std::iter::Peekable;
 use std::str::Chars;
-use std::fmt::Write;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use std::ascii::AsciiExt;
 
-use helper::DoesContain;
+// use helper::DoesContain;
 
 #[derive(Debug,PartialEq,Clone)]
 pub enum Token {
@@ -159,7 +158,7 @@ impl Tokenizer for String {
 
         let mut it = self.chars().peekable();
         let mut stream: Vec<Token> = Vec::new();
-        let mut literal_index = AtomicU32::new(0);
+        let literal_index = AtomicU32::new(0);
         loop {
             match next_token(&mut it, &literal_index) {
                 Ok(Some(token)) => stream.push(token),
@@ -198,7 +197,7 @@ impl Iterator for Tokens {
 
 #[cfg(test)]
 mod tests {
-    use super::{Token, Tokenizer};
+    use super::Tokenizer;
     use super::Token::*;
     use super::LiteralToken;
 

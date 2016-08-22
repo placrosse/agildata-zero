@@ -1,11 +1,8 @@
-extern crate config;
-use self::config::{Config, TConfig};
-extern crate encrypt;
-use self::encrypt::{Encrypt, EncryptionType};
+use config::{Config, TConfig};
+use encrypt::Encrypt;
 
-extern crate sql_parser;
-use sql_parser::visitor::*;
-use sql_parser::sql_parser::{SQLExpr, LiteralExpr, SQLOperator, SQLUnionType, SQLJoinType};
+use parser::visitor::*;
+use parser::sql_parser::{SQLExpr, LiteralExpr, SQLOperator};
 
 use std::collections::HashMap;
 
@@ -74,8 +71,8 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 								for (i, e) in columns.iter().enumerate() {
 									match e {
 										&SQLExpr::SQLIdentifier(ref name) => {
-											let mut col = self.config.get_column_config(&String::from("babel"), table, name);
-											if (col.is_some()) {
+											let col = self.config.get_column_config(&String::from("babel"), table, name);
+											if col.is_some() {
 												match values[i] {
 													SQLExpr::SQLLiteral(ref l) => match l {
 														&LiteralExpr::LiteralLong(ref i, ref val) => {
@@ -113,13 +110,13 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 					// TODO Messy...clean up
 					// TODO should check left and right
 					&SQLOperator::EQ => {
-						if (self.is_identifier(left) && self.is_literal(right)) {
+						if self.is_identifier(left) && self.is_literal(right) {
 							let ident = match left {
 								&SQLExpr::SQLIdentifier(ref v) => v,
 								_ => panic!("Unreachable")
 							};
-							let mut col = self.config.get_column_config(&String::from("babel"), &String::from("users"), ident);
-							if (col.is_some()) {
+							let col = self.config.get_column_config(&String::from("babel"), &String::from("users"), ident);
+							if col.is_some() {
 								match right {
 									&SQLExpr::SQLLiteral(ref l) => match l {
 										&LiteralExpr::LiteralLong(ref i, ref val) => {
@@ -133,7 +130,7 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 									_ => panic!("Unreachable")
 								}
 							}
-						} else if (self.is_identifier(&right) && self.is_literal(&left)) {
+						} else if self.is_identifier(&right) && self.is_literal(&left) {
 							panic!("Syntax literal = identifier not currently supported")
 						}
 					},
@@ -150,7 +147,7 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 				self.visit_sql_expr(&expr);
 				self.visit_sql_expr(&alias);
 			},
-			&SQLExpr::SQLIdentifier(ref id) => {
+			&SQLExpr::SQLIdentifier(_) => {
 				// TODO end of visit arm
 			},
 			&SQLExpr::SQLNested(ref expr) => {
@@ -160,11 +157,11 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 				self.visit_sql_operator(operator);
 				self.visit_sql_expr(expr);
 			},
-			&SQLExpr::SQLOrderBy{box ref expr, ref is_asc} => {
+			&SQLExpr::SQLOrderBy{box ref expr, ..} => {
 				self.visit_sql_expr(expr);
 				// TODO bool
 			},
-			&SQLExpr::SQLJoin{box ref left, ref join_type, box ref right, ref on_expr} => {
+			&SQLExpr::SQLJoin{box ref left, box ref right, ref on_expr, ..} => {
 				self.visit_sql_expr(left);
 				// TODO visit join type
 				self.visit_sql_expr(right);
@@ -173,20 +170,20 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 					&None => {}
 				}
 			},
-			&SQLExpr::SQLUnion{box ref left, ref union_type, box ref right} => {
+			&SQLExpr::SQLUnion{box ref left, box ref right, ..} => {
 				self.visit_sql_expr(left);
 				// TODO union type
 				self.visit_sql_expr(right);
 			},
-			//_ => panic!("Unsupported expr {:?}", expr)
+			_ => panic!("Unsupported expr {:?}", expr)
 		}
 	}
 
-	fn visit_sql_lit_expr(&mut self, lit: &LiteralExpr) {
+	fn visit_sql_lit_expr(&mut self, _lit: &LiteralExpr) {
 		//do nothing
 	}
 
-	fn visit_sql_operator(&mut self, op: &SQLOperator) {
+	fn visit_sql_operator(&mut self, _op: &SQLOperator) {
 		// do nothing
 	}
 }
@@ -197,10 +194,11 @@ pub fn walk(visitor: &mut SQLExprVisitor, e: &SQLExpr) {
 
 #[cfg(test)]
 mod tests {
-	use super::sql_parser::sql_parser::AnsiSQLParser;
-	use super::*;
-	use std::collections::HashMap;
-	use super::sql_parser::sql_writer;
+    use super::*;
+    use std::collections::HashMap;
+	use parser::sql_parser::AnsiSQLParser;
+	use parser::sql_writer;
+    use config;
 
 	#[test]
 	fn test_visitor() {
@@ -208,11 +206,11 @@ mod tests {
 		let sql = "SELECT age, first_name, last_name FROM users WHERE age = 1";
 		let parsed = parser.parse(sql).unwrap();
 
-		let config = super::config::parse_config("../config/src/demo-client-config.xml");
-		let mut valueMap: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
+		let config = config::parse_config("../src/example-babel-config.xml");
+		let value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
 		let mut encrypt_vis = EncryptionVisitor {
 			config: &config,
-			valuemap: valueMap
+			valuemap: value_map
 		};
 		 walk(&mut encrypt_vis, &parsed);
 
@@ -225,11 +223,11 @@ mod tests {
 		let sql = "INSERT INTO users (id, first_name, last_name, ssn, age, sex) VALUES(1, 'Janis', 'Joplin', '123456789', 27, 'F')";
 		let parsed = parser.parse(sql).unwrap();
 
-		let config = super::config::parse_config("../src/example-babel-config.xml");
-		let mut valueMap: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
+		let config = config::parse_config("../src/example-babel-config.xml");
+		let value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
 		let mut encrypt_vis = EncryptionVisitor {
 			config: &config,
-			valuemap: valueMap
+			valuemap: value_map
 		};
 		 walk(&mut encrypt_vis, &parsed);
 
@@ -242,11 +240,11 @@ mod tests {
 		let sql = "UPDATE users SET age = 31, ssn = '987654321' WHERE first_name = 'Janis' AND last_name = 'Joplin'";
 		let parsed = parser.parse(sql).unwrap();
 
-		let config = super::config::parse_config("../src/example-babel-config.xml");
-		let mut valueMap: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
+		let config = config::parse_config("../src/example-babel-config.xml");
+		let value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
 		let mut encrypt_vis = EncryptionVisitor {
 			config: &config,
-			valuemap: valueMap
+			valuemap: value_map
 		};
 		walk(&mut encrypt_vis, &parsed);
 

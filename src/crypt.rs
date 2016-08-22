@@ -7,11 +7,9 @@ use self::regex::Regex;
 extern crate notify;
 use self::notify::{RecommendedWatcher, Error, Watcher};
 
-use chrono::*;
 
 use std::io::prelude::*;
 use std::fs::File;
-use std::ops::Deref;
 use std::sync::mpsc::channel;
 
 // pub enum EncScheme {
