@@ -1170,9 +1170,9 @@ fn create_table_options() {
 	let parser = AnsiSQLParser {};
 
 	let sql = "CREATE TABLE foo (
-	      id BIGINT,
+	      id BIGINT AUTO_INCREMENT,
 	      a VARCHAR(50)
-	) Engine InnoDB DEFAULT CHARSET utf8 COMMENT 'Table Comment'";
+	) Engine InnoDB DEFAULT CHARSET utf8 COMMENT 'Table Comment' AUTO_INCREMENT 12345";
 
 	let parsed = parser.parse(sql).unwrap();
 
@@ -1185,7 +1185,7 @@ fn create_table_options() {
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("id"))),
 		            data_type: BigInt {display: None},
-		            qualifiers: None
+		            qualifiers: Some(vec![AutoIncrement])
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("a"))),
@@ -1197,7 +1197,8 @@ fn create_table_options() {
 			table_options: vec![
 		        TableOption::Engine(Box::new(SQLIdentifier(String::from("InnoDB")))),
 		        TableOption::Charset(Box::new(SQLIdentifier(String::from("utf8")))),
-		        TableOption::Comment(Box::new(SQLLiteral(LiteralString(1,String::from("Table Comment")))))
+		        TableOption::Comment(Box::new(SQLLiteral(LiteralString(1,String::from("Table Comment"))))),
+				TableOption::AutoIncrement(Box::new(SQLLiteral(LiteralLong(2,12345_u64))))
 		    ]
 		},
 		parsed

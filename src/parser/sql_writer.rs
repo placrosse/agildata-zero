@@ -420,6 +420,10 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
             TableOption::Engine(e) => {
                 builder.push_str(" ENGINE");
                 _write(builder, *e, literals);
+            },
+            TableOption::AutoIncrement(e) => {
+                builder.push_str(" AUTO_INCREMENT");
+                _write(builder, *e, literals);
             }
         }
     }

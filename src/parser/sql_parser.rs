@@ -105,7 +105,8 @@ pub enum ColumnQualifier {
 pub enum TableOption {
 	Engine(Box<SQLExpr>),
 	Charset(Box<SQLExpr>),
-	Comment(Box<SQLExpr>)
+	Comment(Box<SQLExpr>),
+	AutoIncrement(Box<SQLExpr>)
 }
 
 #[derive(Debug, PartialEq)]
@@ -349,7 +350,11 @@ impl AnsiSQLParser {
 				"COMMENT" => {
 					tokens.next();
 					Ok(Some(TableOption::Comment(Box::new(self.parse_expr(tokens, 0)?))))
-				}
+				},
+				"AUTO_INCREMENT" => {
+					tokens.next();
+					Ok(Some(TableOption::AutoIncrement(Box::new(self.parse_expr(tokens, 0)?))))
+				},
 				// "COLLATE"
 				_ => Err(String::from(format!("Unsupported Table Option {}", v)))
 			},
