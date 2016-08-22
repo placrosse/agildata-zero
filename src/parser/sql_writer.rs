@@ -262,8 +262,16 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
                 builder.push_str(" CHAR");
                 _write_optional_display(builder, length);
             },
+            DataType::NChar{length} => {
+                builder.push_str(" NCHAR");
+                _write_optional_display(builder, length);
+            },
             DataType::Varchar{length} => {
                 builder.push_str(" VARCHAR");
+                _write_optional_display(builder, length);
+            },
+            DataType::NVarchar{length} => {
+                builder.push_str(" NVARCHAR");
                 _write_optional_display(builder, length);
             },
             DataType::Binary{length} => {

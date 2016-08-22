@@ -744,7 +744,7 @@ fn create_character() {
 		    column_list: vec![
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("a"))),
-		            data_type: Char {length: None},
+		            data_type: NChar {length: None},
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
@@ -759,17 +759,17 @@ fn create_character() {
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("d"))),
-		            data_type: Char {length: None},
+		            data_type: NChar {length: None},
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("e"))),
-		            data_type: Char {length: Some(255)},
+		            data_type: NChar {length: Some(255)},
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("f"))),
-		            data_type: Char {length: None},
+		            data_type: NChar {length: None},
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
@@ -784,7 +784,7 @@ fn create_character() {
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("i"))),
-		            data_type: Varchar {length: Some(50)},
+		            data_type: NVarchar {length: Some(50)},
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
@@ -794,7 +794,7 @@ fn create_character() {
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("k"))),
-		            data_type: Varchar {length: Some(50)},
+		            data_type: NVarchar {length: Some(50)},
 		            qualifiers: None
 		        },
 		        SQLColumnDef {

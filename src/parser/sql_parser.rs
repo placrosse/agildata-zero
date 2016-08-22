@@ -53,7 +53,9 @@ pub enum DataType {
 	Time{fsp: Option<u32>},
 	Year{display: Option<u32>},
 	Char{length: Option<u32>},
+	NChar{length: Option<u32>},
 	Varchar{length: Option<u32>},
+	NVarchar{length: Option<u32>},
 	Binary{length: Option<u32>},
 	VarBinary{length: Option<u32>},
 	TinyBlob,
@@ -413,11 +415,29 @@ impl AnsiSQLParser {
 				"TIME" => Ok(DataType::Time{fsp: try!(self.parse_optional_display(tokens))}),
 				"YEAR" => Ok(DataType::Year{display: try!(self.parse_optional_display(tokens))}),
 				// TODO do something with NATIONAL, NCHAR, etc
-				"NATIONAL" => self.parse_data_type(tokens),
-				"CHAR" | "NCHAR" => {
+				"NATIONAL" => {
+					if self.consume_keyword(&"CHAR", tokens) {
+						Ok(DataType::NChar{length: try!(self.parse_optional_display(tokens))})
+					} else if self.consume_keyword(&"VARCHAR", tokens) {
+						Ok(DataType::NVarchar{length: try!(self.parse_optional_display(tokens))})
+					} else if self.consume_keyword(&"CHARACTER", tokens) {
+						if self.consume_keyword(&"VARYING", tokens) {
+							Ok(DataType::NVarchar{length: try!(self.parse_optional_display(tokens))})
+						} else {
+							Ok(DataType::NChar{length: try!(self.parse_optional_display(tokens))})
+						}
+					} else {
+						Err(format!("Expected NATIONAL CHAR|VARCHAR|CHARACTER [VARYING], received NATIONAL {:?}", tokens.peek()))
+					}
+				},
+				"CHAR" => {
 					let ret = Ok(DataType::Char{length: try!(self.parse_optional_display(tokens))});
 					// TODO do something with CHAR BYTE
 					self.consume_keyword("BYTE", tokens);
+					ret
+				},
+				"NCHAR" => {
+					let ret = Ok(DataType::NChar{length: try!(self.parse_optional_display(tokens))});
 					ret
 				},
 				"CHARACTER" => {
@@ -427,7 +447,8 @@ impl AnsiSQLParser {
 						Ok(DataType::Char{length: try!(self.parse_optional_display(tokens))})
 					}
 				},
-				"VARCHAR" | "NVARCHAR" => Ok(DataType::Varchar{length: try!(self.parse_optional_display(tokens))}),
+				"VARCHAR" => Ok(DataType::Varchar{length: try!(self.parse_optional_display(tokens))}),
+				"NVARCHAR" => Ok(DataType::NVarchar{length: try!(self.parse_optional_display(tokens))}),
 				"BINARY" => Ok(DataType::Binary{length: try!(self.parse_optional_display(tokens))}),
 				"VARBINARY" => Ok(DataType::VarBinary{length: try!(self.parse_optional_display(tokens))}),
 				"TINYBLOB" => Ok(DataType::TinyBlob),
