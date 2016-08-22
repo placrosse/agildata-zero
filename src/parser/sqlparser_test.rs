@@ -611,7 +611,8 @@ fn create_numeric() {
 					data_type: Double { precision: Some(10), scale: Some(2) },
 					qualifiers: None
 				}
-			]
+			],
+			keys: vec![]
 		},
 		parsed
 	);
@@ -693,7 +694,8 @@ fn create_temporal() {
 		            data_type: Year {display: Some(4)},
 					qualifiers: None
 		        }
-		    ]
+		    ],
+			keys: vec![]
 		},
 		parsed
 	);
@@ -906,7 +908,8 @@ fn create_character() {
 		            data_type: CharByte {length: Some(50)},
 		            qualifiers: None
 		        }
-		    ]
+		    ],
+			keys: vec![]
 		},
 		parsed
 	);
@@ -990,10 +993,42 @@ fn create_column_qualifiers() {
 		                ]
 		            )
 		        }
-		    ]
+		    ],
+			keys: vec![]
 		},
 		parsed
 	);
+
+	println!("{:#?}", parsed);
+
+	let rewritten = sql_writer::write(parsed, &HashMap::new());
+
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {}", rewritten);
+}
+
+#[test]
+fn create_tail_keys() {
+	let parser = AnsiSQLParser {};
+
+	let sql = "CREATE TABLE foo (
+	      id BIGINT AUTO_INCREMENT,
+	      a VARCHAR(50) NOT NULL,
+	      b TIMESTAMP NOT NULL,
+	      PRIMARY KEY (id),
+	      UNIQUE KEY keyName1 (id, b),
+	      KEY keyName2 (b),
+	      FULLTEXT KEY keyName (a),
+	      FOREIGN KEY fkeyName (a) REFERENCES bar(id)
+  	)";
+
+	let parsed = parser.parse(sql).unwrap();
+
+	// assert_eq!(
+	// 	None,
+	// 	parsed
+	// );
 
 	println!("{:#?}", parsed);
 

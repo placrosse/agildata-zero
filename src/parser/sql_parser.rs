@@ -31,8 +31,17 @@ pub enum SQLExpr {
 	},
 	SQLUnion{left: Box<SQLExpr>, union_type: SQLUnionType, right: Box<SQLExpr>},
 	SQLJoin{left: Box<SQLExpr>, join_type: SQLJoinType, right: Box<SQLExpr>, on_expr: Option<Box<SQLExpr>>},
-	SQLCreateTable{table: Box<SQLExpr>, column_list: Vec<SQLExpr>},
+	SQLCreateTable{table: Box<SQLExpr>, column_list: Vec<SQLExpr>, keys: Vec<SQLKeyDef>},
 	SQLColumnDef{column: Box<SQLExpr>, data_type: DataType, qualifiers: Option<Vec<ColumnQualifier>>}
+}
+
+#[derive(Debug, PartialEq)]
+pub enum SQLKeyDef {
+	Primary{name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>},
+	Unique{name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>},
+	Foreign{name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>, reference_table: Box<SQLExpr>, reference_columns: Vec<SQLExpr>},
+	FullText{name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>},
+	Index{name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>}
 }
 
 #[derive(Debug, PartialEq)]
@@ -264,18 +273,100 @@ impl AnsiSQLParser {
 			self.consume_punctuator("(", tokens);
 
 			let mut columns: Vec<SQLExpr> = Vec::new();
+			let mut keys: Vec<SQLKeyDef> = Vec::new();
+
 			columns.push(try!(self.parse_column_def(tokens)));
 			while self.consume_punctuator(",", tokens) {
-				columns.push(try!(self.parse_column_def(tokens)));
+				match tokens.peek().cloned() {
+					Some(Token::Keyword(v)) => match &v as &str {
+						"PRIMARY" | "KEY" | "UNIQUE" | "FULLTEXT" | "FOREIGN" => keys.push(try!(self.parse_key_def(tokens))),
+						_ => columns.push(try!(self.parse_column_def(tokens)))
+					},
+					_ => columns.push(try!(self.parse_column_def(tokens)))
+				}
 			}
 
-			self.consume_punctuator(")", tokens);
+			if !self.consume_punctuator(")", tokens) {
+				return Err(String::from(format!("Expected token ) received token {:?}", tokens.peek())))
+			}
 
-			Ok(SQLExpr::SQLCreateTable{table: Box::new(table), column_list: columns })
+			Ok(SQLExpr::SQLCreateTable{table: Box::new(table), column_list: columns, keys: keys })
 		} else {
 			Err(String::from(format!("Unexpected token after CREATE {:?}", tokens.peek())))
 		}
 
+	}
+
+	fn parse_key_def(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLKeyDef, String> {
+		println!("parse_key_def()");
+		let t = tokens.next();
+		match t {
+			Some(Token::Keyword(v)) => match &v as &str {
+				"PRIMARY" => {
+					self.consume_keyword("KEY", tokens);
+					Ok(SQLKeyDef::Primary{
+						name: self.parse_optional_key_name(tokens)?,
+						columns: self.parse_key_column_list(tokens)?
+					})
+				},
+				"UNIQUE" => {
+					self.consume_keyword("KEY", tokens);
+					Ok(SQLKeyDef::Unique{
+						name: self.parse_optional_key_name(tokens)?,
+						columns: self.parse_key_column_list(tokens)?
+					})
+				},
+				"FOREIGN" => {
+					self.consume_keyword("KEY", tokens);
+					let name = self.parse_optional_key_name(tokens)?;
+					let columns = self.parse_key_column_list(tokens)?;
+					self.consume_keyword("REFERENCES", tokens);
+
+					Ok(SQLKeyDef::Foreign{
+						name: name,
+						columns: columns,
+						reference_table: Box::new(self.parse_identifier(tokens)?),
+						reference_columns: self.parse_key_column_list(tokens)?
+					})
+				},
+				"FULLTEXT" => {
+					self.consume_keyword("KEY", tokens);
+					Ok(SQLKeyDef::FullText{
+						name: self.parse_optional_key_name(tokens)?,
+						columns: self.parse_key_column_list(tokens)?
+					})
+				},
+				"KEY" => {
+					self.consume_keyword("KEY", tokens);
+					Ok(SQLKeyDef::Index{
+						name: self.parse_optional_key_name(tokens)?,
+						columns: self.parse_key_column_list(tokens)?
+					})
+				},
+				_ => Err(String::from(format!("Unsupported key definition prefix {}", v)))
+			},
+			_ => Err(String::from(format!("Expected key definition received token {:?}", t)))
+		}
+	}
+
+	fn parse_optional_key_name(&self, tokens: &mut Peekable<Tokens>) -> Result<Option<Box<SQLExpr>>, String> {
+		match tokens.peek().cloned() {
+			Some(Token::Identifier(_)) => Ok(Some(Box::new(self.parse_identifier(tokens)?))),
+			_ => Ok(None)
+		}
+	}
+
+	fn parse_key_column_list(&self, tokens: &mut Peekable<Tokens>) -> Result<Vec<SQLExpr>, String> {
+		self.consume_punctuator("(", tokens);
+
+		let mut columns: Vec<SQLExpr> = Vec::new();
+		columns.push(self.parse_identifier(tokens)?);
+		while self.consume_punctuator(",", tokens) {
+			columns.push(self.parse_identifier(tokens)?);
+		}
+		self.consume_punctuator(")", tokens);
+
+		Ok(columns)
 	}
 
 	fn parse_column_def(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr, String> {

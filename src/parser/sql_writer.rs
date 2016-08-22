@@ -1,4 +1,4 @@
-use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator, SQLUnionType, SQLJoinType, DataType, ColumnQualifier};
+use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator, SQLUnionType, SQLJoinType, DataType, ColumnQualifier, SQLKeyDef};
 use std::fmt::Write;
 use std::collections::HashMap;
 
@@ -53,7 +53,7 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
                 _write(builder, *selection.unwrap(), literals);
             }
         },
-        SQLExpr::SQLCreateTable{table, column_list} => {
+        SQLExpr::SQLCreateTable{table, column_list, keys} => {
             builder.push_str("CREATE TABLE");
             _write(builder, *table, literals);
 
@@ -62,6 +62,12 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
             for c in column_list {
                 builder.push_str(sep);
                 _write(builder, c, literals);
+                sep = ", ";
+            }
+
+            for k in keys {
+                builder.push_str(sep);
+                _write_key_definition(builder, k, literals);
                 sep = ", ";
             }
 
@@ -331,6 +337,61 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
             // _ => panic!("Unsupported data type {:?}", data_type)
 
         }
+    }
+
+    fn _write_key_definition(builder:  &mut String, key: SQLKeyDef, literals: &HashMap<u32, Option<Vec<u8>>>) {
+        match key {
+            SQLKeyDef::Primary{name, columns} => {
+                builder.push_str(&" PRIMARY KEY");
+                if name.is_some() {
+                    _write(builder, *name.unwrap(), literals);
+                }
+                _write_key_column_list(builder, columns, literals);
+            },
+            SQLKeyDef::Unique{name, columns} => {
+                builder.push_str(&" UNIQUE KEY");
+                if name.is_some() {
+                    _write(builder, *name.unwrap(), literals);
+                }
+                _write_key_column_list(builder, columns, literals);
+            },
+            SQLKeyDef::FullText{name, columns} => {
+                builder.push_str(&" FULLTEXT KEY");
+                if name.is_some() {
+                    _write(builder, *name.unwrap(), literals);
+                }
+                _write_key_column_list(builder, columns, literals);
+            },
+            SQLKeyDef::Index{name, columns} => {
+                builder.push_str(&" KEY");
+                if name.is_some() {
+                    _write(builder, *name.unwrap(), literals);
+                }
+                _write_key_column_list(builder, columns, literals);
+            },
+            SQLKeyDef::Foreign{name, columns, reference_table, reference_columns} => {
+                builder.push_str(&" FOREIGN KEY");
+                if name.is_some() {
+                    _write(builder, *name.unwrap(), literals);
+                }
+                _write_key_column_list(builder, columns, literals);
+
+                builder.push_str(&" REFERENCES");
+                _write(builder, *reference_table, literals);
+                _write_key_column_list(builder, reference_columns, literals);
+            }
+        }
+    }
+
+    fn _write_key_column_list(builder: &mut String, list: Vec<SQLExpr>, literals: &HashMap<u32, Option<Vec<u8>>>) {
+        builder.push_str(&" (");
+        let mut sep = "";
+        for c in list {
+            builder.push_str(sep);
+            _write(builder, c, literals);
+            sep = ", ";
+        }
+        builder.push_str(&")");
     }
 
     fn _write_column_qualifier(builder:  &mut String, q: ColumnQualifier, literals: &HashMap<u32, Option<Vec<u8>>>) {
