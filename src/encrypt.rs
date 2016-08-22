@@ -36,14 +36,14 @@ pub trait Encrypt {
 }
 
 pub trait Decrypt {
-	fn decrypt(value: Vec<u8>, scheme: &EncryptionType) -> Self;
+	fn decrypt(value: &[u8], scheme: &EncryptionType) -> Self;
 }
 
 impl Decrypt for u64 {
-	fn decrypt(value: Vec<u8>, scheme: &EncryptionType) -> u64 {
+	fn decrypt(value: &[u8], scheme: &EncryptionType) -> u64 {
 		match scheme {
 			&EncryptionType::AES => {
-				let mut decrypted = Cursor::new(decrypt(&get_key(), &value).unwrap());
+				let mut decrypted = Cursor::new(decrypt(&get_key(), value).unwrap());
 				decrypted.read_u64::<BigEndian>().unwrap()
 			},
 			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
@@ -53,10 +53,10 @@ impl Decrypt for u64 {
 }
 
 impl Decrypt for String {
-	fn decrypt(value: Vec<u8>, scheme: &EncryptionType) -> String {
+	fn decrypt(value: &[u8], scheme: &EncryptionType) -> String {
 		match scheme {
 			&EncryptionType::AES => {
-				let decrypted = decrypt(&get_key(), &value);
+				let decrypted = decrypt(&get_key(), value);
 				String::from_utf8(decrypted.unwrap()).expect("Invalid UTF-8")
 			},
 			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
