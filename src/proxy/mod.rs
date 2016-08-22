@@ -34,9 +34,9 @@ struct MySQLPacket {
 
 impl MySQLPacket {
 
-    // fn sequence_id(&self) -> u8 {
-    //     self.header[3]
-    // }
+    fn sequence_id(&self) -> u8 {
+        self.header[3]
+    }
 
     fn packet_type(&self) -> u8 {
         match self.payload.len() {
@@ -51,12 +51,16 @@ fn parse_string(bytes: &[u8]) -> String {
     String::from_utf8(bytes.to_vec()).expect("Invalid UTF-8")
 }
 
-struct MySQLPacketReader {
-    payload: Vec<u8>,
+struct MySQLPacketReader<'a> {
+    payload: &'a [u8],
     pos: usize
 }
 
-impl MySQLPacketReader {
+impl<'a> MySQLPacketReader<'a> {
+
+    fn new(packet: &'a MySQLPacket) -> Self {
+        MySQLPacketReader { payload: &packet.payload, pos: 0 }
+    }
 
     fn read_lenenc_str(&mut self) -> Option<String> {
         println!("read_lenenc_str BEGIN pos={}", self.pos);
@@ -484,7 +488,7 @@ impl<'a> Connection<'a> {
                     write_buf.extend_from_slice(&field_packet.header);
                     write_buf.extend_from_slice(&field_packet.payload);
 
-                    let mut r = MySQLPacketReader { payload: field_packet.payload, pos: 0 };
+                    let mut r = MySQLPacketReader::new(&field_packet);
 
                     //TODO: assumes these values can never be NULL
                     let catalog = r.read_lenenc_str().unwrap();
@@ -543,7 +547,7 @@ impl<'a> Connection<'a> {
                             println!("Original Payload: {:?}", &row_packet.payload);
 
                             //TODO do decryption here if required
-                            let mut r = MySQLPacketReader { payload: row_packet.payload, pos: 0 };
+                            let mut r = MySQLPacketReader::new(&row_packet);
 
                             let mut wtr: Vec<u8> = vec![];
 
@@ -602,7 +606,7 @@ impl<'a> Connection<'a> {
                             }
 
                             let mut new_header: Vec<u8> = vec![];
-                            let sequence_id = row_packet.header[3];
+                            let sequence_id = row_packet.sequence_id();
                             new_header.write_u32::<LittleEndian>(wtr.len() as u32).unwrap();
                             new_header.pop();
                             new_header.push(sequence_id);
