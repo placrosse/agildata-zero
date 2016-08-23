@@ -1,3 +1,6 @@
+use std::net;
+use std::io::{Read, Write};
+
 #[derive(Debug)]
 pub struct MySQLPacket {
     pub bytes: Vec<u8>
@@ -68,4 +71,37 @@ impl<'a> MySQLPacketReader<'a> {
         }
     }
 
+}
+
+pub trait MySQLConnection {
+    fn read_packet(&mut self) -> Result<MySQLPacket, &'static str>;
+}
+
+impl MySQLConnection for net::TcpStream {
+
+    fn read_packet(&mut self) -> Result<MySQLPacket, &'static str> {
+
+        println!("read_packet() BEGIN");
+
+        // read header
+        let mut header_vec = vec![0_u8; 4];
+        match self.read(&mut header_vec) {
+            Ok(0) => Ok(MySQLPacket { bytes: vec![] }),
+            Ok(n) => {
+                assert!(n==4);
+
+                let payload_len = MySQLPacket::parse_packet_length(&header_vec);
+
+                // read payload
+                let mut payload_vec = vec![0_u8; payload_len];
+                assert!(payload_len == self.read(&mut payload_vec).unwrap());
+                header_vec.extend_from_slice(&payload_vec);
+
+                println!("read_packet() END");
+
+                Ok(MySQLPacket { bytes: header_vec })
+            },
+            Err(_) => Err("oops")
+        }
+    }
 }
