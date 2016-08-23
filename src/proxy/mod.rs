@@ -15,7 +15,7 @@ use std::str::FromStr;
 
 // use parser::*;
 use parser::sql_parser::{AnsiSQLParser, SQLExpr};
-use parser::sql_writer;
+use parser::sql_writer::*;
 
 use config::{Config, TConfig, ColumnConfig};
 
@@ -248,9 +248,10 @@ impl<'a> Connection<'a> {
                                         Some(ref expr) => encryption_visitor::walk(&mut encrypt_vis, expr),
                                         None => {}
                                     }
-                                    // encryption_visitor::walk(&mut encrypt_vis, &parsed.unwrap());
 
-                                    let rewritten = sql_writer::write(parsed.unwrap(), encrypt_vis.get_value_map());
+                                    let writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
+
+                                    let rewritten = writer.write(parsed.unwrap());
                                     println!("REWRITTEN {}", rewritten);
 
                                     // write packed with new query

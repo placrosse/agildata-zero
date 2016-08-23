@@ -15,8 +15,8 @@ pub trait SqlWriter {
     fn write(&self, node:SQLExpr) -> String;
 }
 
-struct LiteralReplacingWriter<'a> {
-    literals: &'a HashMap<u32, Option<Vec<u8>>>
+pub struct LiteralReplacingWriter<'a> {
+    pub literals: &'a HashMap<u32, Option<Vec<u8>>>
 }
 
 impl<'a> SqlWriter for LiteralReplacingWriter<'a> {
