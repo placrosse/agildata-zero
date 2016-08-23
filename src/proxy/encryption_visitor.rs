@@ -198,6 +198,7 @@ mod tests {
     use std::collections::HashMap;
 	use parser::sql_parser::AnsiSQLParser;
 	use parser::sql_writer::*;
+	use super::super::writers::*;
     use config;
 
 	#[test]
@@ -250,9 +251,11 @@ mod tests {
 
 		println!("HERE {:#?}", encrypt_vis);
 
-		let writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
+		let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
 
-		let rewritten = writer.write(parsed);
+		let writer = SQLWriter::new(vec![&lit_writer]);
+
+		let rewritten = writer.write(&parsed).unwrap();
 
 		println!("Rewritten: {}", rewritten);
 

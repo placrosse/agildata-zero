@@ -9,7 +9,6 @@ use super::sql_parser::ColumnQualifier::*;
 use super::sql_parser::SQLKeyDef::*;
 use super::sql_parser::TableOption;
 use super::sql_writer::*;
-use super::sql_writer_new::*;
 use std::collections::HashMap;
 
 #[test]
@@ -924,10 +923,8 @@ fn create_character() {
 
 	println!("{:#?}", parsed);
 
-	let writer = LiteralReplacingWriter{literals: &HashMap::new()};
-
-	let rewritten = writer.write(parsed);
-
+	let writer = SQLWriter::default();
+	let rewritten = writer.write(&parsed).unwrap();
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
 	println!("Rewritten: {}", rewritten);
