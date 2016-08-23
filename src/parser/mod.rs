@@ -10,4 +10,5 @@ pub mod sql_writer;
 
 pub mod visitor;
 
+#[cfg(test)]
 mod sqlparser_test;
