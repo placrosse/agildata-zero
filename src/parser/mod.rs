@@ -8,6 +8,8 @@ pub mod sql_parser;
 
 pub mod sql_writer;
 
+pub mod sql_writer_new;
+
 pub mod visitor;
 
 #[cfg(test)]

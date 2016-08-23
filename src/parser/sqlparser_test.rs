@@ -9,6 +9,7 @@ use super::sql_parser::ColumnQualifier::*;
 use super::sql_parser::SQLKeyDef::*;
 use super::sql_parser::TableOption;
 use super::sql_writer::*;
+use super::sql_writer_new::*;
 use std::collections::HashMap;
 
 #[test]
@@ -143,10 +144,9 @@ fn sqlparser() {
 
 	println!("{:#?}", parser.parse(sql));
 
-    let writer = LiteralReplacingWriter{literals: &HashMap::new()};
-	let rewritten = writer.write(parsed);
-
-	//assert_eq!(rewritten, sql);
+	let writer = SQLWriter::default();
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
 	println!("Rewritten: {:?}", rewritten);
 
@@ -227,10 +227,9 @@ fn sql_join() {
 
 	println!("{:#?}", parser.parse(sql));
 
-	let writer = LiteralReplacingWriter{literals: &HashMap::new()};
-	let rewritten = writer.write(parsed);
-
-	//assert_eq!(rewritten, sql);
+	let writer = SQLWriter::default();
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
 	println!("Rewritten: {:?}", rewritten);
 }
@@ -317,9 +316,9 @@ fn nasty() {
 
 	println!("{:#?}", parser.parse(sql));
 
-	let writer = LiteralReplacingWriter{literals: &HashMap::new()};
-
-	let rewritten = writer.write(parsed);
+	let writer = SQLWriter::default();
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
 	println!("Rewritten: {:?}", rewritten);
 }
@@ -354,11 +353,10 @@ fn insert() {
 
 	println!("{:#?}", parser.parse(sql));
 
-	let writer = LiteralReplacingWriter{literals: &HashMap::new()};
-
-	let rewritten = writer.write(parsed);
-
+	let writer = SQLWriter::default();
+	let rewritten = writer.write(&parsed).unwrap();
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
 	println!("Rewritten: {:?}", rewritten);
 
 }
@@ -382,11 +380,10 @@ fn select_wildcard() {
 
 	println!("{:#?}", parser.parse(sql));
 
-	let writer = LiteralReplacingWriter{literals: &HashMap::new()};
-
-	let rewritten = writer.write(parsed);
-
+	let writer = SQLWriter::default();
+	let rewritten = writer.write(&parsed).unwrap();
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
 	println!("Rewritten: {:?}", rewritten);
 
 }
@@ -426,10 +423,8 @@ fn update() {
 
 	println!("{:#?}", parser.parse(sql));
 
-	let writer = LiteralReplacingWriter{literals: &HashMap::new()};
-
-	let rewritten = writer.write(parsed);
-
+	let writer = SQLWriter::default();
+	let rewritten = writer.write(&parsed).unwrap();
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
 	println!("Rewritten: {}", rewritten);
@@ -630,10 +625,8 @@ fn create_numeric() {
 
 	println!("{:#?}", parser.parse(sql));
 
-	let writer = LiteralReplacingWriter{literals: &HashMap::new()};
-
-	let rewritten = writer.write(parsed);
-
+	let writer = SQLWriter::default();
+	let rewritten = writer.write(&parsed).unwrap();
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
 	println!("Rewritten: {}", rewritten);
@@ -716,10 +709,8 @@ fn create_temporal() {
 
 	println!("{:#?}", parsed);
 
-	let writer = LiteralReplacingWriter{literals: &HashMap::new()};
-
-	let rewritten = writer.write(parsed);
-
+	let writer = SQLWriter::default();
+	let rewritten = writer.write(&parsed).unwrap();
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
 	println!("Rewritten: {}", rewritten);
@@ -1021,10 +1012,8 @@ fn create_column_qualifiers() {
 
 	println!("{:#?}", parsed);
 
-	let writer = LiteralReplacingWriter{literals: &HashMap::new()};
-
-	let rewritten = writer.write(parsed);
-
+	let writer = SQLWriter::default();
+	let rewritten = writer.write(&parsed).unwrap();
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
 	println!("Rewritten: {}", rewritten);
@@ -1104,10 +1093,8 @@ fn create_tail_keys() {
 
 	println!("{:#?}", parsed);
 
-	let writer = LiteralReplacingWriter{literals: &HashMap::new()};
-
-	let rewritten = writer.write(parsed);
-
+	let writer = SQLWriter::default();
+	let rewritten = writer.write(&parsed).unwrap();
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
 	println!("Rewritten: {}", rewritten);
@@ -1176,10 +1163,8 @@ fn create_tail_constraints() {
 		parsed
 	);
 
-	let writer = LiteralReplacingWriter{literals: &HashMap::new()};
-
-	let rewritten = writer.write(parsed);
-
+	let writer = SQLWriter::default();
+	let rewritten = writer.write(&parsed).unwrap();
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
 	println!("Rewritten: {}", rewritten);
@@ -1224,10 +1209,8 @@ fn create_table_options() {
 		parsed
 	);
 
-	let writer = LiteralReplacingWriter{literals: &HashMap::new()};
-
-	let rewritten = writer.write(parsed);
-
+	let writer = SQLWriter::default();
+	let rewritten = writer.write(&parsed).unwrap();
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
 	println!("Rewritten: {}", rewritten);
@@ -1248,6 +1231,10 @@ fn format_sql(sql: &str) -> String {
 		.replace("NATIONAL CHAR", "NCHAR")
 		.replace("NATIONAL VARCHAR", "NVARCHAR")
 		.replace("CHARACTER", "CHAR")
+
+		// optional keywords
+		.replace("ASC", "")
+		.replace("INNER JOIN", "JOIN")
 
 		// strip whitespace
 		.replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "")
