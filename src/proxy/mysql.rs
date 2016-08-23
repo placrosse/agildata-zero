@@ -1,7 +1,5 @@
 use std::net;
 use std::io::{Read, Write, Cursor};
-use std::mem;
-use std::str::FromStr;
 use std::collections::HashMap;
 
 use byteorder::*;
@@ -11,10 +9,8 @@ use parser::sql_writer;
 
 use mio::{self, TryRead, TryWrite};
 use mio::tcp::*;
-use mio::util::Slab;
 
-
-use bytes::{Buf, Take};
+use bytes::{Take};
 
 use config::{Config, TConfig, ColumnConfig};
 

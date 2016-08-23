@@ -31,7 +31,6 @@ mod config;
 mod protocol;
 
 mod proxy;
-use proxy::*;
 
 mod parser;
 

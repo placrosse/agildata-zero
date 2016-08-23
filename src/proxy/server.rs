@@ -1,10 +1,7 @@
 
-use byteorder::*;
-
-use mio::{self, TryRead, TryWrite};
+use mio::{self};
 use mio::tcp::*;
 
-use std::io::{Read, Write};
 use mio::util::Slab;
 use bytes::{Buf, Take};
 use std::mem;
@@ -13,12 +10,9 @@ use std::str::FromStr;
 
 const SERVER: mio::Token = mio::Token(0);
 
-use config::{Config, TConfig, ColumnConfig};
+use config::{Config, TConfig};
 
-use std::collections::HashMap;
-use std::net;
-
-use super::mysql::{MySQLPacket, MySQLPacketReader, MySQLConnection, MySQLConnectionHandler};
+use super::mysql::MySQLConnectionHandler;
 
 pub struct Proxy<'a> {
     server: TcpListener,
