@@ -82,7 +82,7 @@ fn main() {
     info!("{} is up", app_ver);
 
     // create proxy
-    Proxy::run(&config);
+    proxy::server::Proxy::run(&config);
 
     while !chk_stop() { x_sleep(); }
 
