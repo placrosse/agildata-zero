@@ -47,15 +47,15 @@ impl MySQLPacket {
 
 }
 
-pub struct MySQLPacketReader<'a> {
+pub struct MySQLPacketParser<'a> {
     payload: &'a [u8],
     pos: usize
 }
 
-impl<'a> MySQLPacketReader<'a> {
+impl<'a> MySQLPacketParser<'a> {
 
     pub fn new(packet: &'a MySQLPacket) -> Self {
-        MySQLPacketReader { payload: &packet.bytes, pos: 4 }
+        MySQLPacketParser { payload: &packet.bytes, pos: 4 }
     }
 
     /// read the length of a length-encoded field
@@ -374,7 +374,7 @@ impl<'a> MySQLConnectionHandler <'a> {
                     let field_packet = self.remote.read_packet().unwrap();
                     write_buf.extend_from_slice(&field_packet.bytes);
 
-                    let mut r = MySQLPacketReader::new(&field_packet);
+                    let mut r = MySQLPacketParser::new(&field_packet);
 
                     //TODO: assumes these values can never be NULL
                     let catalog = r.read_string().unwrap();
@@ -429,7 +429,7 @@ impl<'a> MySQLConnectionHandler <'a> {
                             // skip all of this processing
 
                             //TODO do decryption here if required
-                            let mut r = MySQLPacketReader::new(&row_packet);
+                            let mut r = MySQLPacketParser::new(&row_packet);
 
                             let mut wtr: Vec<u8> = vec![];
 
