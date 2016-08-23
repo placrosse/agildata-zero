@@ -31,8 +31,22 @@ pub enum SQLExpr {
 	},
 	SQLUnion{left: Box<SQLExpr>, union_type: SQLUnionType, right: Box<SQLExpr>},
 	SQLJoin{left: Box<SQLExpr>, join_type: SQLJoinType, right: Box<SQLExpr>, on_expr: Option<Box<SQLExpr>>},
-	SQLCreateTable{table: Box<SQLExpr>, column_list: Vec<SQLExpr>},
+	SQLCreateTable{
+		table: Box<SQLExpr>,
+		column_list: Vec<SQLExpr>,
+		keys: Vec<SQLKeyDef>,
+		table_options: Vec<TableOption>
+	},
 	SQLColumnDef{column: Box<SQLExpr>, data_type: DataType, qualifiers: Option<Vec<ColumnQualifier>>}
+}
+
+#[derive(Debug, PartialEq)]
+pub enum SQLKeyDef {
+	Primary{symbol: Option<Box<SQLExpr>>, name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>},
+	Unique{symbol: Option<Box<SQLExpr>>, name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>},
+	Foreign{symbol: Option<Box<SQLExpr>>, name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>, reference_table: Box<SQLExpr>, reference_columns: Vec<SQLExpr>},
+	FullText{name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>},
+	Index{name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>}
 }
 
 #[derive(Debug, PartialEq)]
@@ -53,7 +67,10 @@ pub enum DataType {
 	Time{fsp: Option<u32>},
 	Year{display: Option<u32>},
 	Char{length: Option<u32>},
+	NChar{length: Option<u32>},
+	CharByte{length: Option<u32>},
 	Varchar{length: Option<u32>},
+	NVarchar{length: Option<u32>},
 	Binary{length: Option<u32>},
 	VarBinary{length: Option<u32>},
 	TinyBlob,
@@ -70,18 +87,26 @@ pub enum DataType {
 
 #[derive(Debug, PartialEq)]
 pub enum ColumnQualifier {
-	// CharacterSet(Box<SQLExpr>),
-	// Collate(Box<SQLExpr>),
-	// Default(Box<SQLExpr>),
-	// Signed,
-	// Unsigned,
-	// Null,
-	// NotNull,
-	// AutoIncrement,
-	// PrimaryKey,
-	// UniqueKey,
-	// OnUpdate(Box<SQLExpr>),
-	// Comment(Box<SQLExpr>)
+	CharacterSet(Box<SQLExpr>),
+	Collate(Box<SQLExpr>),
+	Default(Box<SQLExpr>),
+	Signed,
+	Unsigned,
+	Null,
+	NotNull,
+	AutoIncrement,
+	PrimaryKey,
+	UniqueKey,
+	OnUpdate(Box<SQLExpr>),
+	Comment(Box<SQLExpr>)
+}
+
+#[derive(Debug, PartialEq)]
+pub enum TableOption {
+	Engine(Box<SQLExpr>),
+	Charset(Box<SQLExpr>),
+	Comment(Box<SQLExpr>),
+	AutoIncrement(Box<SQLExpr>)
 }
 
 #[derive(Debug, PartialEq)]
@@ -261,19 +286,163 @@ impl AnsiSQLParser {
 			self.consume_punctuator("(", tokens);
 
 			let mut columns: Vec<SQLExpr> = Vec::new();
+			let mut keys: Vec<SQLKeyDef> = Vec::new();
+
 			columns.push(try!(self.parse_column_def(tokens)));
 			while self.consume_punctuator(",", tokens) {
-				columns.push(try!(self.parse_column_def(tokens)));
+				match tokens.peek().cloned() {
+					Some(Token::Keyword(v)) => match &v as &str {
+						"PRIMARY" | "KEY" | "UNIQUE" | "FULLTEXT" | "FOREIGN" | "CONSTRAINT" => keys.push(try!(self.parse_key_def(tokens))),
+						_ => columns.push(try!(self.parse_column_def(tokens)))
+					},
+					_ => columns.push(try!(self.parse_column_def(tokens)))
+				}
 			}
 
-			//let column_list = try!(self.parse_expr_list(tokens));
-			self.consume_punctuator(")", tokens);
+			if !self.consume_punctuator(")", tokens) {
+				return Err(String::from(format!("Expected token ) received token {:?}", tokens.peek())))
+			}
 
-			Ok(SQLExpr::SQLCreateTable{table: Box::new(table), column_list: columns })
+			let mut table_options = self.parse_table_options(tokens)?;
+
+			match tokens.peek() {
+				None => Ok(SQLExpr::SQLCreateTable{
+					table: Box::new(table),
+					column_list: columns,
+					keys: keys,
+					table_options: table_options
+				 }),
+				_ => Err(String::from(format!("Expected end of statement, received {:?}", tokens.peek())))
+			}
+
 		} else {
 			Err(String::from(format!("Unexpected token after CREATE {:?}", tokens.peek())))
 		}
 
+	}
+
+	fn parse_table_options(&self, tokens: &mut Peekable<Tokens>) -> Result<Vec<TableOption>, String> {
+		let mut ret: Vec<TableOption> = Vec::new();
+
+		while let Some(o) = self.parse_table_option(tokens)? {
+			ret.push(o);
+		}
+		Ok(ret)
+	}
+
+	fn parse_table_option(&self, tokens: &mut Peekable<Tokens>) -> Result<Option<TableOption>, String> {
+		match tokens.peek().cloned() {
+			Some(Token::Keyword(v)) | Some(Token::Identifier(v)) => match &v.to_uppercase() as &str {
+				"ENGINE" => {
+					tokens.next();
+					self.consume_operator("=", tokens);
+					Ok(Some(TableOption::Engine(Box::new(self.parse_expr(tokens, 0)?))))
+				},
+				"DEFAULT" => { // [DEFAULT] [CHARACTER SET | COLLATE]
+					tokens.next();
+					self.parse_table_option(tokens)
+				},
+				"CHARACTER" | "CHARSET" => {
+					tokens.next();
+					self.consume_keyword("SET", tokens);
+					Ok(Some(TableOption::Charset(Box::new(self.parse_expr(tokens, 0)?))))
+				},
+				"COMMENT" => {
+					tokens.next();
+					Ok(Some(TableOption::Comment(Box::new(self.parse_expr(tokens, 0)?))))
+				},
+				"AUTO_INCREMENT" => {
+					tokens.next();
+					Ok(Some(TableOption::AutoIncrement(Box::new(self.parse_expr(tokens, 0)?))))
+				},
+				// "COLLATE"
+				_ => Err(String::from(format!("Unsupported Table Option {}", v)))
+			},
+			_ => Ok(None)
+		}
+	}
+
+	fn parse_key_def(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLKeyDef, String> {
+		println!("parse_key_def()");
+
+		let symbol = if self.consume_keyword("CONSTRAINT", tokens) {
+			Some(Box::new(self.parse_identifier(tokens)?))
+		} else {
+			None
+		};
+
+		let t = tokens.next();
+
+		match t {
+			Some(Token::Keyword(v)) => match &v as &str {
+				"PRIMARY" => {
+					self.consume_keyword("KEY", tokens);
+					Ok(SQLKeyDef::Primary{
+						symbol: symbol,
+						name: self.parse_optional_key_name(tokens)?,
+						columns: self.parse_key_column_list(tokens)?
+					})
+				},
+				"UNIQUE" => {
+					self.consume_keyword("KEY", tokens);
+					Ok(SQLKeyDef::Unique{
+						symbol: symbol,
+						name: self.parse_optional_key_name(tokens)?,
+						columns: self.parse_key_column_list(tokens)?
+					})
+				},
+				"FOREIGN" => {
+					self.consume_keyword("KEY", tokens);
+					let name = self.parse_optional_key_name(tokens)?;
+					let columns = self.parse_key_column_list(tokens)?;
+					self.consume_keyword("REFERENCES", tokens);
+
+					Ok(SQLKeyDef::Foreign{
+						symbol: symbol,
+						name: name,
+						columns: columns,
+						reference_table: Box::new(self.parse_identifier(tokens)?),
+						reference_columns: self.parse_key_column_list(tokens)?
+					})
+				},
+				"FULLTEXT" => {
+					self.consume_keyword("KEY", tokens);
+					Ok(SQLKeyDef::FullText{
+						name: self.parse_optional_key_name(tokens)?,
+						columns: self.parse_key_column_list(tokens)?
+					})
+				},
+				"KEY" => {
+					self.consume_keyword("KEY", tokens);
+					Ok(SQLKeyDef::Index{
+						name: self.parse_optional_key_name(tokens)?,
+						columns: self.parse_key_column_list(tokens)?
+					})
+				},
+				_ => Err(String::from(format!("Unsupported key definition prefix {}", v)))
+			},
+			_ => Err(String::from(format!("Expected key definition received token {:?}", t)))
+		}
+	}
+
+	fn parse_optional_key_name(&self, tokens: &mut Peekable<Tokens>) -> Result<Option<Box<SQLExpr>>, String> {
+		match tokens.peek().cloned() {
+			Some(Token::Identifier(_)) => Ok(Some(Box::new(self.parse_identifier(tokens)?))),
+			_ => Ok(None)
+		}
+	}
+
+	fn parse_key_column_list(&self, tokens: &mut Peekable<Tokens>) -> Result<Vec<SQLExpr>, String> {
+		self.consume_punctuator("(", tokens);
+
+		let mut columns: Vec<SQLExpr> = Vec::new();
+		columns.push(self.parse_identifier(tokens)?);
+		while self.consume_punctuator(",", tokens) {
+			columns.push(self.parse_identifier(tokens)?);
+		}
+		self.consume_punctuator(")", tokens);
+
+		Ok(columns)
 	}
 
 	fn parse_column_def(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr, String> {
@@ -291,8 +460,92 @@ impl AnsiSQLParser {
 		Ok(SQLExpr::SQLColumnDef{column: Box::new(column), data_type: data_type, qualifiers: qualifiers})
 	}
 
-	fn parse_column_qualifiers(&self, _tokens: &mut Peekable<Tokens>) ->  Result<Option<Vec<ColumnQualifier>>, String> {
-		Ok(None)
+	fn parse_column_qualifiers(&self, tokens: &mut Peekable<Tokens>) ->  Result<Option<Vec<ColumnQualifier>>, String> {
+		let mut ret: Vec<ColumnQualifier> = Vec::new();
+
+		while let Some(cq) = try!(self.parse_column_qualifier(tokens)) {
+			ret.push(cq);
+		}
+
+		if ret.len() > 0 {
+			Ok(Some(ret))
+		} else {
+			Ok(None)
+		}
+	}
+
+	fn parse_column_qualifier(&self, tokens: &mut Peekable<Tokens>) ->  Result<Option<ColumnQualifier>, String> {
+		println!("parse_column_qualifier() {:?}", tokens.peek());
+		match tokens.peek().cloned() {
+			Some(Token::Keyword(v)) | Some(Token::Identifier(v)) => match &v.to_uppercase() as &str {
+				"NOT" => {
+					tokens.next();
+					if self.consume_keyword("NULL", tokens) {
+						Ok(Some(ColumnQualifier::NotNull))
+					} else {
+						Err(format!("Expected NOT NULL, received NOT {:?}", tokens.peek()))
+					}
+				},
+				"NULL" => {
+					tokens.next();
+					Ok(Some(ColumnQualifier::Null))
+				},
+				"AUTO_INCREMENT" => {
+					tokens.next();
+					Ok(Some(ColumnQualifier::AutoIncrement))
+				},
+				"PRIMARY" => {
+					tokens.next();
+					if self.consume_keyword("KEY", tokens) {
+						Ok(Some(ColumnQualifier::PrimaryKey))
+					} else {
+						Err(format!("Expected PRIMARY KEY, received PRIMARY {:?}", tokens.peek()))
+					}
+				},
+				"UNIQUE" => {
+					tokens.next();
+					Ok(Some(ColumnQualifier::UniqueKey))
+				},
+				"DEFAULT" => {
+					tokens.next();
+					Ok(Some(ColumnQualifier::Default(Box::new(try!(self.parse_expr(tokens, 0))))))
+				},
+				"CHARACTER" => {
+					tokens.next();
+					if self.consume_keyword("SET", tokens) {
+						Ok(Some(ColumnQualifier::CharacterSet(Box::new(try!(self.parse_expr(tokens, 0))))))
+					} else {
+						Err(format!("Expected PRIMARY KEY, received PRIMARY {:?}", tokens.peek()))
+					}
+				},
+				"COLLATE" => {
+					tokens.next();
+					Ok(Some(ColumnQualifier::Collate(Box::new(try!(self.parse_expr(tokens, 0))))))
+				},
+				"SIGNED" => {
+					tokens.next();
+					Ok(Some(ColumnQualifier::Signed))
+				},
+				"UNSIGNED" => {
+					tokens.next();
+					Ok(Some(ColumnQualifier::Unsigned))
+				},
+				"ON" => {
+					tokens.next();
+					if self.consume_keyword("UPDATE", tokens) {
+						Ok(Some(ColumnQualifier::OnUpdate(Box::new(try!(self.parse_expr(tokens, 0))))))
+					} else {
+						Err(format!("Expected ON UPDATE, received ON {:?}", tokens.peek()))
+					}
+				},
+				"COMMENT" => {
+					tokens.next();
+					Ok(Some(ColumnQualifier::Comment(Box::new(try!(self.parse_expr(tokens, 0))))))
+				}
+				_ => Ok(None)
+			},
+			_ => Ok(None)
+		}
 	}
 
 	fn parse_data_type(&self, tokens: &mut Peekable<Tokens>) ->  Result<DataType, String> {
@@ -330,11 +583,31 @@ impl AnsiSQLParser {
 				"TIME" => Ok(DataType::Time{fsp: try!(self.parse_optional_display(tokens))}),
 				"YEAR" => Ok(DataType::Year{display: try!(self.parse_optional_display(tokens))}),
 				// TODO do something with NATIONAL, NCHAR, etc
-				"NATIONAL" => self.parse_data_type(tokens),
-				"CHAR" | "NCHAR" => {
-					let ret = Ok(DataType::Char{length: try!(self.parse_optional_display(tokens))});
-					// TODO do something with CHAR BYTE
-					self.consume_keyword("BYTE", tokens);
+				"NATIONAL" => {
+					if self.consume_keyword(&"CHAR", tokens) {
+						Ok(DataType::NChar{length: try!(self.parse_optional_display(tokens))})
+					} else if self.consume_keyword(&"VARCHAR", tokens) {
+						Ok(DataType::NVarchar{length: try!(self.parse_optional_display(tokens))})
+					} else if self.consume_keyword(&"CHARACTER", tokens) {
+						if self.consume_keyword(&"VARYING", tokens) {
+							Ok(DataType::NVarchar{length: try!(self.parse_optional_display(tokens))})
+						} else {
+							Ok(DataType::NChar{length: try!(self.parse_optional_display(tokens))})
+						}
+					} else {
+						Err(format!("Expected NATIONAL CHAR|VARCHAR|CHARACTER [VARYING], received NATIONAL {:?}", tokens.peek()))
+					}
+				},
+				"CHAR" => {
+					let length = try!(self.parse_optional_display(tokens));
+					if self.consume_keyword(&"BYTE", tokens) {
+						Ok(DataType::CharByte{length: length})
+					} else {
+						Ok(DataType::Char{length: length})
+					}
+				},
+				"NCHAR" => {
+					let ret = Ok(DataType::NChar{length: try!(self.parse_optional_display(tokens))});
 					ret
 				},
 				"CHARACTER" => {
@@ -344,7 +617,8 @@ impl AnsiSQLParser {
 						Ok(DataType::Char{length: try!(self.parse_optional_display(tokens))})
 					}
 				},
-				"VARCHAR" | "NVARCHAR" => Ok(DataType::Varchar{length: try!(self.parse_optional_display(tokens))}),
+				"VARCHAR" => Ok(DataType::Varchar{length: try!(self.parse_optional_display(tokens))}),
+				"NVARCHAR" => Ok(DataType::NVarchar{length: try!(self.parse_optional_display(tokens))}),
 				"BINARY" => Ok(DataType::Binary{length: try!(self.parse_optional_display(tokens))}),
 				"VARBINARY" => Ok(DataType::VarBinary{length: try!(self.parse_optional_display(tokens))}),
 				"TINYBLOB" => Ok(DataType::TinyBlob),
@@ -726,947 +1000,18 @@ impl AnsiSQLParser {
 		}
 	}
 
-}
-
-
-#[cfg(test)]
-mod tests {
-
-use std::collections::HashMap;
-// TODO: Is there a better way to import all of this???
-
-use super::AnsiSQLParser;
-use super::SQLExpr::*;
-use super::SQLOperator::*;
-use super::SQLUnionType::*;
-use super::SQLJoinType::*;
-use super::LiteralExpr::*;
-use super::DataType::*;
-use super::super::sql_writer;
-
-#[test]
-fn sqlparser() {
-	let parser = AnsiSQLParser {};
-	let sql = "SELECT 1 + 1 + 1,
-		a AS alias,
-		(3 * (1 + 2)),
-		-1 AS unary,
-		(SELECT a, b, c FROM tTwo WHERE c = a) AS subselect
-		FROM (SELECT a, b, c FROM tThree) AS l
-		WHERE a > 10 AND b = true
-		ORDER BY a DESC, (a + b) ASC, c";
-	let parsed = parser.parse(sql).unwrap();
-
-	assert_eq!(
-		SQLSelect {
-			expr_list: Box::new(
-				SQLExprList(vec![
-					SQLBinary {
-						left:  Box::new(SQLBinary{
-							left: Box::new(SQLLiteral(LiteralLong(0, 1_u64))),
-							op: ADD,
-							right:  Box::new(SQLLiteral(LiteralLong(1, 1_u64)))
-						}),
-						op: ADD,
-						right:  Box::new(SQLLiteral(LiteralLong(2, 1_u64)))
-					},
-					SQLAlias{
-						expr:  Box::new(SQLIdentifier(String::from("a"))),
-						alias:  Box::new(SQLIdentifier(String::from("alias")))
-					},
-					SQLNested(
-						 Box::new(SQLBinary {
-							left:  Box::new(SQLLiteral(LiteralLong(3, 3_u64))),
-							op: MULT,
-							right:  Box::new(SQLNested(
-								 Box::new(SQLBinary{
-									left:  Box::new(SQLLiteral(LiteralLong(4, 1_u64))),
-									op: ADD,
-									right:  Box::new(SQLLiteral(LiteralLong(5, 2_u64)))
-								})
-							))
-						})
-					),
-					SQLAlias{
-						expr:  Box::new(SQLUnary{
-							operator: SUB,
-							expr:  Box::new(SQLLiteral(LiteralLong(6, 1_u64)))
-						}),
-						alias:  Box::new(SQLIdentifier(String::from("unary")))
-					},
-					SQLAlias {
-						expr:  Box::new(SQLNested(
-							 Box::new(SQLSelect{
-								expr_list:  Box::new(SQLExprList(
-									vec![
-										SQLIdentifier(String::from("a")),
-										SQLIdentifier(String::from("b")),
-										SQLIdentifier(String::from("c"))
-									]
-								)),
-								relation: Some( Box::new(SQLIdentifier(String::from("tTwo")))),
-								selection: Some( Box::new(SQLBinary{
-									left:  Box::new(SQLIdentifier(String::from("c"))),
-									op: EQ,
-									right:  Box::new(SQLIdentifier(String::from("a")))
-								})),
-								order: None
-							})
-						)),
-						alias:  Box::new(SQLIdentifier(String::from("subselect")))
-					}
-					]
-				)
-			),
-			relation: Some( Box::new(SQLAlias{
-				expr:  Box::new(SQLNested(
-					 Box::new(SQLSelect {
-						expr_list:  Box::new(SQLExprList(
-							vec![
-								SQLIdentifier(String::from("a")),
-								SQLIdentifier(String::from("b")),
-								SQLIdentifier(String::from("c"))
-							]
-						)),
-						relation: Some( Box::new(SQLIdentifier(String::from("tThree")))),
-						selection: None,
-						order: None
-					})
-				)),
-				alias:  Box::new(SQLIdentifier(String::from("l")))
-			})),
-			selection: Some( Box::new(SQLBinary {
-				left:  Box::new(SQLBinary{
-					left:  Box::new(SQLIdentifier(String::from("a"))),
-					op: GT,
-					right:  Box::new(SQLLiteral(LiteralLong(7, 10_u64)))
-				}),
-				op: AND,
-				right:  Box::new(SQLBinary{
-					left:  Box::new(SQLIdentifier(String::from("b"))),
-					op: EQ,
-					right:  Box::new(SQLLiteral(LiteralBool(8, true)))
-				})
-			})),
-			order: Some( Box::new(SQLExprList(
-				vec![
-					SQLOrderBy{
-						expr:  Box::new(SQLIdentifier(String::from("a"))),
-						is_asc: false
-					},
-					SQLOrderBy{
-						expr:  Box::new(SQLNested(
-							 Box::new(SQLBinary{
-								left:  Box::new(SQLIdentifier(String::from("a"))),
-								op: ADD,
-								right:  Box::new(SQLIdentifier(String::from("b")))
-							})
-						)),
-						is_asc: true
-					},
-					SQLOrderBy{
-						expr:  Box::new(SQLIdentifier(String::from("c"))),
-						is_asc: true
-					},
-				]
-			)))
-		},
-		parsed
-	);
-
-	println!("{:#?}", parser.parse(sql));
-
-	let rewritten = sql_writer::write(parsed, &HashMap::new());
-
-	//assert_eq!(rewritten, sql);
-
-	println!("Rewritten: {:?}", rewritten);
-
-}
-
-#[test]
-fn sql_join() {
-	let parser = AnsiSQLParser {};
-	let sql = "SELECT l.a, r.b, l.c FROM tOne AS l
-		JOIN (SELECT a, b, c FROM tTwo WHERE a > 0) AS r
-		ON l.a = r.a
-		WHERE l.b > r.b
-		ORDER BY r.c DESC";
-	let parsed = parser.parse(sql).unwrap();
-
-	assert_eq!(
-		SQLSelect {
-			expr_list: Box::new(SQLExprList(
-				vec![
-					SQLIdentifier(String::from("l.a")),
-					SQLIdentifier(String::from("r.b")),
-					SQLIdentifier(String::from("l.c"))
-				]
-			)),
-			relation: Some(Box::new(SQLJoin {
-				left: Box::new(
-					SQLAlias {
-						expr: Box::new(SQLIdentifier(String::from("tOne"))),
-						alias: Box::new(SQLIdentifier(String::from("l")))
-					}
-				),
-				join_type: INNER,
-				right: Box::new(
-					SQLAlias {
-						expr: Box::new(SQLNested(
-							Box::new(SQLSelect{
-								expr_list: Box::new(SQLExprList(
-									vec![
-									SQLIdentifier(String::from("a")),
-									SQLIdentifier(String::from("b")),
-									SQLIdentifier(String::from("c"))
-									]
-								)),
-								relation: Some(Box::new(SQLIdentifier(String::from("tTwo")))),
-								selection: Some(Box::new(SQLBinary{
-									left: Box::new(SQLIdentifier(String::from("a"))),
-									op: GT,
-									right: Box::new(SQLLiteral(LiteralLong(0, 0_u64)))
-								})),
-								order: None
-							})
-						)),
-						alias: Box::new(SQLIdentifier(String::from("r")))
-					}
-				),
-				on_expr: Some(Box::new(SQLBinary {
-					left: Box::new(SQLIdentifier(String::from("l.a"))),
-					op: EQ,
-					right: Box::new(SQLIdentifier(String::from("r.a")))
-				}))
-			})),
-			selection: Some(Box::new(SQLBinary{
-				left: Box::new(SQLIdentifier(String::from("l.b"))),
-				op: GT,
-				right: Box::new(SQLIdentifier(String::from("r.b")))
-			})),
-			order: Some(Box::new(SQLExprList(
-				vec![
-					SQLOrderBy{
-						expr: Box::new(SQLIdentifier(String::from("r.c"))),
-						is_asc: false
-					}
-				]
-			)))
-		},
-		parsed
-	);
-
-	println!("{:#?}", parser.parse(sql));
-
-	let rewritten = sql_writer::write(parsed, &HashMap::new());
-
-	//assert_eq!(rewritten, sql);
-
-	println!("Rewritten: {:?}", rewritten);
-}
-
-#[test]
-fn nasty() {
-	let parser = AnsiSQLParser {};
-	let sql = "((((SELECT a, b, c FROM tOne UNION (SELECT a, b, c FROM tTwo))))) UNION (((SELECT a, b, c FROM tThree) UNION ((SELECT a, b, c FROM tFour))))";
-
-	let parsed = parser.parse(sql).unwrap();
-
-	assert_eq!(
-		SQLUnion{
-			left: Box::new(SQLNested(
-				Box::new(SQLNested(
-					Box::new(SQLNested(
-						Box::new(SQLNested(
-							Box::new(SQLUnion{
-								left: Box::new(SQLSelect{
-									expr_list: Box::new(SQLExprList(vec![
-										SQLIdentifier(String::from("a")),
-										SQLIdentifier(String::from("b")),
-										SQLIdentifier(String::from("c"))
-									])),
-									relation: Some(Box::new(SQLIdentifier(String::from("tOne")))),
-									selection: None,
-									order: None
-								}),
-								union_type: UNION,
-								right: Box::new(SQLNested(
-									Box::new(SQLSelect{
-										expr_list: Box::new(SQLExprList(vec![
-											SQLIdentifier(String::from("a")),
-											SQLIdentifier(String::from("b")),
-											SQLIdentifier(String::from("c"))
-										])),
-										relation: Some(Box::new(SQLIdentifier(String::from("tTwo")))),
-										selection: None,
-										order: None
-									})
-								))
-							})
-						))
-					))
-				))
-			)),
-			union_type: UNION,
-			right: Box::new(SQLNested(
-				Box::new(SQLNested(
-					Box::new(SQLUnion{
-						left: Box::new(SQLNested(
-							Box::new(SQLSelect{
-								expr_list: Box::new(SQLExprList(vec![
-									SQLIdentifier(String::from("a")),
-									SQLIdentifier(String::from("b")),
-									SQLIdentifier(String::from("c"))
-								])),
-								relation: Some(Box::new(SQLIdentifier(String::from("tThree")))),
-								selection: None,
-								order: None
-							})
-						)),
-						union_type: UNION,
-						right: Box::new(SQLNested(
-							Box::new(SQLNested(
-								Box::new(SQLSelect{
-									expr_list: Box::new(SQLExprList(vec![
-										SQLIdentifier(String::from("a")),
-										SQLIdentifier(String::from("b")),
-										SQLIdentifier(String::from("c"))
-									])),
-									relation: Some(Box::new(SQLIdentifier(String::from("tFour")))),
-									selection: None,
-									order: None
-								})
-							))
-						))
-					})
-				))
-			))
-		},
-		parsed
-	);
-
-	println!("{:#?}", parser.parse(sql));
-
-	let rewritten = sql_writer::write(parsed, &HashMap::new());
-
-	println!("Rewritten: {:?}", rewritten);
-}
-
-#[test]
-fn insert() {
-	let parser = AnsiSQLParser {};
-	let sql = "INSERT INTO foo (a, b, c) VALUES(1, 20.45, 'abcdefghijk')";
-
-	let parsed = parser.parse(sql).unwrap();
-
-	assert_eq!(
-		SQLInsert{
-			table: Box::new(SQLIdentifier(String::from("foo"))),
-			column_list: Box::new(SQLExprList(
-				vec![
-					SQLIdentifier(String::from("a")),
-					SQLIdentifier(String::from("b")),
-					SQLIdentifier(String::from("c"))
-				]
-			)),
-			values_list: Box::new(SQLExprList(
-				vec![
-					SQLLiteral(LiteralLong(0, 1_u64)),
-					SQLLiteral(LiteralDouble(1, 20.45_f64)),
-					SQLLiteral(LiteralString(2, String::from("abcdefghijk")))
-				]
-			))
-		},
-		parsed
-	);
-
-	println!("{:#?}", parser.parse(sql));
-
-	let rewritten = sql_writer::write(parsed, &HashMap::new());
-
-	println!("Rewritten: {:?}", rewritten);
-
-}
-
-#[test]
-fn select_wildcard() {
-	let parser = AnsiSQLParser {};
-	let sql = "SELECT * FROM foo";
-
-	let parsed = parser.parse(sql).unwrap();
-
-	assert_eq!(
-		SQLSelect {
-			expr_list: Box::new(SQLExprList(vec![SQLIdentifier(String::from("*"))])),
-			relation: Some(Box::new(SQLIdentifier(String::from("foo")))),
-			selection: None,
-			order: None
-		},
-		parsed
-	);
-
-	println!("{:#?}", parser.parse(sql));
-
-	let rewritten = sql_writer::write(parsed, &HashMap::new());
-
-	assert_eq!(rewritten, sql);
-	println!("Rewritten: {:?}", rewritten);
-
-}
-
-#[test]
-fn update() {
-	let parser = AnsiSQLParser {};
-	let sql = "UPDATE foo SET a = 'hello', b = 12345 WHERE c > 10)";
-
-	let parsed = parser.parse(sql).unwrap();
-
-	assert_eq!(
-		SQLUpdate {
-			table: Box::new(SQLIdentifier(String::from("foo"))),
-			assignments: Box::new(SQLExprList(
-				vec![
-					SQLBinary{
-						left: Box::new(SQLIdentifier(String::from("a"))),
-						op: EQ,
-						right: Box::new(SQLLiteral(LiteralString(0, String::from("hello"))))
-					},
-					SQLBinary{
-						left: Box::new(SQLIdentifier(String::from("b"))),
-						op: EQ,
-						right: Box::new(SQLLiteral(LiteralLong(1, 12345_u64)))
-					}
-				]
-			)),
-			selection: Some(Box::new(SQLBinary{
-				left: Box::new(SQLIdentifier(String::from("c"))),
-				op: GT,
-				right : Box::new(SQLLiteral(LiteralLong(2, 10_u64)))
-			}))
-		},
-		parsed
-	);
-
-	println!("{:#?}", parser.parse(sql));
-
-	let rewritten = sql_writer::write(parsed, &HashMap::new());
-
-	println!("Rewritten: {}", rewritten);
-
-}
-
-#[test]
-fn create_numeric() {
-	let parser = AnsiSQLParser {};
-	let sql = "CREATE TABLE foo (
-	      a BIT,
-	      b BIT(2),
-	      c TINYINT,
-	      d TINYINT(10),
-	      e BOOL,
-	      f BOOLEAN,
-	      g SMALLINT,
-	      h SMALLINT(100),
-	      i INT,
-	      j INT(64),
-	      k INTEGER,
-	      l INTEGER(64),
-	      m BIGINT,
-	      n BIGINT(100),
-	      o DECIMAL,
-	      p DECIMAL(10),
-	      q DECIMAL(10,2),
-	      r DEC,
-	      s DEC(10),
-	      t DEC(10, 2),
-	      u FLOAT,
-	      v FLOAT(10),
-	      w FLOAT(10,2),
-	      x DOUBLE,
-	      y DOUBLE(10),
-	      z DOUBLE(10,2),
-		  aa DOUBLE PRECISION,
-			  ab DOUBLE PRECISION (10),
-			  ac DOUBLE PRECISION (10, 2)
-	      )";
-
-	let parsed = parser.parse(sql).unwrap();
-
-	assert_eq!(
-		SQLCreateTable {
-			table: Box::new(SQLIdentifier(String::from("foo"))),
-			column_list: vec![
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("a"))),
-					data_type: Bit { display: None },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("b"))),
-					data_type: Bit { display: Some(2) },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("c"))),
-					data_type: TinyInt { display: None },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("d"))),
-					data_type: TinyInt { display: Some(10) },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("e"))),
-					data_type: Bool,
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("f"))),
-					data_type: Bool,
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("g"))),
-					data_type: SmallInt { display: None },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("h"))),
-					data_type: SmallInt { display: Some(100) },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("i"))),
-					data_type: Int { display: None },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("j"))),
-					data_type: Int { display: Some(64) },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("k"))),
-					data_type: Int { display: None },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("l"))),
-					data_type: Int { display: Some(64) },
-					qualifiers: None
-				}, SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("m"))),
-					data_type: BigInt { display: None },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("n"))),
-					data_type: BigInt { display: Some(100) },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("o"))),
-					data_type: Decimal { precision: None, scale: None },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("p"))),
-					data_type: Decimal { precision: Some(10), scale: None },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("q"))),
-					data_type: Decimal { precision: Some(10), scale: Some(2) },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("r"))),
-					data_type: Decimal { precision: None, scale: None },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("s"))),
-					data_type: Decimal { precision: Some(10), scale: None },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("t"))),
-					data_type: Decimal { precision: Some(10), scale: Some(2) },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("u"))),
-					data_type: Float { precision: None, scale: None },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("v"))),
-					data_type: Float { precision: Some(10), scale: None },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("w"))),
-					data_type: Float { precision: Some(10), scale: Some(2) },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("x"))),
-					data_type: Double { precision: None, scale: None },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("y"))),
-					data_type: Double { precision: Some(10), scale: None },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("z"))),
-					data_type: Double { precision: Some(10), scale: Some(2) },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("aa"))),
-					data_type: Double { precision: None, scale: None },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("ab"))),
-					data_type: Double { precision: Some(10), scale: None },
-					qualifiers: None
-				},
-				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("ac"))),
-					data_type: Double { precision: Some(10), scale: Some(2) },
-					qualifiers: None
+	fn consume_operator(&self, text: &str, tokens: &mut Peekable<Tokens>) -> bool {
+		match tokens.peek().cloned() {
+			Some(Token::Operator(v)) => {
+				if text.eq_ignore_ascii_case(&v) {
+					tokens.next();
+					true
+				} else {
+					false
 				}
-			]
-		},
-		parsed
-	);
+			},
+			_ => false
+		}
+	}
 
-	println!("{:#?}", parser.parse(sql));
-
-	let rewritten = sql_writer::write(parsed, &HashMap::new());
-
-	println!("Rewritten: {}", rewritten);
-
-}
-
-#[test]
-fn create_temporal() {
-	let parser = AnsiSQLParser {};
-
-	let sql = "CREATE TABLE foo (
-	      a DATE,
-	      b DATETIME,
-	      c DATETIME(6),
-	      d TIMESTAMP,
-	      e TIMESTAMP(6),
-	      f TIME,
-	      g TIME(6),
-	      h YEAR,
-	      i YEAR(4)
-	  )";
-
-	let parsed = parser.parse(sql).unwrap();
-
-	assert_eq!(
-		SQLCreateTable {
-		    table: Box::new(SQLIdentifier(String::from("foo"))),
-		    column_list: vec![
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("a"))),
-		            data_type: Date,
-					qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("b"))),
-		            data_type: DateTime {fsp: None},
-					qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("c"))),
-		            data_type: DateTime {fsp: Some(6)},
-					qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("d"))),
-		            data_type: Timestamp {fsp: None},
-					qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("e"))),
-		            data_type: Timestamp {fsp: Some(6)},
-					qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("f"))),
-		            data_type: Time {fsp: None},
-					qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("g"))),
-		            data_type: Time {fsp: Some(6)},
-					qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("h"))),
-		            data_type: Year {display: None},
-					qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("i"))),
-		            data_type: Year {display: Some(4)},
-					qualifiers: None
-		        }
-		    ]
-		},
-		parsed
-	);
-
-	println!("{:#?}", parsed);
-
-	let rewritten = sql_writer::write(parsed, &HashMap::new());
-
-	println!("Rewritten: {}", rewritten);
-}
-
-#[test]
-fn create_character() {
-	let parser = AnsiSQLParser {};
-
-	let sql = "CREATE TABLE foo (
-	      a NATIONAL CHAR,
-	      b CHAR,
-	      c CHAR(255),
-	      d NCHAR,
-	      e NCHAR(255),
-	      f NATIONAL CHARACTER,
-	      g CHARACTER,
-	      h CHARACTER(255),
-	      i NATIONAL VARCHAR(50),
-	      j VARCHAR(50),
-	      k NVARCHAR(50),
-	      l CHARACTER VARYING(50),
-	      m BINARY,
-	      n BINARY(50),
-	      o VARBINARY(50),
-	      p TINYBLOB,
-	      q TINYTEXT,
-	      r BLOB,
-	      s BLOB(50),
-	      t TEXT,
-	      u TEXT(100),
-	      v MEDIUMBLOB,
-	      w MEDIUMTEXT,
-	      x LONGBLOB,
-	      y LONGTEXT,
-	      z ENUM('val1', 'val2', 'val3'),
-	      aa SET('val1', 'val2', 'val3'),
-	      ab CHAR BYTE,
-	      ac CHAR(50) BYTE
-	)";
-
-	let parsed = parser.parse(sql).unwrap();
-
-	assert_eq!(
-		SQLCreateTable {
-		    table: Box::new(SQLIdentifier(String::from("foo"))),
-		    column_list: vec![
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("a"))),
-		            data_type: Char {length: None},
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("b"))),
-		            data_type: Char {length: None},
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("c"))),
-		            data_type: Char {length: Some(255)},
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("d"))),
-		            data_type: Char {length: None},
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("e"))),
-		            data_type: Char {length: Some(255)},
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("f"))),
-		            data_type: Char {length: None},
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("g"))),
-		            data_type: Char {length: None},
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("h"))),
-		            data_type: Char {length: Some(255)},
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("i"))),
-		            data_type: Varchar {length: Some(50)},
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("j"))),
-		            data_type: Varchar {length: Some(50)},
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("k"))),
-		            data_type: Varchar {length: Some(50)},
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("l"))),
-		            data_type: Varchar {length: Some(50)},
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("m"))),
-		            data_type: Binary {length: None},
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("n"))),
-		            data_type: Binary {length: Some(50)},
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("o"))),
-		            data_type: VarBinary {length: Some(50)},
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("p"))),
-		            data_type: TinyBlob,
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("q"))),
-		            data_type: TinyText,
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("r"))),
-		            data_type: Blob {length: None},
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("s"))),
-		            data_type: Blob {length: Some(50)},
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("t"))),
-		            data_type: Text {length: None},
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("u"))),
-		            data_type: Text {length: Some(100)},
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("v"))),
-		            data_type: MediumBlob,
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("w"))),
-		            data_type: MediumText,
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("x"))),
-		            data_type: LongBlob,
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("y"))),
-		            data_type: LongText,
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("z"))),
-		            data_type: Enum {values: Box::new(SQLExprList(vec![
-		                        SQLLiteral(LiteralString(11,String::from("val1"))),
-		                        SQLLiteral(LiteralString(12,String::from("val2"))),
-		                        SQLLiteral(LiteralString(13,String::from("val3")))
-		                    ]
-		                ))
-		            },
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("aa"))),
-		            data_type: Set {values: Box::new(SQLExprList(vec![
-		                        SQLLiteral(LiteralString(14,String::from("val1"))),
-		                        SQLLiteral(LiteralString(15,String::from("val2"))),
-		                        SQLLiteral(LiteralString(16,String::from("val3")))
-		                    ]
-		                ))
-		            },
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("ab"))),
-		            data_type: Char {length: None},
-		            qualifiers: None
-		        },
-		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("ac"))),
-		            data_type: Char {length: Some(50)},
-		            qualifiers: None
-		        }
-		    ]
-		},
-		parsed
-	);
-
-	println!("{:#?}", parsed);
-
-	let rewritten = sql_writer::write(parsed, &HashMap::new());
-
-	println!("Rewritten: {}", rewritten);
-}
-
-// #[test]
-// fn create_column_qualifiers() {
-// 	let parser = AnsiSQLParser {};
-//
-// 	let sql = "CREATE TABLE foo (
-// 	      id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-// 	      a VARCHAR(50) CHARACTER SET utf8 COLLATE utf8_general_ci NULL UNIQUE,
-// 	      b BIGINT SIGNED NOT NULL DEFAULT 123456789,
-// 	      c TINYINT UNSIGNED NULL DEFAULT NULL,
-// 	      d TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-//     )";
-//
-// 	let parsed = parser.parse(sql).unwrap();
-//
-// 	// assert_eq!(
-// 	// 	None,
-// 	// 	parsed
-// 	// );
-//
-// 	println!("{:#?}", parsed);
-//
-// 	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
-//
-// 	println!("Rewritten: {}", rewritten);
-// }
 }

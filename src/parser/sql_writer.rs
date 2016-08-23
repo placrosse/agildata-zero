@@ -1,4 +1,6 @@
-use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator, SQLUnionType, SQLJoinType, DataType};
+use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator,
+    SQLUnionType, SQLJoinType, DataType, ColumnQualifier,
+    SQLKeyDef, TableOption};
 use std::fmt::Write;
 use std::collections::HashMap;
 
@@ -53,18 +55,41 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
                 _write(builder, *selection.unwrap(), literals);
             }
         },
-        SQLExpr::SQLCreateTable{column_list, ..} => {
+        SQLExpr::SQLCreateTable{table, column_list, keys, table_options} => {
             builder.push_str("CREATE TABLE");
+            _write(builder, *table, literals);
+
+            builder.push_str(&" (");
             let mut sep = "";
             for c in column_list {
                 builder.push_str(sep);
                 _write(builder, c, literals);
                 sep = ", ";
             }
+
+            for k in keys {
+                builder.push_str(sep);
+                _write_key_definition(builder, k, literals);
+                sep = ", ";
+            }
+
+            builder.push_str(&")");
+
+            sep = " ";
+            for o in table_options {
+                builder.push_str(sep);
+                _write_table_option(builder, o, literals);
+            }
         },
-        SQLExpr::SQLColumnDef{column, data_type, ..} => {
+        SQLExpr::SQLColumnDef{column, data_type, qualifiers} => {
             _write(builder, *column, literals);
             _write_data_type(builder, data_type, literals);
+            if qualifiers.is_some() {
+                for q in qualifiers.unwrap() {
+                    _write_column_qualifier(builder, q, literals);
+                }
+            }
+
         },
 		SQLExpr::SQLExprList(vector) => {
 			let mut sep = "";
@@ -103,8 +128,6 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 			LiteralExpr::LiteralString(i, s) => {
 				match literals.get(&i) {
 					Some(value) => match value {
-						// TODO write! escapes the single quotes...
-						// X'...'
 						&Some(ref e) => {
 							write!(builder, "X'{}'", to_hex_string(e)).unwrap(); // must_use
 						},
@@ -251,15 +274,28 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
                 _write_optional_display(builder, fsp);
             },
             DataType::Year{display} => {
-                builder.push_str(" DATETIME");
+                builder.push_str(" YEAR");
                 _write_optional_display(builder, display);
             },
             DataType::Char{length} => {
                 builder.push_str(" CHAR");
                 _write_optional_display(builder, length);
             },
+            DataType::NChar{length} => {
+                builder.push_str(" NCHAR");
+                _write_optional_display(builder, length);
+            },
+            DataType::CharByte{length} => {
+                builder.push_str(" CHAR");
+                _write_optional_display(builder, length);
+                builder.push_str(" BYTE");
+            },
             DataType::Varchar{length} => {
                 builder.push_str(" VARCHAR");
+                _write_optional_display(builder, length);
+            },
+            DataType::NVarchar{length} => {
+                builder.push_str(" NVARCHAR");
                 _write_optional_display(builder, length);
             },
             DataType::Binary{length} => {
@@ -308,6 +344,130 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
             },
             // _ => panic!("Unsupported data type {:?}", data_type)
 
+        }
+    }
+
+    fn _write_key_definition(builder:  &mut String, key: SQLKeyDef, literals: &HashMap<u32, Option<Vec<u8>>>) {
+        match key {
+            SQLKeyDef::Primary{symbol, name, columns} => {
+
+                if symbol.is_some() {
+                    builder.push_str(&" CONSTRAINT");
+                    _write(builder, *symbol.unwrap(), literals);
+                }
+
+                builder.push_str(&" PRIMARY KEY");
+                if name.is_some() {
+                    _write(builder, *name.unwrap(), literals);
+                }
+                _write_key_column_list(builder, columns, literals);
+            },
+            SQLKeyDef::Unique{symbol, name, columns} => {
+                if symbol.is_some() {
+                    builder.push_str(&" CONSTRAINT");
+                    _write(builder, *symbol.unwrap(), literals);
+                }
+
+                builder.push_str(&" UNIQUE KEY");
+                if name.is_some() {
+                    _write(builder, *name.unwrap(), literals);
+                }
+                _write_key_column_list(builder, columns, literals);
+            },
+            SQLKeyDef::FullText{name, columns} => {
+                builder.push_str(&" FULLTEXT KEY");
+                if name.is_some() {
+                    _write(builder, *name.unwrap(), literals);
+                }
+                _write_key_column_list(builder, columns, literals);
+            },
+            SQLKeyDef::Index{name, columns} => {
+                builder.push_str(&" KEY");
+                if name.is_some() {
+                    _write(builder, *name.unwrap(), literals);
+                }
+                _write_key_column_list(builder, columns, literals);
+            },
+            SQLKeyDef::Foreign{symbol, name, columns, reference_table, reference_columns} => {
+                if symbol.is_some() {
+                    builder.push_str(&" CONSTRAINT");
+                    _write(builder, *symbol.unwrap(), literals);
+                }
+
+                builder.push_str(&" FOREIGN KEY");
+                if name.is_some() {
+                    _write(builder, *name.unwrap(), literals);
+                }
+                _write_key_column_list(builder, columns, literals);
+
+                builder.push_str(&" REFERENCES");
+                _write(builder, *reference_table, literals);
+                _write_key_column_list(builder, reference_columns, literals);
+            }
+        }
+    }
+
+    fn _write_table_option(builder:  &mut String, option: TableOption, literals: &HashMap<u32, Option<Vec<u8>>>) {
+        match option {
+            TableOption::Comment(e) => {
+                builder.push_str(" COMMENT");
+                _write(builder, *e, literals);
+            },
+            TableOption::Charset(e) => {
+                builder.push_str(" DEFAULT CHARSET");
+                _write(builder, *e, literals);
+            },
+            TableOption::Engine(e) => {
+                builder.push_str(" ENGINE");
+                _write(builder, *e, literals);
+            },
+            TableOption::AutoIncrement(e) => {
+                builder.push_str(" AUTO_INCREMENT");
+                _write(builder, *e, literals);
+            }
+        }
+    }
+
+    fn _write_key_column_list(builder: &mut String, list: Vec<SQLExpr>, literals: &HashMap<u32, Option<Vec<u8>>>) {
+        builder.push_str(&" (");
+        let mut sep = "";
+        for c in list {
+            builder.push_str(sep);
+            _write(builder, c, literals);
+            sep = ", ";
+        }
+        builder.push_str(&")");
+    }
+
+    fn _write_column_qualifier(builder:  &mut String, q: ColumnQualifier, literals: &HashMap<u32, Option<Vec<u8>>>) {
+        match q {
+            ColumnQualifier::CharacterSet(box e) => {
+                builder.push_str(&" CHARACTER SET");
+                _write(builder, e, literals);
+            },
+            ColumnQualifier::Collate(box e) => {
+                builder.push_str(&" COLLATE");
+                _write(builder, e, literals);
+            },
+            ColumnQualifier::Default(box e) => {
+                builder.push_str(&" DEFAULT");
+                _write(builder, e, literals);
+            },
+            ColumnQualifier::Signed => builder.push_str(&" SIGNED"),
+            ColumnQualifier::Unsigned => builder.push_str(&" UNSIGNED"),
+            ColumnQualifier::Null => builder.push_str(&" NULL"),
+            ColumnQualifier::NotNull => builder.push_str(&" NOT NULL"),
+            ColumnQualifier::AutoIncrement => builder.push_str(&" AUTO_INCREMENT"),
+            ColumnQualifier::PrimaryKey => builder.push_str(&" PRIMARY KEY"),
+            ColumnQualifier::UniqueKey => builder.push_str(&" UNIQUE"),
+            ColumnQualifier::OnUpdate(box e) => {
+                builder.push_str(&" ON UPDATE");
+                _write(builder, e, literals);
+            },
+            ColumnQualifier::Comment(box e) => {
+                builder.push_str(&" COMMENT");
+                _write(builder, e, literals);
+            }
         }
     }
 
