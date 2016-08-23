@@ -156,15 +156,17 @@ impl AnsiSQLParser {
 
 	pub fn parse(&self, sql: &str) -> Result<SQLExpr,  String> {
 		let tvec = try!(String::from(sql).tokenize());
-		let mut stream = (Tokens {tokens: tvec, index: 0}).peekable();
+		let mut stream = tvec.iter().peekable();
 		self.parse_expr(&mut stream, 0u32)
 	}
 
-	pub fn parse_expr(&self, stream: &mut Peekable<Tokens>, precedence: u32) -> Result<SQLExpr,  String> {
+	pub fn parse_expr<'a, It>(&self, stream: &mut Peekable<It>, precedence: u32) -> Result<SQLExpr,  String>
+		where It: Iterator<Item=&'a Token> {
+
 		let mut expr = self.parse_prefix(stream).unwrap();
 
 		if expr.is_some() {
-			while let Some(_) = stream.peek().cloned() {
+			while let Some(_) = stream.peek() {
 				let next_precedence = self.get_precedence(stream);
 
 				if precedence >= next_precedence {
@@ -179,45 +181,46 @@ impl AnsiSQLParser {
 		}
 	}
 
-	fn parse_prefix(&self, tokens: &mut Peekable<Tokens>) -> Result<Option<SQLExpr>,  String>{
+	fn parse_prefix<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<Option<SQLExpr>,  String>
+		where It: Iterator<Item=&'a Token> {
+
 		println!("parse_prefix()");
-		// TODO need a better solution than cloned()
-		match tokens.peek().cloned() {
-			Some(t) => match t {
-				Token::Keyword(ref v) => match &v as &str {
+		match tokens.peek() {
+			Some(&t) => match t {
+				&Token::Keyword(ref v) => match &v as &str {
 					"SELECT" => Ok(Some(try!(self.parse_select(tokens)))),
 					"INSERT" => Ok(Some(try!(self.parse_insert(tokens)))),
 					"UPDATE" => Ok(Some(try!(self.parse_update(tokens)))),
 					"CREATE" => Ok(Some(try!(self.parse_create(tokens)))),
 					_ => Err(format!("Unsupported prefix {:?}", v))
 				},
-				Token::Literal(v) => match v {
-					LiteralToken::LiteralLong(i, value) => {
+				&Token::Literal(ref v) => match v {
+					&LiteralToken::LiteralLong(i, ref value) => {
 						tokens.next();
 						Ok(Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralLong(i, u64::from_str(&value).unwrap()))))
 					},
-					LiteralToken::LiteralBool(i, value) => {
+					&LiteralToken::LiteralBool(i, ref value) => {
 						tokens.next();
 						Ok(Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralBool(i, bool::from_str(&value).unwrap()))))
 					},
-					LiteralToken::LiteralDouble(i, value) => {
+					&LiteralToken::LiteralDouble(i, ref value) => {
 						tokens.next();
 						Ok(Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralDouble(i, f64::from_str(&value).unwrap()))))
 					},
-					LiteralToken::LiteralString(i, value) => {
+					&LiteralToken::LiteralString(i, ref value) => {
 						tokens.next();
 						Ok(Some(SQLExpr::SQLLiteral(LiteralExpr::LiteralString(i, value.clone()))))
 					}
 					//_ => panic!("Unsupported literal {:?}", v)
 				},
-				Token::Identifier(_) => Ok(Some(try!(self.parse_identifier(tokens)))),//Some(self.parse_identifier(tokens)),
-				Token::Punctuator(v) => match &v as &str {
+				&Token::Identifier(_) => Ok(Some(try!(self.parse_identifier(tokens)))),//Some(self.parse_identifier(tokens)),
+				&Token::Punctuator(ref v) => match &v as &str {
 					"(" => {
 						Ok(Some(try!(self.parse_nested(tokens))))
 					},
 					_ => Err(format!("Unsupported prefix for punctuator {:?}", &v))
 				},
-				Token::Operator(v) => match &v as &str {
+				&Token::Operator(ref v) => match &v as &str {
 					"+" | "-" => Ok(Some(try!(self.parse_unary(tokens)))),
 					"*" => Ok(Some(try!(self.parse_identifier(tokens)))),
 					_ => Err(format!("Unsupported operator as prefix {:?}", &v))
@@ -228,12 +231,14 @@ impl AnsiSQLParser {
 		}
 	}
 
-	fn parse_infix(&self, left: SQLExpr, stream: &mut Peekable<Tokens>, precedence: u32) -> Result<Option<SQLExpr>,  String>{
-		println!("parse_infix() {}", precedence);
-		match stream.peek().cloned() {
-			Some(token) => match token {
-				Token::Operator(_) => Ok(Some(try!(self.parse_binary(left, stream)))),//Some(self.parse_binary(left, stream)),
-				Token::Keyword(t) => match &t as &str {
+	fn parse_infix<'a, It>(&self, left: SQLExpr, stream: &mut Peekable<It>, precedence: u32) -> Result<Option<SQLExpr>,  String>
+		where It: Iterator<Item=&'a Token> {
+
+			println!("parse_infix() {}", precedence);
+		match stream.peek() {
+			Some(&token) => match token {
+				&Token::Operator(_) => Ok(Some(try!(self.parse_binary(left, stream)))),//Some(self.parse_binary(left, stream)),
+				&Token::Keyword(ref t) => match &t as &str {
 					"UNION" => Ok(Some(try!(self.parse_union(left, stream)))),
 					"JOIN" | "INNER" | "RIGHT" | "LEFT" | "CROSS" | "FULL" => Ok(Some(try!(self.parse_join(left, stream)))),
 					"AS" => Ok(Some(try!(self.parse_alias(left, stream)))),
@@ -252,11 +257,13 @@ impl AnsiSQLParser {
 		}
 	}
 
-	fn get_precedence(&self, stream: &mut Peekable<Tokens>) -> u32{
+	fn get_precedence<'a, It>(&self, stream: &mut Peekable<It>) -> u32
+		where It: Iterator<Item=&'a Token> {
+
 		println!("get_precedence() token={:?}", stream.peek());
-		match stream.peek().cloned() {
-			Some(token) => match token {
-				Token::Operator(t) => match &t as &str {
+		match stream.peek() {
+			Some(&token) => match token {
+				&Token::Operator(ref t) => match &t as &str {
 					"<" | "<=" | ">" | ">=" | "<>" | "!=" => 20,
 					"-" | "+" => 33,
 					"*" | "/" => 40,
@@ -266,7 +273,7 @@ impl AnsiSQLParser {
 
 					_ => panic!("Unsupported operator {}", t)
 				},
-				Token::Keyword(t) => match &t as &str {
+				&Token::Keyword(ref t) => match &t as &str {
 					"UNION" => 3,
 					"JOIN" | "INNER" | "RIGHT" | "LEFT" | "CROSS" | "FULL" => 5,
 					"AS" => 6,
@@ -278,7 +285,9 @@ impl AnsiSQLParser {
 		}
 	}
 
-	fn parse_create(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr, String> {
+	fn parse_create<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<SQLExpr, String>
+		where It: Iterator<Item=&'a Token> {
+
 		self.consume_keyword("CREATE", tokens);
 
 		if self.consume_keyword("TABLE", tokens) {
@@ -290,8 +299,8 @@ impl AnsiSQLParser {
 
 			columns.push(try!(self.parse_column_def(tokens)));
 			while self.consume_punctuator(",", tokens) {
-				match tokens.peek().cloned() {
-					Some(Token::Keyword(v)) => match &v as &str {
+				match tokens.peek() {
+					Some(&&Token::Keyword(ref v)) => match &v as &str {
 						"PRIMARY" | "KEY" | "UNIQUE" | "FULLTEXT" | "FOREIGN" | "CONSTRAINT" => keys.push(try!(self.parse_key_def(tokens))),
 						_ => columns.push(try!(self.parse_column_def(tokens)))
 					},
@@ -321,7 +330,9 @@ impl AnsiSQLParser {
 
 	}
 
-	fn parse_table_options(&self, tokens: &mut Peekable<Tokens>) -> Result<Vec<TableOption>, String> {
+	fn parse_table_options<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<Vec<TableOption>, String>
+		where It: Iterator<Item=&'a Token> {
+
 		let mut ret: Vec<TableOption> = Vec::new();
 
 		while let Some(o) = self.parse_table_option(tokens)? {
@@ -330,9 +341,11 @@ impl AnsiSQLParser {
 		Ok(ret)
 	}
 
-	fn parse_table_option(&self, tokens: &mut Peekable<Tokens>) -> Result<Option<TableOption>, String> {
-		match tokens.peek().cloned() {
-			Some(Token::Keyword(v)) | Some(Token::Identifier(v)) => match &v.to_uppercase() as &str {
+	fn parse_table_option<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<Option<TableOption>, String>
+		where It: Iterator<Item=&'a Token> {
+
+		match tokens.peek() {
+			Some(&&Token::Keyword(ref v)) | Some(&&Token::Identifier(ref v)) => match &v.to_uppercase() as &str {
 				"ENGINE" => {
 					tokens.next();
 					self.consume_operator("=", tokens);
@@ -362,7 +375,9 @@ impl AnsiSQLParser {
 		}
 	}
 
-	fn parse_key_def(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLKeyDef, String> {
+	fn parse_key_def<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<SQLKeyDef, String>
+		where It: Iterator<Item=&'a Token> {
+
 		println!("parse_key_def()");
 
 		let symbol = if self.consume_keyword("CONSTRAINT", tokens) {
@@ -374,7 +389,7 @@ impl AnsiSQLParser {
 		let t = tokens.next();
 
 		match t {
-			Some(Token::Keyword(v)) => match &v as &str {
+			Some(&Token::Keyword(ref v)) => match &v as &str {
 				"PRIMARY" => {
 					self.consume_keyword("KEY", tokens);
 					Ok(SQLKeyDef::Primary{
@@ -425,14 +440,18 @@ impl AnsiSQLParser {
 		}
 	}
 
-	fn parse_optional_key_name(&self, tokens: &mut Peekable<Tokens>) -> Result<Option<Box<SQLExpr>>, String> {
-		match tokens.peek().cloned() {
-			Some(Token::Identifier(_)) => Ok(Some(Box::new(self.parse_identifier(tokens)?))),
+	fn parse_optional_key_name<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<Option<Box<SQLExpr>>, String>
+		where It: Iterator<Item=&'a Token> {
+
+		match tokens.peek() {
+			Some(&&Token::Identifier(_)) => Ok(Some(Box::new(self.parse_identifier(tokens)?))),
 			_ => Ok(None)
 		}
 	}
 
-	fn parse_key_column_list(&self, tokens: &mut Peekable<Tokens>) -> Result<Vec<SQLExpr>, String> {
+	fn parse_key_column_list<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<Vec<SQLExpr>, String>
+		where It: Iterator<Item=&'a Token> {
+
 		self.consume_punctuator("(", tokens);
 
 		let mut columns: Vec<SQLExpr> = Vec::new();
@@ -445,12 +464,14 @@ impl AnsiSQLParser {
 		Ok(columns)
 	}
 
-	fn parse_column_def(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr, String> {
+	fn parse_column_def<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<SQLExpr, String>
+		where It: Iterator<Item=&'a Token> {
+
 		let column = try!(self.parse_identifier(tokens));
 		let data_type: DataType = try!(self.parse_data_type(tokens));
 		let qualifiers = try!(self.parse_column_qualifiers(tokens));
-		match tokens.peek().cloned() {
-			Some(Token::Punctuator(p)) => match &p as &str {
+		match tokens.peek() {
+			Some(&&Token::Punctuator(ref p)) => match &p as &str {
 				"," | ")" => {},
 				_ => return Err(String::from(format!("Unsupported token in column definition: {:?}", tokens.peek())))
 			},
@@ -460,7 +481,9 @@ impl AnsiSQLParser {
 		Ok(SQLExpr::SQLColumnDef{column: Box::new(column), data_type: data_type, qualifiers: qualifiers})
 	}
 
-	fn parse_column_qualifiers(&self, tokens: &mut Peekable<Tokens>) ->  Result<Option<Vec<ColumnQualifier>>, String> {
+	fn parse_column_qualifiers<'a, It>(&self, tokens: &mut Peekable<It>) ->  Result<Option<Vec<ColumnQualifier>>, String>
+		where It: Iterator<Item=&'a Token> {
+
 		let mut ret: Vec<ColumnQualifier> = Vec::new();
 
 		while let Some(cq) = try!(self.parse_column_qualifier(tokens)) {
@@ -474,10 +497,12 @@ impl AnsiSQLParser {
 		}
 	}
 
-	fn parse_column_qualifier(&self, tokens: &mut Peekable<Tokens>) ->  Result<Option<ColumnQualifier>, String> {
+	fn parse_column_qualifier<'a, It>(&self, tokens: &mut Peekable<It>) ->  Result<Option<ColumnQualifier>, String>
+		where It: Iterator<Item=&'a Token> {
+
 		println!("parse_column_qualifier() {:?}", tokens.peek());
-		match tokens.peek().cloned() {
-			Some(Token::Keyword(v)) | Some(Token::Identifier(v)) => match &v.to_uppercase() as &str {
+		match tokens.peek() {
+			Some(&&Token::Keyword(ref v)) | Some(&&Token::Identifier(ref v)) => match &v.to_uppercase() as &str {
 				"NOT" => {
 					tokens.next();
 					if self.consume_keyword("NULL", tokens) {
@@ -548,10 +573,13 @@ impl AnsiSQLParser {
 		}
 	}
 
-	fn parse_data_type(&self, tokens: &mut Peekable<Tokens>) ->  Result<DataType, String> {
+	fn parse_data_type<'a, It>(&self, tokens: &mut Peekable<It>) ->  Result<DataType, String>
+		where It: Iterator<Item=&'a Token> {
+
 		let data_token = tokens.next();
 		match data_token {
-			Some(Token::Keyword(t)) | Some(Token::Identifier(t)) => match &t.to_uppercase() as &str {
+
+			Some(&Token::Keyword(ref t)) | Some(&Token::Identifier(ref t)) => match &t.to_uppercase() as &str {
 				"BIT" => Ok(DataType::Bit{display: try!(self.parse_optional_display(tokens))}),
 				"TINYINT" => Ok(DataType::TinyInt{display: try!(self.parse_optional_display(tokens))}),
 				"SMALLINT" => Ok(DataType::SmallInt{display: try!(self.parse_optional_display(tokens))}),
@@ -647,10 +675,12 @@ impl AnsiSQLParser {
 		}
 	}
 
-	fn parse_optional_display(&self, tokens: &mut Peekable<Tokens>) -> Result<Option<u32>, String> {
+	fn parse_optional_display<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<Option<u32>, String>
+		where It: Iterator<Item=&'a Token> {
+
 		if self.consume_punctuator("(", tokens) {
-			match tokens.peek().cloned() {
-				Some(Token::Literal(LiteralToken::LiteralLong(_, v))) => {
+			match tokens.peek() {
+				Some(&&Token::Literal(LiteralToken::LiteralLong(_, ref v))) => {
 					tokens.next();
 					let ret = Ok(Some(u32::from_str(&v).unwrap()));
 					self.consume_punctuator(")", tokens);
@@ -664,7 +694,9 @@ impl AnsiSQLParser {
 
 	}
 
-	fn parse_optional_precision_and_scale(&self, tokens: &mut Peekable<Tokens>) -> Result<Option<(u32,Option<u32>)>, String> {
+	fn parse_optional_precision_and_scale<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<Option<(u32,Option<u32>)>, String>
+		where It: Iterator<Item=&'a Token> {
+
 		self.consume_keyword("PRECISION", tokens);
 
 		if self.consume_punctuator("(", tokens) {
@@ -682,9 +714,11 @@ impl AnsiSQLParser {
 
 	}
 
-	fn parse_long(&self, tokens: &mut Peekable<Tokens>) -> Result<u32, String> {
-		match tokens.peek().cloned() {
-			Some(Token::Literal(LiteralToken::LiteralLong(_, v))) => {
+	fn parse_long<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<u32, String>
+		where It: Iterator<Item=&'a Token> {
+
+		match tokens.peek() {
+			Some(&&Token::Literal(LiteralToken::LiteralLong(_, ref v))) => {
 				tokens.next();
 				Ok(u32::from_str(&v).unwrap())
 			},
@@ -692,7 +726,9 @@ impl AnsiSQLParser {
 		}
 	}
 
-	fn parse_insert(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
+	fn parse_insert<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<SQLExpr,  String>
+		where It: Iterator<Item=&'a Token> {
+
 		println!("parse_insert()");
 
 		// TODO validation
@@ -722,14 +758,16 @@ impl AnsiSQLParser {
 
 	}
 
-	fn parse_select(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
+	fn parse_select<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<SQLExpr,  String>
+		where It: Iterator<Item=&'a Token> {
+
 		println!("parse_select()");
 		// consume the SELECT
 		tokens.next();
 		let proj = Box::new(try!(self.parse_expr_list(tokens)));
 
-		let from = match tokens.peek().cloned() {
-			Some(Token::Keyword(t)) => match &t as &str {
+		let from = match tokens.peek() {
+			Some(&&Token::Keyword(ref t)) => match &t as &str {
 				"FROM" => {
 					tokens.next();
 					Some(Box::new(try!(self.parse_relation(tokens))))
@@ -739,8 +777,8 @@ impl AnsiSQLParser {
 			_ => return Err(format!("unexpected token {:?}", tokens.peek()))
 		};
 
-		let whr = match tokens.peek().cloned() {
-			Some(Token::Keyword(t)) => match &t as &str {
+		let whr = match tokens.peek() {
+			Some(&&Token::Keyword(ref t)) => match &t as &str {
 				"WHERE" => {
 					tokens.next();
 					Some(Box::new(try!(self.parse_expr(tokens, 0))))
@@ -765,7 +803,9 @@ impl AnsiSQLParser {
 		Ok(SQLExpr::SQLSelect{expr_list: proj, relation: from, selection: whr, order: ob})
 	}
 
-	fn parse_update(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr, String> {
+	fn parse_update<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<SQLExpr, String>
+		where It: Iterator<Item=&'a Token> {
+
 		self.consume_keyword("UPDATE", tokens);
 
 		let table = try!(self.parse_identifier(tokens));
@@ -788,16 +828,20 @@ impl AnsiSQLParser {
 	}
 
 	// TODO real parse_relation
-	fn parse_relation(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
+	fn parse_relation<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<SQLExpr,  String>
+		where It: Iterator<Item=&'a Token> {
+
 		self.parse_expr(tokens, 4)
 	}
 
-	fn parse_expr_list(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
+	fn parse_expr_list<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<SQLExpr,  String>
+		where It: Iterator<Item=&'a Token> {
+
 		println!("parse_expr_list()");
 		let first = try!(self.parse_expr(tokens, 0_u32));
 		let mut v: Vec<SQLExpr> = Vec::new();
 		v.push(first);
-		while let Some(Token::Punctuator(p)) = tokens.peek().cloned() {
+		while let Some(&&Token::Punctuator(ref p)) = tokens.peek() {
 			if p == "," {
 				tokens.next();
 				v.push(try!(self.parse_expr(tokens, 0_u32)));
@@ -808,11 +852,13 @@ impl AnsiSQLParser {
 		Ok(SQLExpr::SQLExprList(v))
 	}
 
-	fn parse_order_by_list(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
+	fn parse_order_by_list<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<SQLExpr,  String>
+		where It: Iterator<Item=&'a Token> {
+
 		println!("parse_order_by_list()");
 		let mut v: Vec<SQLExpr> = Vec::new();
 		v.push(try!(self.parse_order_by_expr(tokens)));
-		while let Some(Token::Punctuator(p)) = tokens.peek().cloned() {
+		while let Some(&&Token::Punctuator(ref p)) = tokens.peek() {
 			if p == "," {
 				tokens.next();
 				v.push(try!(self.parse_order_by_expr(tokens)));
@@ -823,12 +869,16 @@ impl AnsiSQLParser {
 		Ok(SQLExpr::SQLExprList(v))
 	}
 
-	fn parse_order_by_expr(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
+	fn parse_order_by_expr<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<SQLExpr,  String>
+		where It: Iterator<Item=&'a Token> {
+
 		let e = try!(self.parse_expr(tokens, 0_u32));
 		Ok(SQLExpr::SQLOrderBy {expr: Box::new(e), is_asc: self.is_asc(tokens)})
 	}
 
-	fn is_asc(&self, tokens: &mut Peekable<Tokens>) -> bool {
+	fn is_asc<'a, It>(&self, tokens: &mut Peekable<It>) -> bool
+		where It: Iterator<Item=&'a Token> {
+
 		if self.consume_keyword(&"DESC", tokens) {
 			false
 		} else {
@@ -837,12 +887,14 @@ impl AnsiSQLParser {
 		}
 	}
 
-	fn parse_binary(&self, left: SQLExpr, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
+	fn parse_binary<'a, It>(&self, left: SQLExpr, tokens: &mut Peekable<It>) -> Result<SQLExpr,  String>
+		where It: Iterator<Item=&'a Token> {
+
 		println!("parse_binary()");
 		let precedence = self.get_precedence(tokens);
 		// determine operator
 		let operator = match tokens.next().unwrap() {
-			Token::Operator(t) => match &t as &str {
+			&Token::Operator(ref t) => match &t as &str {
 				"+" => SQLOperator::ADD,
 				"-" => SQLOperator::SUB,
 				"*" => SQLOperator::MULT,
@@ -861,25 +913,29 @@ impl AnsiSQLParser {
 		Ok(SQLExpr::SQLBinary {left: Box::new(left), op: operator, right: Box::new(try!(self.parse_expr(tokens, precedence)))})
 	}
 
-	fn parse_identifier(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
+	fn parse_identifier<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<SQLExpr,  String>
+		where It: Iterator<Item=&'a Token> {
+
 		println!("parse_identifier()");
 		match tokens.next().unwrap() {
-			Token::Identifier(v) => Ok(SQLExpr::SQLIdentifier(v)),
-			Token::Operator(o) => match &o as &str {
-				"*" => Ok(SQLExpr::SQLIdentifier(o)),
+			&Token::Identifier(ref v) => Ok(SQLExpr::SQLIdentifier(v.clone())),
+			&Token::Operator(ref o) => match &o as &str {
+				"*" => Ok(SQLExpr::SQLIdentifier(o.clone())),
 				_ => Err(format!("Unsupported operator as identifier {}", o))
 			},
 			_ => Err(format!("Illegal state"))
 		}
 	}
 
-	fn parse_nested(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
+	fn parse_nested<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<SQLExpr,  String>
+		where It: Iterator<Item=&'a Token> {
+
 		//consume (
 		tokens.next();
 		let nested = try!(self.parse_expr(tokens, 0));
 		// consume )
-		match tokens.peek().cloned() {
-			Some(Token::Punctuator(v)) => match &v as &str {
+		match tokens.peek() {
+			Some(&&Token::Punctuator(ref v)) => match &v as &str {
 				")" => {tokens.next();},
 				_ => return Err(format!("Expected , punctuator, received {}", v))
 			},
@@ -889,10 +945,12 @@ impl AnsiSQLParser {
 		Ok(SQLExpr::SQLNested(Box::new(nested)))
 	}
 
-	fn parse_unary(&self, tokens: & mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
+	fn parse_unary<'a, It>(&self, tokens: & mut Peekable<It>) -> Result<SQLExpr,  String>
+		where It: Iterator<Item=&'a Token> {
+
 		let precedence = self.get_precedence(tokens);
 		let op = match tokens.next() {
-			Some(Token::Operator(o)) => match &o as &str {
+			Some(&Token::Operator(ref o)) => match &o as &str {
 				"+" => SQLOperator::ADD,
 				"-" => SQLOperator::SUB,
 				_ => return Err(format!("Illegal operator for unary {}", o))
@@ -903,12 +961,14 @@ impl AnsiSQLParser {
 
 	}
 
-	fn parse_union(&self, left: SQLExpr, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
+	fn parse_union<'a, It>(&self, left: SQLExpr, tokens: &mut Peekable<It>) -> Result<SQLExpr,  String>
+		where It: Iterator<Item=&'a Token> {
+
 		// consume the UNION
 		tokens.next();
 
-		let union_type = match tokens.peek().cloned() {
-			Some(Token::Keyword(t)) => match &t as &str {
+		let union_type = match tokens.peek() {
+			Some(&&Token::Keyword(ref t)) => match &t as &str {
 				"ALL" => SQLUnionType::ALL,
 				"DISTINCT" => SQLUnionType::DISTINCT,
 				_ => SQLUnionType::UNION
@@ -922,7 +982,9 @@ impl AnsiSQLParser {
 
 	}
 
-	fn parse_join(&self, left: SQLExpr, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
+	fn parse_join<'a, It>(&self, left: SQLExpr, tokens: &mut Peekable<It>) -> Result<SQLExpr,  String>
+		where It: Iterator<Item=&'a Token> {
+
 		// TODO better protection on expected keyword sequences
 		let join_type = {
 			if self.consume_keyword("JOIN", tokens) || self.consume_keyword("INNER", tokens) {
@@ -963,7 +1025,9 @@ impl AnsiSQLParser {
 		Ok(SQLExpr::SQLJoin {left: Box::new(left), join_type: join_type, right: right, on_expr: on})
 	}
 
-	fn parse_alias(&self, left: SQLExpr, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr,  String> {
+	fn parse_alias<'a, It>(&self, left: SQLExpr, tokens: &mut Peekable<It>) -> Result<SQLExpr,  String>
+		where It: Iterator<Item=&'a Token> {
+
 		if self.consume_keyword(&"AS", tokens) {
 			Ok(SQLExpr::SQLAlias{expr: Box::new(left), alias: Box::new(try!(self.parse_identifier(tokens)))})
 		} else {
@@ -972,9 +1036,11 @@ impl AnsiSQLParser {
 	}
 
 	// TODO more helper methods like consume_keyword_sequence, required_keyword_sequence, etc
-	fn consume_keyword(&self, text: &str, tokens: &mut Peekable<Tokens>) -> bool {
-		match tokens.peek().cloned() {
-			Some(Token::Keyword(v)) | Some(Token::Identifier(v)) => {
+	fn consume_keyword<'a, It>(&self, text: &str, tokens: &mut Peekable<It>) -> bool
+		where It: Iterator<Item=&'a Token> {
+
+		match tokens.peek() {
+			Some(&&Token::Keyword(ref v)) | Some(&&Token::Identifier(ref v)) => {
 				if text.eq_ignore_ascii_case(&v) {
 					tokens.next();
 					true
@@ -986,9 +1052,11 @@ impl AnsiSQLParser {
 		}
 	}
 
-	fn consume_punctuator(&self, text: &str, tokens: &mut Peekable<Tokens>) -> bool {
-		match tokens.peek().cloned() {
-			Some(Token::Punctuator(v)) => {
+	fn consume_punctuator<'a, It>(&self, text: &str, tokens: &mut Peekable<It>) -> bool
+		where It: Iterator<Item=&'a Token> {
+
+		match tokens.peek() {
+			Some(&&Token::Punctuator(ref v)) => {
 				if text.eq_ignore_ascii_case(&v) {
 					tokens.next();
 					true
@@ -1000,9 +1068,11 @@ impl AnsiSQLParser {
 		}
 	}
 
-	fn consume_operator(&self, text: &str, tokens: &mut Peekable<Tokens>) -> bool {
-		match tokens.peek().cloned() {
-			Some(Token::Operator(v)) => {
+	fn consume_operator<'a, It>(&self, text: &str, tokens: &mut Peekable<It>) -> bool
+		where It: Iterator<Item=&'a Token> {
+
+		match tokens.peek() {
+			Some(&&Token::Operator(ref v)) => {
 				if text.eq_ignore_ascii_case(&v) {
 					tokens.next();
 					true

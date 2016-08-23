@@ -351,7 +351,7 @@ mod tests {
 
 	#[test]
 	fn config_test() {
-		let config = super::parse_config("src/example-babel-config.xml");
+		let config = super::parse_config("example-babel-config.xml");
 		println!("CONFIG {:#?}", config);
 		println!("HERE {:#?}", config.get_column_config(&String::from("babel"), &String::from("users"), &String::from("age")))
 	}

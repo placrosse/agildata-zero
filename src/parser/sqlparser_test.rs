@@ -1,5 +1,3 @@
-#[cfg(test)]
-
 use super::sql_parser::{AnsiSQLParser};
 use super::sql_parser::SQLExpr::*;
 use super::sql_parser::LiteralExpr::*;
