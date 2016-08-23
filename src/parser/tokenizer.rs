@@ -176,26 +176,6 @@ impl Tokenizer for String {
 
 }
 
-pub struct Tokens {
-    pub tokens: Vec<Token>,
-    pub index: usize,
-}
-
-impl Iterator for Tokens {
-    type Item = Token;
-
-    fn next(&mut self) -> Option<Token> {
-        // TODO clone?
-        if self.tokens.len() > self.index {
-            let result = self.tokens[self.index].clone();
-            self.index += 1;
-            Some(result)
-        } else {
-            None
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::Tokenizer;
