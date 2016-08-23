@@ -1,14 +1,15 @@
-
-use std::collections::HashMap;
-// TODO: Is there a better way to import all of this???
-
-use super::sql_parser::AnsiSQLParser;
+use super::sql_parser::{AnsiSQLParser};
 use super::sql_parser::SQLExpr::*;
-use super::sql_parser::SQLOperator::*;
-use super::sql_parser::SQLUnionType::*;
-use super::sql_parser::SQLJoinType::*;
 use super::sql_parser::LiteralExpr::*;
+use super::sql_parser::SQLOperator::*;
+use super::sql_parser::SQLJoinType::*;
+use super::sql_parser::SQLUnionType::*;
 use super::sql_parser::DataType::*;
+use super::sql_parser::ColumnQualifier::*;
+use super::sql_parser::SQLKeyDef::*;
+use super::sql_parser::TableOption;
+use super::sql_writer;
+use std::collections::HashMap;
 
 #[test]
 fn sqlparser() {
@@ -142,7 +143,7 @@ fn sqlparser() {
 
 	println!("{:#?}", parser.parse(sql));
 
-	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
+	let rewritten = sql_writer::write(parsed, &HashMap::new());
 
 	//assert_eq!(rewritten, sql);
 
@@ -225,7 +226,7 @@ fn sql_join() {
 
 	println!("{:#?}", parser.parse(sql));
 
-	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
+	let rewritten = sql_writer::write(parsed, &HashMap::new());
 
 	//assert_eq!(rewritten, sql);
 
@@ -314,7 +315,7 @@ fn nasty() {
 
 	println!("{:#?}", parser.parse(sql));
 
-	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
+	let rewritten = sql_writer::write(parsed, &HashMap::new());
 
 	println!("Rewritten: {:?}", rewritten);
 }
@@ -349,8 +350,9 @@ fn insert() {
 
 	println!("{:#?}", parser.parse(sql));
 
-	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
+	let rewritten = sql_writer::write(parsed, &HashMap::new());
 
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 	println!("Rewritten: {:?}", rewritten);
 
 }
@@ -374,9 +376,9 @@ fn select_wildcard() {
 
 	println!("{:#?}", parser.parse(sql));
 
-	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
+	let rewritten = sql_writer::write(parsed, &HashMap::new());
 
-	assert_eq!(rewritten, sql);
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 	println!("Rewritten: {:?}", rewritten);
 
 }
@@ -384,7 +386,7 @@ fn select_wildcard() {
 #[test]
 fn update() {
 	let parser = AnsiSQLParser {};
-	let sql = "UPDATE foo SET a = 'hello', b = 12345 WHERE c > 10)";
+	let sql = "UPDATE foo SET a = 'hello', b = 12345 WHERE c > 10";
 
 	let parsed = parser.parse(sql).unwrap();
 
@@ -416,7 +418,9 @@ fn update() {
 
 	println!("{:#?}", parser.parse(sql));
 
-	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
+	let rewritten = sql_writer::write(parsed, &HashMap::new());
+
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
 	println!("Rewritten: {}", rewritten);
 
@@ -453,8 +457,8 @@ fn create_numeric() {
 	      y DOUBLE(10),
 	      z DOUBLE(10,2),
 		  aa DOUBLE PRECISION,
-			  ab DOUBLE PRECISION (10),
-			  ac DOUBLE PRECISION (10, 2)
+		  ab DOUBLE PRECISION (10),
+		  ac DOUBLE PRECISION (10, 2)
 	      )";
 
 	let parsed = parser.parse(sql).unwrap();
@@ -607,14 +611,18 @@ fn create_numeric() {
 					data_type: Double { precision: Some(10), scale: Some(2) },
 					qualifiers: None
 				}
-			]
+			],
+			keys: vec![],
+			table_options: vec![]
 		},
 		parsed
 	);
 
 	println!("{:#?}", parser.parse(sql));
 
-	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
+	let rewritten = sql_writer::write(parsed, &HashMap::new());
+
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
 	println!("Rewritten: {}", rewritten);
 
@@ -687,14 +695,18 @@ fn create_temporal() {
 		            data_type: Year {display: Some(4)},
 					qualifiers: None
 		        }
-		    ]
+		    ],
+			keys: vec![],
+			table_options: vec![]
 		},
 		parsed
 	);
 
 	println!("{:#?}", parsed);
 
-	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
+	let rewritten = sql_writer::write(parsed, &HashMap::new());
+
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
 	println!("Rewritten: {}", rewritten);
 }
@@ -743,7 +755,7 @@ fn create_character() {
 		    column_list: vec![
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("a"))),
-		            data_type: Char {length: None},
+		            data_type: NChar {length: None},
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
@@ -758,17 +770,17 @@ fn create_character() {
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("d"))),
-		            data_type: Char {length: None},
+		            data_type: NChar {length: None},
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("e"))),
-		            data_type: Char {length: Some(255)},
+		            data_type: NChar {length: Some(255)},
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("f"))),
-		            data_type: Char {length: None},
+		            data_type: NChar {length: None},
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
@@ -783,7 +795,7 @@ fn create_character() {
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("i"))),
-		            data_type: Varchar {length: Some(50)},
+		            data_type: NVarchar {length: Some(50)},
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
@@ -793,7 +805,7 @@ fn create_character() {
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("k"))),
-		            data_type: Varchar {length: Some(50)},
+		            data_type: NVarchar {length: Some(50)},
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
@@ -890,48 +902,331 @@ fn create_character() {
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("ab"))),
-		            data_type: Char {length: None},
+		            data_type: CharByte {length: None},
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("ac"))),
-		            data_type: Char {length: Some(50)},
+		            data_type: CharByte {length: Some(50)},
 		            qualifiers: None
 		        }
-		    ]
+		    ],
+			keys: vec![],
+			table_options: vec![]
 		},
 		parsed
 	);
 
 	println!("{:#?}", parsed);
 
-	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
+	let rewritten = sql_writer::write(parsed, &HashMap::new());
+
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
 	println!("Rewritten: {}", rewritten);
 }
 
-// #[test]
-// fn create_column_qualifiers() {
-// 	let parser = AnsiSQLParser {};
-//
-// 	let sql = "CREATE TABLE foo (
-// 	      id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-// 	      a VARCHAR(50) CHARACTER SET utf8 COLLATE utf8_general_ci NULL UNIQUE,
-// 	      b BIGINT SIGNED NOT NULL DEFAULT 123456789,
-// 	      c TINYINT UNSIGNED NULL DEFAULT NULL,
-// 	      d TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-//     )";
-//
-// 	let parsed = parser.parse(sql).unwrap();
-//
-// 	// assert_eq!(
-// 	// 	None,
-// 	// 	parsed
-// 	// );
-//
-// 	println!("{:#?}", parsed);
-//
-// 	let rewritten = super::sql_writer::write(parsed, &HashMap::new());
-//
-// 	println!("Rewritten: {}", rewritten);
-// }
+#[test]
+fn create_column_qualifiers() {
+	let parser = AnsiSQLParser {};
+
+	let sql = "CREATE TABLE foo (
+	      id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+	      a VARCHAR(50) CHARACTER SET utf8 COLLATE utf8_general_ci NULL UNIQUE,
+	      b BIGINT SIGNED NOT NULL DEFAULT 123456789,
+	      c TINYINT UNSIGNED NULL DEFAULT NULL COMMENT 'Some Comment',
+	      d TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )";
+
+	let parsed = parser.parse(sql).unwrap();
+
+	assert_eq!(
+		SQLCreateTable {
+		    table: Box::new(SQLIdentifier(String::from("foo"))),
+		    column_list: vec![
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("id"))),
+		            data_type: BigInt {display: None},
+		            qualifiers: Some(vec![
+		                    NotNull,
+		                    AutoIncrement,
+		                    PrimaryKey
+		                ]
+		            )
+		        },
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("a"))),
+		            data_type: Varchar {length: Some(50)},
+		            qualifiers: Some(vec![
+		                    CharacterSet(Box::new(SQLIdentifier(String::from("utf8")))),
+		                    Collate(Box::new(SQLIdentifier(String::from("utf8_general_ci")))),
+		                    Null,
+		                    UniqueKey
+		                ]
+		            )
+		        },
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("b"))),
+		            data_type: BigInt {display: None},
+		            qualifiers: Some(vec![
+		                    Signed,
+		                    NotNull,
+		                    Default(Box::new(SQLLiteral(LiteralLong(1,123456789)))
+		                    )
+		                ]
+		            )
+		        },
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("c"))),
+		            data_type: TinyInt {display: None},
+		            qualifiers: Some(vec![
+		                    Unsigned,
+		                    Null,
+		                    Default(Box::new(SQLIdentifier(String::from("NULL")))), // TODO should be literal null ?
+							Comment(Box::new(SQLLiteral(LiteralString(2,String::from("Some Comment")))))
+		                ]
+		            )
+		        },
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("d"))),
+		            data_type: Timestamp {fsp: None},
+		            qualifiers: Some(vec![
+		                    Default(Box::new(SQLIdentifier(String::from("CURRENT_TIMESTAMP")))),
+		                    OnUpdate(Box::new(SQLIdentifier(String::from("CURRENT_TIMESTAMP"))))
+		                ]
+		            )
+		        }
+		    ],
+			keys: vec![],
+			table_options: vec![]
+		},
+		parsed
+	);
+
+	println!("{:#?}", parsed);
+
+	let rewritten = sql_writer::write(parsed, &HashMap::new());
+
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {}", rewritten);
+}
+
+#[test]
+fn create_tail_keys() {
+	let parser = AnsiSQLParser {};
+
+	let sql = "CREATE TABLE foo (
+	      id BIGINT AUTO_INCREMENT,
+	      a VARCHAR(50) NOT NULL,
+	      b TIMESTAMP NOT NULL,
+	      PRIMARY KEY (id),
+	      UNIQUE KEY keyName1 (id, b),
+	      KEY keyName2 (b),
+	      FULLTEXT KEY keyName (a),
+	      FOREIGN KEY fkeyName (a) REFERENCES bar(id)
+  	)";
+
+	let parsed = parser.parse(sql).unwrap();
+
+	assert_eq!(
+		SQLCreateTable {
+		    table: Box::new(SQLIdentifier(String::from("foo"))),
+		    column_list: vec![
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("id"))),
+		            data_type: BigInt {display: None},
+		            qualifiers: Some(vec![AutoIncrement])
+		        },
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("a"))),
+		            data_type: Varchar {length: Some(50)},
+		            qualifiers: Some(vec![NotNull])
+		        },
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("b"))),
+		            data_type: Timestamp {fsp: None},
+		            qualifiers: Some(vec![NotNull])
+		        }
+		    ],
+		    keys: vec![
+		        Primary {
+					symbol: None,
+		            name: None,
+		            columns: vec![SQLIdentifier(String::from("id"))]
+		        },
+		        Unique {
+					symbol: None,
+		            name: Some(Box::new(SQLIdentifier(String::from("keyName1")))),
+		            columns: vec![
+		                SQLIdentifier(String::from("id")),
+		                SQLIdentifier(String::from("b"))
+		            ]
+		        },
+		        Index {
+		            name:  Some(Box::new(SQLIdentifier(String::from("keyName2")))),
+		            columns: vec![SQLIdentifier(String::from("b"))]
+		        },
+		        FullText {
+		            name: Some(Box::new(SQLIdentifier(String::from("keyName")))),
+		            columns: vec![SQLIdentifier(String::from("a"))]
+		        },
+		        Foreign {
+					symbol: None,
+		            name: Some(Box::new(SQLIdentifier(String::from("fkeyName")))),
+		            columns: vec![SQLIdentifier(String::from("a"))],
+		            reference_table: Box::new(SQLIdentifier(String::from("bar"))),
+		            reference_columns: vec![SQLIdentifier(String::from("id"))],
+		        }
+		    ],
+			table_options: vec![]
+		},
+		parsed
+	);
+
+	println!("{:#?}", parsed);
+
+	let rewritten = sql_writer::write(parsed, &HashMap::new());
+
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {}", rewritten);
+}
+
+#[test]
+fn create_tail_constraints() {
+	let parser = AnsiSQLParser {};
+
+	let sql = "CREATE TABLE foo (
+	      id BIGINT AUTO_INCREMENT,
+	      a VARCHAR(50) NOT NULL,
+	      b TIMESTAMP NOT NULL,
+	      CONSTRAINT symbol1 PRIMARY KEY (id),
+	      CONSTRAINT symbol2 UNIQUE KEY keyName1 (a),
+	      CONSTRAINT symbol3 FOREIGN KEY fkeyName (a) REFERENCES bar(id)
+	)";
+
+	let parsed = parser.parse(sql).unwrap();
+
+	println!("{:#?}", parsed);
+
+	assert_eq!(
+		SQLCreateTable {
+		    table: Box::new(SQLIdentifier(String::from("foo"))),
+		    column_list: vec![
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("id"))),
+		            data_type: BigInt {display: None},
+		            qualifiers: Some(vec![AutoIncrement])
+		        },
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("a"))),
+		            data_type: Varchar {length: Some(50)},
+		            qualifiers: Some(vec![NotNull])
+		        },
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("b"))),
+		            data_type: Timestamp {fsp: None},
+		            qualifiers: Some(vec![NotNull])
+		        }
+		    ],
+		    keys: vec![
+				Primary {
+					symbol: Some(Box::new(SQLIdentifier(String::from("symbol1")))),
+					name: None,
+					columns: vec![SQLIdentifier(String::from("id"))]
+				},
+				Unique {
+					symbol: Some(Box::new(SQLIdentifier(String::from("symbol2")))),
+					name: Some(Box::new(SQLIdentifier(String::from("keyName1")))),
+					columns: vec![
+						SQLIdentifier(String::from("a"))
+					]
+				},
+				Foreign {
+					symbol: Some(Box::new(SQLIdentifier(String::from("symbol3")))),
+					name: Some(Box::new(SQLIdentifier(String::from("fkeyName")))),
+					columns: vec![SQLIdentifier(String::from("a"))],
+					reference_table: Box::new(SQLIdentifier(String::from("bar"))),
+					reference_columns: vec![SQLIdentifier(String::from("id"))],
+				}
+			],
+			table_options: vec![]
+		},
+		parsed
+	);
+
+	let rewritten = sql_writer::write(parsed, &HashMap::new());
+
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {}", rewritten);
+}
+
+#[test]
+fn create_table_options() {
+	let parser = AnsiSQLParser {};
+
+	let sql = "CREATE TABLE foo (
+	      id BIGINT AUTO_INCREMENT,
+	      a VARCHAR(50)
+	) Engine InnoDB DEFAULT CHARSET utf8 COMMENT 'Table Comment' AUTO_INCREMENT 12345";
+
+	let parsed = parser.parse(sql).unwrap();
+
+	println!("{:#?}", parsed);
+
+	assert_eq!(
+		SQLCreateTable {
+		    table: Box::new(SQLIdentifier(String::from("foo"))),
+		    column_list: vec![
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("id"))),
+		            data_type: BigInt {display: None},
+		            qualifiers: Some(vec![AutoIncrement])
+		        },
+		        SQLColumnDef {
+		            column: Box::new(SQLIdentifier(String::from("a"))),
+		            data_type: Varchar {length: Some(50)},
+		            qualifiers: None
+		        }
+		    ],
+		    keys: vec![],
+			table_options: vec![
+		        TableOption::Engine(Box::new(SQLIdentifier(String::from("InnoDB")))),
+		        TableOption::Charset(Box::new(SQLIdentifier(String::from("utf8")))),
+		        TableOption::Comment(Box::new(SQLLiteral(LiteralString(1,String::from("Table Comment"))))),
+				TableOption::AutoIncrement(Box::new(SQLLiteral(LiteralLong(2,12345_u64))))
+		    ]
+		},
+		parsed
+	);
+
+	let rewritten = sql_writer::write(parsed, &HashMap::new());
+
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {}", rewritten);
+}
+
+// used for fomatting sql strings for assertions
+fn format_sql(sql: &str) -> String {
+
+	sql.to_uppercase()
+
+		// unify datatype synonymns
+		.replace("BOOLEAN", "BOOL").replace("BOOL", "BOOLEAN") // done twice intentionally
+		.replace("INTEGER", "INT").replace(" INT", " INTEGER")
+		.replace("PRECISION", "")
+		.replace("DECIMAL", "DEC").replace("DEC", "DECIMAL")
+		.replace("CHARACTER VARYING", "VARCHAR")
+		.replace("NATIONAL CHARACTER", "NCHAR")
+		.replace("NATIONAL CHAR", "NCHAR")
+		.replace("NATIONAL VARCHAR", "NVARCHAR")
+		.replace("CHARACTER", "CHAR")
+
+		// strip whitespace
+		.replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "")
+
+
+}

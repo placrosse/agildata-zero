@@ -31,8 +31,22 @@ pub enum SQLExpr {
 	},
 	SQLUnion{left: Box<SQLExpr>, union_type: SQLUnionType, right: Box<SQLExpr>},
 	SQLJoin{left: Box<SQLExpr>, join_type: SQLJoinType, right: Box<SQLExpr>, on_expr: Option<Box<SQLExpr>>},
-	SQLCreateTable{table: Box<SQLExpr>, column_list: Vec<SQLExpr>},
+	SQLCreateTable{
+		table: Box<SQLExpr>,
+		column_list: Vec<SQLExpr>,
+		keys: Vec<SQLKeyDef>,
+		table_options: Vec<TableOption>
+	},
 	SQLColumnDef{column: Box<SQLExpr>, data_type: DataType, qualifiers: Option<Vec<ColumnQualifier>>}
+}
+
+#[derive(Debug, PartialEq)]
+pub enum SQLKeyDef {
+	Primary{symbol: Option<Box<SQLExpr>>, name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>},
+	Unique{symbol: Option<Box<SQLExpr>>, name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>},
+	Foreign{symbol: Option<Box<SQLExpr>>, name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>, reference_table: Box<SQLExpr>, reference_columns: Vec<SQLExpr>},
+	FullText{name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>},
+	Index{name: Option<Box<SQLExpr>>, columns: Vec<SQLExpr>}
 }
 
 #[derive(Debug, PartialEq)]
@@ -53,7 +67,10 @@ pub enum DataType {
 	Time{fsp: Option<u32>},
 	Year{display: Option<u32>},
 	Char{length: Option<u32>},
+	NChar{length: Option<u32>},
+	CharByte{length: Option<u32>},
 	Varchar{length: Option<u32>},
+	NVarchar{length: Option<u32>},
 	Binary{length: Option<u32>},
 	VarBinary{length: Option<u32>},
 	TinyBlob,
@@ -70,18 +87,26 @@ pub enum DataType {
 
 #[derive(Debug, PartialEq)]
 pub enum ColumnQualifier {
-	// CharacterSet(Box<SQLExpr>),
-	// Collate(Box<SQLExpr>),
-	// Default(Box<SQLExpr>),
-	// Signed,
-	// Unsigned,
-	// Null,
-	// NotNull,
-	// AutoIncrement,
-	// PrimaryKey,
-	// UniqueKey,
-	// OnUpdate(Box<SQLExpr>),
-	// Comment(Box<SQLExpr>)
+	CharacterSet(Box<SQLExpr>),
+	Collate(Box<SQLExpr>),
+	Default(Box<SQLExpr>),
+	Signed,
+	Unsigned,
+	Null,
+	NotNull,
+	AutoIncrement,
+	PrimaryKey,
+	UniqueKey,
+	OnUpdate(Box<SQLExpr>),
+	Comment(Box<SQLExpr>)
+}
+
+#[derive(Debug, PartialEq)]
+pub enum TableOption {
+	Engine(Box<SQLExpr>),
+	Charset(Box<SQLExpr>),
+	Comment(Box<SQLExpr>),
+	AutoIncrement(Box<SQLExpr>)
 }
 
 #[derive(Debug, PartialEq)]
@@ -261,19 +286,163 @@ impl AnsiSQLParser {
 			self.consume_punctuator("(", tokens);
 
 			let mut columns: Vec<SQLExpr> = Vec::new();
+			let mut keys: Vec<SQLKeyDef> = Vec::new();
+
 			columns.push(try!(self.parse_column_def(tokens)));
 			while self.consume_punctuator(",", tokens) {
-				columns.push(try!(self.parse_column_def(tokens)));
+				match tokens.peek().cloned() {
+					Some(Token::Keyword(v)) => match &v as &str {
+						"PRIMARY" | "KEY" | "UNIQUE" | "FULLTEXT" | "FOREIGN" | "CONSTRAINT" => keys.push(try!(self.parse_key_def(tokens))),
+						_ => columns.push(try!(self.parse_column_def(tokens)))
+					},
+					_ => columns.push(try!(self.parse_column_def(tokens)))
+				}
 			}
 
-			//let column_list = try!(self.parse_expr_list(tokens));
-			self.consume_punctuator(")", tokens);
+			if !self.consume_punctuator(")", tokens) {
+				return Err(String::from(format!("Expected token ) received token {:?}", tokens.peek())))
+			}
 
-			Ok(SQLExpr::SQLCreateTable{table: Box::new(table), column_list: columns })
+			let table_options = self.parse_table_options(tokens)?;
+
+			match tokens.peek() {
+				None => Ok(SQLExpr::SQLCreateTable{
+					table: Box::new(table),
+					column_list: columns,
+					keys: keys,
+					table_options: table_options
+				 }),
+				_ => Err(String::from(format!("Expected end of statement, received {:?}", tokens.peek())))
+			}
+
 		} else {
 			Err(String::from(format!("Unexpected token after CREATE {:?}", tokens.peek())))
 		}
 
+	}
+
+	fn parse_table_options(&self, tokens: &mut Peekable<Tokens>) -> Result<Vec<TableOption>, String> {
+		let mut ret: Vec<TableOption> = Vec::new();
+
+		while let Some(o) = self.parse_table_option(tokens)? {
+			ret.push(o);
+		}
+		Ok(ret)
+	}
+
+	fn parse_table_option(&self, tokens: &mut Peekable<Tokens>) -> Result<Option<TableOption>, String> {
+		match tokens.peek().cloned() {
+			Some(Token::Keyword(v)) | Some(Token::Identifier(v)) => match &v.to_uppercase() as &str {
+				"ENGINE" => {
+					tokens.next();
+					self.consume_operator("=", tokens);
+					Ok(Some(TableOption::Engine(Box::new(self.parse_expr(tokens, 0)?))))
+				},
+				"DEFAULT" => { // [DEFAULT] [CHARACTER SET | COLLATE]
+					tokens.next();
+					self.parse_table_option(tokens)
+				},
+				"CHARACTER" | "CHARSET" => {
+					tokens.next();
+					self.consume_keyword("SET", tokens);
+					Ok(Some(TableOption::Charset(Box::new(self.parse_expr(tokens, 0)?))))
+				},
+				"COMMENT" => {
+					tokens.next();
+					Ok(Some(TableOption::Comment(Box::new(self.parse_expr(tokens, 0)?))))
+				},
+				"AUTO_INCREMENT" => {
+					tokens.next();
+					Ok(Some(TableOption::AutoIncrement(Box::new(self.parse_expr(tokens, 0)?))))
+				},
+				// "COLLATE"
+				_ => Err(String::from(format!("Unsupported Table Option {}", v)))
+			},
+			_ => Ok(None)
+		}
+	}
+
+	fn parse_key_def(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLKeyDef, String> {
+		println!("parse_key_def()");
+
+		let symbol = if self.consume_keyword("CONSTRAINT", tokens) {
+			Some(Box::new(self.parse_identifier(tokens)?))
+		} else {
+			None
+		};
+
+		let t = tokens.next();
+
+		match t {
+			Some(Token::Keyword(v)) => match &v as &str {
+				"PRIMARY" => {
+					self.consume_keyword("KEY", tokens);
+					Ok(SQLKeyDef::Primary{
+						symbol: symbol,
+						name: self.parse_optional_key_name(tokens)?,
+						columns: self.parse_key_column_list(tokens)?
+					})
+				},
+				"UNIQUE" => {
+					self.consume_keyword("KEY", tokens);
+					Ok(SQLKeyDef::Unique{
+						symbol: symbol,
+						name: self.parse_optional_key_name(tokens)?,
+						columns: self.parse_key_column_list(tokens)?
+					})
+				},
+				"FOREIGN" => {
+					self.consume_keyword("KEY", tokens);
+					let name = self.parse_optional_key_name(tokens)?;
+					let columns = self.parse_key_column_list(tokens)?;
+					self.consume_keyword("REFERENCES", tokens);
+
+					Ok(SQLKeyDef::Foreign{
+						symbol: symbol,
+						name: name,
+						columns: columns,
+						reference_table: Box::new(self.parse_identifier(tokens)?),
+						reference_columns: self.parse_key_column_list(tokens)?
+					})
+				},
+				"FULLTEXT" => {
+					self.consume_keyword("KEY", tokens);
+					Ok(SQLKeyDef::FullText{
+						name: self.parse_optional_key_name(tokens)?,
+						columns: self.parse_key_column_list(tokens)?
+					})
+				},
+				"KEY" => {
+					self.consume_keyword("KEY", tokens);
+					Ok(SQLKeyDef::Index{
+						name: self.parse_optional_key_name(tokens)?,
+						columns: self.parse_key_column_list(tokens)?
+					})
+				},
+				_ => Err(String::from(format!("Unsupported key definition prefix {}", v)))
+			},
+			_ => Err(String::from(format!("Expected key definition received token {:?}", t)))
+		}
+	}
+
+	fn parse_optional_key_name(&self, tokens: &mut Peekable<Tokens>) -> Result<Option<Box<SQLExpr>>, String> {
+		match tokens.peek().cloned() {
+			Some(Token::Identifier(_)) => Ok(Some(Box::new(self.parse_identifier(tokens)?))),
+			_ => Ok(None)
+		}
+	}
+
+	fn parse_key_column_list(&self, tokens: &mut Peekable<Tokens>) -> Result<Vec<SQLExpr>, String> {
+		self.consume_punctuator("(", tokens);
+
+		let mut columns: Vec<SQLExpr> = Vec::new();
+		columns.push(self.parse_identifier(tokens)?);
+		while self.consume_punctuator(",", tokens) {
+			columns.push(self.parse_identifier(tokens)?);
+		}
+		self.consume_punctuator(")", tokens);
+
+		Ok(columns)
 	}
 
 	fn parse_column_def(&self, tokens: &mut Peekable<Tokens>) -> Result<SQLExpr, String> {
@@ -291,8 +460,92 @@ impl AnsiSQLParser {
 		Ok(SQLExpr::SQLColumnDef{column: Box::new(column), data_type: data_type, qualifiers: qualifiers})
 	}
 
-	fn parse_column_qualifiers(&self, _tokens: &mut Peekable<Tokens>) ->  Result<Option<Vec<ColumnQualifier>>, String> {
-		Ok(None)
+	fn parse_column_qualifiers(&self, tokens: &mut Peekable<Tokens>) ->  Result<Option<Vec<ColumnQualifier>>, String> {
+		let mut ret: Vec<ColumnQualifier> = Vec::new();
+
+		while let Some(cq) = try!(self.parse_column_qualifier(tokens)) {
+			ret.push(cq);
+		}
+
+		if ret.len() > 0 {
+			Ok(Some(ret))
+		} else {
+			Ok(None)
+		}
+	}
+
+	fn parse_column_qualifier(&self, tokens: &mut Peekable<Tokens>) ->  Result<Option<ColumnQualifier>, String> {
+		println!("parse_column_qualifier() {:?}", tokens.peek());
+		match tokens.peek().cloned() {
+			Some(Token::Keyword(v)) | Some(Token::Identifier(v)) => match &v.to_uppercase() as &str {
+				"NOT" => {
+					tokens.next();
+					if self.consume_keyword("NULL", tokens) {
+						Ok(Some(ColumnQualifier::NotNull))
+					} else {
+						Err(format!("Expected NOT NULL, received NOT {:?}", tokens.peek()))
+					}
+				},
+				"NULL" => {
+					tokens.next();
+					Ok(Some(ColumnQualifier::Null))
+				},
+				"AUTO_INCREMENT" => {
+					tokens.next();
+					Ok(Some(ColumnQualifier::AutoIncrement))
+				},
+				"PRIMARY" => {
+					tokens.next();
+					if self.consume_keyword("KEY", tokens) {
+						Ok(Some(ColumnQualifier::PrimaryKey))
+					} else {
+						Err(format!("Expected PRIMARY KEY, received PRIMARY {:?}", tokens.peek()))
+					}
+				},
+				"UNIQUE" => {
+					tokens.next();
+					Ok(Some(ColumnQualifier::UniqueKey))
+				},
+				"DEFAULT" => {
+					tokens.next();
+					Ok(Some(ColumnQualifier::Default(Box::new(try!(self.parse_expr(tokens, 0))))))
+				},
+				"CHARACTER" => {
+					tokens.next();
+					if self.consume_keyword("SET", tokens) {
+						Ok(Some(ColumnQualifier::CharacterSet(Box::new(try!(self.parse_expr(tokens, 0))))))
+					} else {
+						Err(format!("Expected PRIMARY KEY, received PRIMARY {:?}", tokens.peek()))
+					}
+				},
+				"COLLATE" => {
+					tokens.next();
+					Ok(Some(ColumnQualifier::Collate(Box::new(try!(self.parse_expr(tokens, 0))))))
+				},
+				"SIGNED" => {
+					tokens.next();
+					Ok(Some(ColumnQualifier::Signed))
+				},
+				"UNSIGNED" => {
+					tokens.next();
+					Ok(Some(ColumnQualifier::Unsigned))
+				},
+				"ON" => {
+					tokens.next();
+					if self.consume_keyword("UPDATE", tokens) {
+						Ok(Some(ColumnQualifier::OnUpdate(Box::new(try!(self.parse_expr(tokens, 0))))))
+					} else {
+						Err(format!("Expected ON UPDATE, received ON {:?}", tokens.peek()))
+					}
+				},
+				"COMMENT" => {
+					tokens.next();
+					Ok(Some(ColumnQualifier::Comment(Box::new(try!(self.parse_expr(tokens, 0))))))
+				}
+				_ => Ok(None)
+			},
+			_ => Ok(None)
+		}
 	}
 
 	fn parse_data_type(&self, tokens: &mut Peekable<Tokens>) ->  Result<DataType, String> {
@@ -330,11 +583,31 @@ impl AnsiSQLParser {
 				"TIME" => Ok(DataType::Time{fsp: try!(self.parse_optional_display(tokens))}),
 				"YEAR" => Ok(DataType::Year{display: try!(self.parse_optional_display(tokens))}),
 				// TODO do something with NATIONAL, NCHAR, etc
-				"NATIONAL" => self.parse_data_type(tokens),
-				"CHAR" | "NCHAR" => {
-					let ret = Ok(DataType::Char{length: try!(self.parse_optional_display(tokens))});
-					// TODO do something with CHAR BYTE
-					self.consume_keyword("BYTE", tokens);
+				"NATIONAL" => {
+					if self.consume_keyword(&"CHAR", tokens) {
+						Ok(DataType::NChar{length: try!(self.parse_optional_display(tokens))})
+					} else if self.consume_keyword(&"VARCHAR", tokens) {
+						Ok(DataType::NVarchar{length: try!(self.parse_optional_display(tokens))})
+					} else if self.consume_keyword(&"CHARACTER", tokens) {
+						if self.consume_keyword(&"VARYING", tokens) {
+							Ok(DataType::NVarchar{length: try!(self.parse_optional_display(tokens))})
+						} else {
+							Ok(DataType::NChar{length: try!(self.parse_optional_display(tokens))})
+						}
+					} else {
+						Err(format!("Expected NATIONAL CHAR|VARCHAR|CHARACTER [VARYING], received NATIONAL {:?}", tokens.peek()))
+					}
+				},
+				"CHAR" => {
+					let length = try!(self.parse_optional_display(tokens));
+					if self.consume_keyword(&"BYTE", tokens) {
+						Ok(DataType::CharByte{length: length})
+					} else {
+						Ok(DataType::Char{length: length})
+					}
+				},
+				"NCHAR" => {
+					let ret = Ok(DataType::NChar{length: try!(self.parse_optional_display(tokens))});
 					ret
 				},
 				"CHARACTER" => {
@@ -344,7 +617,8 @@ impl AnsiSQLParser {
 						Ok(DataType::Char{length: try!(self.parse_optional_display(tokens))})
 					}
 				},
-				"VARCHAR" | "NVARCHAR" => Ok(DataType::Varchar{length: try!(self.parse_optional_display(tokens))}),
+				"VARCHAR" => Ok(DataType::Varchar{length: try!(self.parse_optional_display(tokens))}),
+				"NVARCHAR" => Ok(DataType::NVarchar{length: try!(self.parse_optional_display(tokens))}),
 				"BINARY" => Ok(DataType::Binary{length: try!(self.parse_optional_display(tokens))}),
 				"VARBINARY" => Ok(DataType::VarBinary{length: try!(self.parse_optional_display(tokens))}),
 				"TINYBLOB" => Ok(DataType::TinyBlob),
@@ -715,6 +989,20 @@ impl AnsiSQLParser {
 	fn consume_punctuator(&self, text: &str, tokens: &mut Peekable<Tokens>) -> bool {
 		match tokens.peek().cloned() {
 			Some(Token::Punctuator(v)) => {
+				if text.eq_ignore_ascii_case(&v) {
+					tokens.next();
+					true
+				} else {
+					false
+				}
+			},
+			_ => false
+		}
+	}
+
+	fn consume_operator(&self, text: &str, tokens: &mut Peekable<Tokens>) -> bool {
+		match tokens.peek().cloned() {
+			Some(Token::Operator(v)) => {
 				if text.eq_ignore_ascii_case(&v) {
 					tokens.next();
 					true

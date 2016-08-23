@@ -1,4 +1,6 @@
-use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator, SQLUnionType, SQLJoinType, DataType};
+use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator,
+    SQLUnionType, SQLJoinType, DataType, ColumnQualifier,
+    SQLKeyDef, TableOption};
 use std::fmt::Write;
 use std::collections::HashMap;
 
@@ -21,15 +23,15 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 			builder.push_str("SELECT");
 			_write(builder, *expr_list, literals);
 			if !relation.is_none() {
-				builder.push_str("FROM");
+				builder.push_str(" FROM");
 				_write(builder, *relation.unwrap(), literals)
 			}
 			if !selection.is_none() {
-				builder.push_str("WHERE");
+				builder.push_str(" WHERE");
 				_write(builder, *selection.unwrap(), literals)
 			}
 			if !order.is_none() {
-				builder.push_str("ORDER BY");
+				builder.push_str(" ORDER BY");
 				_write(builder, *order.unwrap(), literals)
 			}
 
@@ -46,25 +48,48 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
         SQLExpr::SQLUpdate{table, assignments, selection} => {
             builder.push_str("UPDATE");
             _write(builder, *table, literals);
-            builder.push_str("SET");
+            builder.push_str(" SET");
             _write(builder, *assignments, literals);
             if selection.is_some() {
-                builder.push_str("WHERE");
+                builder.push_str(" WHERE");
                 _write(builder, *selection.unwrap(), literals);
             }
         },
-        SQLExpr::SQLCreateTable{column_list, ..} => {
+        SQLExpr::SQLCreateTable{table, column_list, keys, table_options} => {
             builder.push_str("CREATE TABLE");
+            _write(builder, *table, literals);
+
+            builder.push_str(&" (");
             let mut sep = "";
             for c in column_list {
                 builder.push_str(sep);
                 _write(builder, c, literals);
                 sep = ", ";
             }
+
+            for k in keys {
+                builder.push_str(sep);
+                _write_key_definition(builder, k, literals);
+                sep = ", ";
+            }
+
+            builder.push_str(&")");
+
+            sep = " ";
+            for o in table_options {
+                builder.push_str(sep);
+                _write_table_option(builder, o, literals);
+            }
         },
-        SQLExpr::SQLColumnDef{column, data_type, ..} => {
+        SQLExpr::SQLColumnDef{column, data_type, qualifiers} => {
             _write(builder, *column, literals);
             _write_data_type(builder, data_type, literals);
+            if qualifiers.is_some() {
+                for q in qualifiers.unwrap() {
+                    _write_column_qualifier(builder, q, literals);
+                }
+            }
+
         },
 		SQLExpr::SQLExprList(vector) => {
 			let mut sep = "";
@@ -103,8 +128,6 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 			LiteralExpr::LiteralString(i, s) => {
 				match literals.get(&i) {
 					Some(value) => match value {
-						// TODO write! escapes the single quotes...
-						// X'...'
 						&Some(ref e) => {
 							write!(builder, "X'{}'", to_hex_string(e)).unwrap(); // must_use
 						},
@@ -117,11 +140,11 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 		},
 		SQLExpr::SQLAlias{expr, alias} => {
 			_write(builder, *expr, literals);
-			builder.push_str("AS");
+			builder.push_str(" AS");
 			_write(builder, *alias, literals);
 		},
 		SQLExpr::SQLIdentifier(id) => {
-			write!(builder, "{}", id).unwrap();
+			write!(builder, " {}", id).unwrap();
 		},
 		SQLExpr::SQLNested(expr) => {
 			builder.push_str("(");
@@ -135,7 +158,7 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 		SQLExpr::SQLOrderBy{expr, is_asc} => {
 			_write(builder, *expr, literals);
 			if !is_asc {
-				builder.push_str("DESC");
+				builder.push_str(" DESC");
 			}
 		},
 		SQLExpr::SQLJoin{left, join_type, right, on_expr} => {
@@ -143,7 +166,7 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
 			_write_join_type(builder, join_type);
 			_write(builder, *right, literals);
 			if !on_expr.is_none() {
-				builder.push_str("ON");
+				builder.push_str(" ON");
 				_write(builder, *on_expr.unwrap(), literals);
 			}
 		},
@@ -197,117 +220,254 @@ fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Ve
     fn _write_data_type(builder: &mut String, data_type: DataType, literals: &HashMap<u32, Option<Vec<u8>>>) {
         match data_type {
             DataType::Bit{display} => {
-                builder.push_str("BIT");
+                builder.push_str(" BIT");
                 _write_optional_display(builder, display);
             },
             DataType::TinyInt{display} => {
-                builder.push_str("TINYINT");
+                builder.push_str(" TINYINT");
                 _write_optional_display(builder, display);
             },
             DataType::SmallInt{display} => {
-                builder.push_str("SMALLINT");
+                builder.push_str(" SMALLINT");
                 _write_optional_display(builder, display);
             },
             DataType::MediumInt{display} => {
-                builder.push_str("MEDIUMINT");
+                builder.push_str(" MEDIUMINT");
                 _write_optional_display(builder, display);
             },
             DataType::Int{display} => {
-                builder.push_str("INTEGER");
+                builder.push_str(" INTEGER");
                 _write_optional_display(builder, display);
             },
             DataType::BigInt{display} => {
-                builder.push_str("BIGINT");
+                builder.push_str(" BIGINT");
                 _write_optional_display(builder, display);
             },
             DataType::Decimal{precision, scale} => {
-                builder.push_str("DECIMAL");
+                builder.push_str(" DECIMAL");
                 _write_optional_precision_and_scale(builder, precision, scale);
             },
             DataType::Float{precision, scale} => {
-                builder.push_str("FLOAT");
+                builder.push_str(" FLOAT");
                 _write_optional_precision_and_scale(builder, precision, scale);
             },
             DataType::Double{precision, scale} => {
-                builder.push_str("DOUBLE");
+                builder.push_str(" DOUBLE");
                 _write_optional_precision_and_scale(builder, precision, scale);
             },
             DataType::Bool => {
-                builder.push_str("BOOLEAN");
+                builder.push_str(" BOOLEAN");
             },
             DataType::Date => {
-                builder.push_str("DATE");
+                builder.push_str(" DATE");
             },
             DataType::DateTime{fsp} => {
-                builder.push_str("DATETIME");
+                builder.push_str(" DATETIME");
                 _write_optional_display(builder, fsp);
             },
             DataType::Timestamp{fsp} => {
-                builder.push_str("TIMESTAMP");
+                builder.push_str(" TIMESTAMP");
                 _write_optional_display(builder, fsp);
             },
             DataType::Time{fsp} => {
-                builder.push_str("TIME");
+                builder.push_str(" TIME");
                 _write_optional_display(builder, fsp);
             },
             DataType::Year{display} => {
-                builder.push_str("DATETIME");
+                builder.push_str(" YEAR");
                 _write_optional_display(builder, display);
             },
             DataType::Char{length} => {
-                builder.push_str("CHAR");
+                builder.push_str(" CHAR");
                 _write_optional_display(builder, length);
             },
+            DataType::NChar{length} => {
+                builder.push_str(" NCHAR");
+                _write_optional_display(builder, length);
+            },
+            DataType::CharByte{length} => {
+                builder.push_str(" CHAR");
+                _write_optional_display(builder, length);
+                builder.push_str(" BYTE");
+            },
             DataType::Varchar{length} => {
-                builder.push_str("VARCHAR");
+                builder.push_str(" VARCHAR");
+                _write_optional_display(builder, length);
+            },
+            DataType::NVarchar{length} => {
+                builder.push_str(" NVARCHAR");
                 _write_optional_display(builder, length);
             },
             DataType::Binary{length} => {
-                builder.push_str("BINARY");
+                builder.push_str(" BINARY");
                 _write_optional_display(builder, length);
             },
             DataType::VarBinary{length} => {
-                builder.push_str("VARBINARY");
+                builder.push_str(" VARBINARY");
                 _write_optional_display(builder, length);
             },
             DataType::Blob{length} => {
-                builder.push_str("BLOB");
+                builder.push_str(" BLOB");
                 _write_optional_display(builder, length);
             },
             DataType::Text{length} => {
-                builder.push_str("TEXT");
+                builder.push_str(" TEXT");
                 _write_optional_display(builder, length);
             },
             DataType::TinyBlob => {
-                builder.push_str("TINYBLOB");
+                builder.push_str(" TINYBLOB");
             },
             DataType::TinyText => {
-                builder.push_str("TINYTEXT");
+                builder.push_str(" TINYTEXT");
             },
             DataType::MediumBlob => {
-                builder.push_str("MEDIUMBLOB");
+                builder.push_str(" MEDIUMBLOB");
             },
             DataType::MediumText => {
-                builder.push_str("MEDIUMTEXT");
+                builder.push_str(" MEDIUMTEXT");
             },
             DataType::LongBlob => {
-                builder.push_str("LONGBLOB");
+                builder.push_str(" LONGBLOB");
             },
             DataType::LongText => {
-                builder.push_str("LONGTEXT");
+                builder.push_str(" LONGTEXT");
             },
             DataType::Enum{values} => {
-                builder.push_str("ENUM");
+                builder.push_str(" ENUM(");
                 _write(builder, *values, literals);
                 builder.push_str(")");
             },
             DataType::Set{values} => {
-                builder.push_str("ENUM");
+                builder.push_str(" SET(");
                 _write(builder, *values, literals);
                 builder.push_str(")");
             },
             // _ => panic!("Unsupported data type {:?}", data_type)
 
+        }
+    }
+
+    fn _write_key_definition(builder:  &mut String, key: SQLKeyDef, literals: &HashMap<u32, Option<Vec<u8>>>) {
+        match key {
+            SQLKeyDef::Primary{symbol, name, columns} => {
+
+                if symbol.is_some() {
+                    builder.push_str(&" CONSTRAINT");
+                    _write(builder, *symbol.unwrap(), literals);
+                }
+
+                builder.push_str(&" PRIMARY KEY");
+                if name.is_some() {
+                    _write(builder, *name.unwrap(), literals);
+                }
+                _write_key_column_list(builder, columns, literals);
+            },
+            SQLKeyDef::Unique{symbol, name, columns} => {
+                if symbol.is_some() {
+                    builder.push_str(&" CONSTRAINT");
+                    _write(builder, *symbol.unwrap(), literals);
+                }
+
+                builder.push_str(&" UNIQUE KEY");
+                if name.is_some() {
+                    _write(builder, *name.unwrap(), literals);
+                }
+                _write_key_column_list(builder, columns, literals);
+            },
+            SQLKeyDef::FullText{name, columns} => {
+                builder.push_str(&" FULLTEXT KEY");
+                if name.is_some() {
+                    _write(builder, *name.unwrap(), literals);
+                }
+                _write_key_column_list(builder, columns, literals);
+            },
+            SQLKeyDef::Index{name, columns} => {
+                builder.push_str(&" KEY");
+                if name.is_some() {
+                    _write(builder, *name.unwrap(), literals);
+                }
+                _write_key_column_list(builder, columns, literals);
+            },
+            SQLKeyDef::Foreign{symbol, name, columns, reference_table, reference_columns} => {
+                if symbol.is_some() {
+                    builder.push_str(&" CONSTRAINT");
+                    _write(builder, *symbol.unwrap(), literals);
+                }
+
+                builder.push_str(&" FOREIGN KEY");
+                if name.is_some() {
+                    _write(builder, *name.unwrap(), literals);
+                }
+                _write_key_column_list(builder, columns, literals);
+
+                builder.push_str(&" REFERENCES");
+                _write(builder, *reference_table, literals);
+                _write_key_column_list(builder, reference_columns, literals);
+            }
+        }
+    }
+
+    fn _write_table_option(builder:  &mut String, option: TableOption, literals: &HashMap<u32, Option<Vec<u8>>>) {
+        match option {
+            TableOption::Comment(e) => {
+                builder.push_str(" COMMENT");
+                _write(builder, *e, literals);
+            },
+            TableOption::Charset(e) => {
+                builder.push_str(" DEFAULT CHARSET");
+                _write(builder, *e, literals);
+            },
+            TableOption::Engine(e) => {
+                builder.push_str(" ENGINE");
+                _write(builder, *e, literals);
+            },
+            TableOption::AutoIncrement(e) => {
+                builder.push_str(" AUTO_INCREMENT");
+                _write(builder, *e, literals);
+            }
+        }
+    }
+
+    fn _write_key_column_list(builder: &mut String, list: Vec<SQLExpr>, literals: &HashMap<u32, Option<Vec<u8>>>) {
+        builder.push_str(&" (");
+        let mut sep = "";
+        for c in list {
+            builder.push_str(sep);
+            _write(builder, c, literals);
+            sep = ", ";
+        }
+        builder.push_str(&")");
+    }
+
+    fn _write_column_qualifier(builder:  &mut String, q: ColumnQualifier, literals: &HashMap<u32, Option<Vec<u8>>>) {
+        match q {
+            ColumnQualifier::CharacterSet(box e) => {
+                builder.push_str(&" CHARACTER SET");
+                _write(builder, e, literals);
+            },
+            ColumnQualifier::Collate(box e) => {
+                builder.push_str(&" COLLATE");
+                _write(builder, e, literals);
+            },
+            ColumnQualifier::Default(box e) => {
+                builder.push_str(&" DEFAULT");
+                _write(builder, e, literals);
+            },
+            ColumnQualifier::Signed => builder.push_str(&" SIGNED"),
+            ColumnQualifier::Unsigned => builder.push_str(&" UNSIGNED"),
+            ColumnQualifier::Null => builder.push_str(&" NULL"),
+            ColumnQualifier::NotNull => builder.push_str(&" NOT NULL"),
+            ColumnQualifier::AutoIncrement => builder.push_str(&" AUTO_INCREMENT"),
+            ColumnQualifier::PrimaryKey => builder.push_str(&" PRIMARY KEY"),
+            ColumnQualifier::UniqueKey => builder.push_str(&" UNIQUE"),
+            ColumnQualifier::OnUpdate(box e) => {
+                builder.push_str(&" ON UPDATE");
+                _write(builder, e, literals);
+            },
+            ColumnQualifier::Comment(box e) => {
+                builder.push_str(&" COMMENT");
+                _write(builder, e, literals);
+            }
         }
     }
 
