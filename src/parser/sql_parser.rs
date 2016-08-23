@@ -303,7 +303,7 @@ impl AnsiSQLParser {
 				return Err(String::from(format!("Expected token ) received token {:?}", tokens.peek())))
 			}
 
-			let mut table_options = self.parse_table_options(tokens)?;
+			let table_options = self.parse_table_options(tokens)?;
 
 			match tokens.peek() {
 				None => Ok(SQLExpr::SQLCreateTable{
