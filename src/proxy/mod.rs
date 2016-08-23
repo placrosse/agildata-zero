@@ -35,7 +35,7 @@ fn parse_string(bytes: &[u8]) -> String {
 
 pub struct Proxy<'a> {
     server: TcpListener,
-    connections: Slab<Connection<'a>>,
+    connections: Slab<MySQLConnectionHandler<'a>>,
     config: &'a Config
 }
 
@@ -87,7 +87,7 @@ impl<'a> mio::Handler for Proxy<'a> {
                         // This will fail when the connection cap is reached
                         let config = self.config;
                         let token = self.connections
-                            .insert_with(|token| Connection::new(socket, token, config))
+                            .insert_with(|token| MySQLConnectionHandler::new(socket, token, config))
                             .unwrap();
 
                         // Register the connection with the event loop.
@@ -131,7 +131,7 @@ struct ColumnMetaData {
 }
 
 #[derive(Debug)]
-struct Connection<'a> {
+struct MySQLConnectionHandler<'a> {
     socket: TcpStream,
     token: mio::Token,
     state: State,
@@ -140,8 +140,9 @@ struct Connection<'a> {
     //authenticating: bool
 }
 
-impl<'a> Connection<'a> {
-    fn new(socket: TcpStream, token: mio::Token, config: &Config) -> Connection {
+impl<'a> MySQLConnectionHandler <'a> {
+
+    fn new(socket: TcpStream, token: mio::Token, config: &Config) -> MySQLConnectionHandler {
         println!("Creating remote connection...");
         // let ip  = std::net::Ipv4Addr::new(127,0,0,1);
         // let saddr = std::net::SocketAddr::new(std::net::IpAddr::V4(ip), 3306);
@@ -158,7 +159,7 @@ impl<'a> Connection<'a> {
 
         println!("Created new connection in Writing state");
 
-        Connection {
+        MySQLConnectionHandler {
             socket: socket,
             token: token,
             state: State::Writing(Take::new(buf, len)),
