@@ -28,20 +28,26 @@ use std::net;
 
 #[derive(Debug)]
 struct MySQLPacket {
-    header: Vec<u8>, // 4 bytes - packet_len (3 bytes), sequence_id (1 byte)
-    payload: Vec<u8>
+    bytes: Vec<u8>
 }
 
 impl MySQLPacket {
 
-    // fn sequence_id(&self) -> u8 {
-    //     self.header[3]
-    // }
+    fn parse_packet_length(header: &[u8]) -> usize {
+        (((header[2] as u32) << 16) |
+            ((header[1] as u32) << 8) |
+            header[0] as u32) as usize
+    }
+
+    fn sequence_id(&self) -> u8 {
+        self.bytes[3]
+    }
 
     fn packet_type(&self) -> u8 {
-        match self.payload.len() {
-            0 => 0,
-            _ => self.payload[0]
+        if self.bytes.len() > 4 {
+            self.bytes[4]
+        } else {
+            0
         }
     }
 
@@ -51,63 +57,49 @@ fn parse_string(bytes: &[u8]) -> String {
     String::from_utf8(bytes.to_vec()).expect("Invalid UTF-8")
 }
 
-struct MySQLPacketReader {
-    payload: Vec<u8>,
+struct MySQLPacketReader<'a> {
+    payload: &'a [u8],
     pos: usize
 }
 
-impl MySQLPacketReader {
+impl<'a> MySQLPacketReader<'a> {
 
-    fn read_lenenc_str(&mut self) -> Option<String> {
-        println!("read_lenenc_str BEGIN pos={}", self.pos);
+    fn new(packet: &'a MySQLPacket) -> Self {
+        MySQLPacketReader { payload: &packet.bytes, pos: 4 }
+    }
 
-        //TODO: HACK: assume single byte for length for now
+    /// read the length of a length-encoded field
+    fn read_len(&mut self) -> usize {
         let n = self.payload[self.pos] as usize;
         self.pos += 1;
 
         match n {
-            0xfb => None, // MySQL NULL value
-            _ => {
-                println!("read_lenenc_str str_len={}", n);
-
-                let s = parse_string(&self.payload[self.pos..self.pos+n]);
-                self.pos += n;
-                Some(s)
-            }
+            //NOTE: depending on context, 0xfb could mean null and 0xff could mean error
+            0xfc | 0xfd | 0xfe => panic!("no support yet for length >= 251"),
+            _ => n
         }
-
     }
 
-    fn read_len_bytes(&mut self) -> Vec<u8> {
-        println!("read_len_bytes BEGIN pos={}", self.pos);
+    fn read_string(&mut self) -> Option<String> {
+        match self.read_bytes() {
+            Some(s) => Some(parse_string(&s)),
+            None => None
+        }
+    }
 
-        //TODO: HACK: assume single byte for length for now
-        let n = self.payload[self.pos] as usize;
-        self.pos += 1;
-
-        match n {
-            0xfb => vec![0xfb], // MySQL NULL value
-            _ => {
-                println!("read_len_bytes str_len={}", n);
-
-
-                let s = self.payload[self.pos..self.pos+n].to_vec();
+    fn read_bytes(&mut self) -> Option<Vec<u8>> {
+        match self.read_len() {
+            0xfb => None,
+            n @ _ => {
+                let s = &self.payload[self.pos..self.pos+n];
                 self.pos += n;
-                s
+                let mut v : Vec<u8> = vec![];
+                v.extend_from_slice(s);
+                Some(v)
             }
         }
     }
 
-    // fn read_bytes(len: usize) -> [u8] {
-    //     panic!("not implemented");
-    // }
-
-}
-
-fn read_packet_length(header: &[u8]) -> usize {
-    (((header[2] as u32) << 16) |
-    ((header[1] as u32) << 8) |
-    header[0] as u32) as usize
 }
 
 pub struct Proxy<'a> {
@@ -212,19 +204,20 @@ impl MySQLConnection for net::TcpStream {
         // read header
         let mut header_vec = vec![0_u8; 4];
         match self.read(&mut header_vec) {
-            Ok(0) => Ok(MySQLPacket { header: vec![], payload: vec![] }),
+            Ok(0) => Ok(MySQLPacket { bytes: vec![] }),
             Ok(n) => {
                 assert!(n==4);
 
-                let payload_len = read_packet_length(&header_vec);
+                let payload_len = MySQLPacket::parse_packet_length(&header_vec);
 
                 // read payload
                 let mut payload_vec = vec![0_u8; payload_len];
                 assert!(payload_len == self.read(&mut payload_vec).unwrap());
+                header_vec.extend_from_slice(&payload_vec);
 
                 println!("read_packet() END");
 
-                Ok(MySQLPacket { header: header_vec, payload: payload_vec })
+                Ok(MySQLPacket { bytes: header_vec })
             },
             Err(_) => Err("oops")
         }
@@ -256,24 +249,21 @@ impl<'a> Connection<'a> {
         // let mut tcps = TcpStream::connect(&saddr).unwrap();
 
         // connect to real MySQL
-        let mut realtcps = net::TcpStream::connect("127.0.0.1:3306").unwrap();
+        let mut mysql = net::TcpStream::connect("127.0.0.1:3306").unwrap();
 
         // read header
-        let auth_packet = realtcps.read_packet().unwrap();
+        let auth_packet = mysql.read_packet().unwrap();
+        let len = auth_packet.bytes.len();
 
-        let mut response: Vec<u8> = Vec::new();
-        response.extend_from_slice(&auth_packet.header);
-        response.extend_from_slice(&auth_packet.payload);
-
-        let buf = Cursor::new(response);
+        let buf = Cursor::new(auth_packet.bytes);
 
         println!("Created new connection in Writing state");
 
         Connection {
             socket: socket,
             token: token,
-            state: State::Writing(Take::new(buf, auth_packet.payload.len()+4)),
-            remote: realtcps,
+            state: State::Writing(Take::new(buf, len)),
+            remote: mysql,
             config: &config
             // authenticating: true
         }
@@ -319,7 +309,7 @@ impl<'a> Connection<'a> {
                 // do we have the complete request packet yet?
                 if buf.len() > 3 {
 
-                    let packet_len = read_packet_length(&buf);
+                    let packet_len = MySQLPacket::parse_packet_length(&buf);
 
                     println!("incoming packet_len = {}", packet_len);
                     println!("Buf len {}", buf.len());
@@ -436,14 +426,12 @@ impl<'a> Connection<'a> {
             // break on receiving OK_Packet, Err_Packet, or EOF_Packet
             0x00 | 0xfe | 0xff => {
                 println!("Got OK/ERR/EOF packet");
-                write_buf.extend_from_slice(&packet.header);
-                write_buf.extend_from_slice(&packet.payload);
+                write_buf.extend_from_slice(&packet.bytes);
             },
             0xfb => panic!("not implemented"),
             0x03 => {
                 println!("Got COM_QUERY packet");
-                write_buf.extend_from_slice(&packet.header);
-                write_buf.extend_from_slice(&packet.payload);
+                write_buf.extend_from_slice(&packet.bytes);
 
                 loop {
                     let row_packet = self.remote.read_packet().unwrap();
@@ -452,13 +440,11 @@ impl<'a> Connection<'a> {
                         0xfe | 0xff => {
 
                             println!("End of result rows");
-                            write_buf.extend_from_slice(&row_packet.header);
-                            write_buf.extend_from_slice(&row_packet.payload);
+                            write_buf.extend_from_slice(&row_packet.bytes);
                             break
                         },
                         _ => {
-                            write_buf.extend_from_slice(&row_packet.header);
-                            write_buf.extend_from_slice(&row_packet.payload);
+                            write_buf.extend_from_slice(&row_packet.bytes);
                         }
                     }
                 }
@@ -468,11 +454,10 @@ impl<'a> Connection<'a> {
                 println!("Got field_count packet");
 
                 // first packet is field count
-                write_buf.extend_from_slice(&packet.header);
-                write_buf.extend_from_slice(&packet.payload);
+                write_buf.extend_from_slice(&packet.bytes);
 
                 //TODO: this assumes < 251 fields in result set
-                let field_count = packet.payload[0] as u32;
+                let field_count = packet.bytes[4] as u32;
 
                 println!("Result set has {} columns", field_count);
 
@@ -481,18 +466,17 @@ impl<'a> Connection<'a> {
                 for i in 0 .. field_count {
 
                     let field_packet = self.remote.read_packet().unwrap();
-                    write_buf.extend_from_slice(&field_packet.header);
-                    write_buf.extend_from_slice(&field_packet.payload);
+                    write_buf.extend_from_slice(&field_packet.bytes);
 
-                    let mut r = MySQLPacketReader { payload: field_packet.payload, pos: 0 };
+                    let mut r = MySQLPacketReader::new(&field_packet);
 
                     //TODO: assumes these values can never be NULL
-                    let catalog = r.read_lenenc_str().unwrap();
-                    let schema = r.read_lenenc_str().unwrap();
-                    let table = r.read_lenenc_str().unwrap();
-                    let org_table = r.read_lenenc_str().unwrap();
-                    let name = r.read_lenenc_str().unwrap();
-                    let org_name = r.read_lenenc_str().unwrap();
+                    let catalog = r.read_string().unwrap();
+                    let schema = r.read_string().unwrap();
+                    let table = r.read_string().unwrap();
+                    let org_table = r.read_string().unwrap();
+                    let name = r.read_string().unwrap();
+                    let org_name = r.read_string().unwrap();
 
                     println!("ALL catalog {}, schema {}, table {}, org_table {}, name {}, org_name {}",
                         catalog, schema, table, org_table, name, org_name);
@@ -527,8 +511,7 @@ impl<'a> Connection<'a> {
                         0xfe | 0xff => {
 
                             println!("End of result rows");
-                            write_buf.extend_from_slice(&row_packet.header);
-                            write_buf.extend_from_slice(&row_packet.payload);
+                            write_buf.extend_from_slice(&row_packet.bytes);
                             break
                         },
 
@@ -539,11 +522,8 @@ impl<'a> Connection<'a> {
                             // then we can just write the packet straight to the client and
                             // skip all of this processing
 
-                            println!("Original Header: {:?}", &row_packet.header);
-                            println!("Original Payload: {:?}", &row_packet.payload);
-
                             //TODO do decryption here if required
-                            let mut r = MySQLPacketReader { payload: row_packet.payload, pos: 0 };
+                            let mut r = MySQLPacketReader::new(&row_packet);
 
                             let mut wtr: Vec<u8> = vec![];
 
@@ -561,20 +541,20 @@ impl<'a> Connection<'a> {
 
                                 let value = match column_config {
 
-                                    None => r.read_lenenc_str(),
+                                    None => r.read_string(),
                                     Some(cc) => match cc {
                                         &ColumnConfig {ref encryption, ref native_type, ..} => {
                                             match native_type {
                                                 &NativeType::U64 => {
                                                     match encryption {
-                                                        &EncryptionType::NA => r.read_lenenc_str(),
-                                                        _ => Some(format!("{}", u64::decrypt(r.read_len_bytes(), encryption)))
+                                                        &EncryptionType::NA => r.read_string(),
+                                                        _ => Some(format!("{}", u64::decrypt(&r.read_bytes().unwrap(), encryption)))
                                                     }
                                                 },
                                                 &NativeType::Varchar(_) => {
                                                     match encryption {
-                                                        &EncryptionType::NA => r.read_lenenc_str(),
-                                                        _ => Some(String::decrypt(r.read_len_bytes(), encryption))
+                                                        &EncryptionType::NA => r.read_string(),
+                                                        _ => Some(String::decrypt(&r.read_bytes().unwrap(), encryption))
                                                     }
                                                 }
                                                 _ => panic!("Native type {:?} not implemented", native_type)
@@ -602,7 +582,7 @@ impl<'a> Connection<'a> {
                             }
 
                             let mut new_header: Vec<u8> = vec![];
-                            let sequence_id = row_packet.header[3];
+                            let sequence_id = row_packet.sequence_id();
                             new_header.write_u32::<LittleEndian>(wtr.len() as u32).unwrap();
                             new_header.pop();
                             new_header.push(sequence_id);
