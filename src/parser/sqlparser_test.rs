@@ -6,7 +6,7 @@ use super::sql_parser::SQLJoinType::*;
 use super::sql_parser::SQLUnionType::*;
 use super::sql_parser::DataType::*;
 use super::sql_parser::ColumnQualifier::*;
-use super::sql_parser::SQLKeyDef::*;
+use super::sql_parser::KeyDef::*;
 use super::sql_parser::TableOption;
 use super::sql_writer::*;
 use std::collections::HashMap;
@@ -473,146 +473,146 @@ fn create_numeric() {
 			column_list: vec![
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("a"))),
-					data_type: Bit { display: None },
+					data_type: Box::new(SQLDataType(Bit { display: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("b"))),
-					data_type: Bit { display: Some(2) },
+					data_type: Box::new(SQLDataType(Bit { display: Some(2) })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("c"))),
-					data_type: TinyInt { display: None },
+					data_type: Box::new(SQLDataType(TinyInt { display: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("d"))),
-					data_type: TinyInt { display: Some(10) },
+					data_type: Box::new(SQLDataType(TinyInt { display: Some(10) })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("e"))),
-					data_type: Bool,
+					data_type: Box::new(SQLDataType(Bool)),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("f"))),
-					data_type: Bool,
+					data_type: Box::new(SQLDataType(Bool)),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("g"))),
-					data_type: SmallInt { display: None },
+					data_type: Box::new(SQLDataType(SmallInt { display: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("h"))),
-					data_type: SmallInt { display: Some(100) },
+					data_type: Box::new(SQLDataType(SmallInt { display: Some(100) })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("i"))),
-					data_type: Int { display: None },
+					data_type: Box::new(SQLDataType(Int { display: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("j"))),
-					data_type: Int { display: Some(64) },
+					data_type: Box::new(SQLDataType(Int { display: Some(64) })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("k"))),
-					data_type: Int { display: None },
+					data_type: Box::new(SQLDataType(Int { display: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("l"))),
-					data_type: Int { display: Some(64) },
+					data_type: Box::new(SQLDataType(Int { display: Some(64) })),
 					qualifiers: None
 				}, SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("m"))),
-					data_type: BigInt { display: None },
+					data_type: Box::new(SQLDataType(BigInt { display: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("n"))),
-					data_type: BigInt { display: Some(100) },
+					data_type: Box::new(SQLDataType(BigInt { display: Some(100) })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("o"))),
-					data_type: Decimal { precision: None, scale: None },
+					data_type: Box::new(SQLDataType(Decimal { precision: None, scale: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("p"))),
-					data_type: Decimal { precision: Some(10), scale: None },
+					data_type: Box::new(SQLDataType(Decimal { precision: Some(10), scale: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("q"))),
-					data_type: Decimal { precision: Some(10), scale: Some(2) },
+					data_type: Box::new(SQLDataType(Decimal { precision: Some(10), scale: Some(2) })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("r"))),
-					data_type: Decimal { precision: None, scale: None },
+					data_type: Box::new(SQLDataType(Decimal { precision: None, scale: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("s"))),
-					data_type: Decimal { precision: Some(10), scale: None },
+					data_type: Box::new(SQLDataType(Decimal { precision: Some(10), scale: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("t"))),
-					data_type: Decimal { precision: Some(10), scale: Some(2) },
+					data_type: Box::new(SQLDataType(Decimal { precision: Some(10), scale: Some(2) })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("u"))),
-					data_type: Float { precision: None, scale: None },
+					data_type: Box::new(SQLDataType(Float { precision: None, scale: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("v"))),
-					data_type: Float { precision: Some(10), scale: None },
+					data_type: Box::new(SQLDataType(Float { precision: Some(10), scale: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("w"))),
-					data_type: Float { precision: Some(10), scale: Some(2) },
+					data_type: Box::new(SQLDataType(Float { precision: Some(10), scale: Some(2) })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("x"))),
-					data_type: Double { precision: None, scale: None },
+					data_type: Box::new(SQLDataType(Double { precision: None, scale: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("y"))),
-					data_type: Double { precision: Some(10), scale: None },
+					data_type: Box::new(SQLDataType(Double { precision: Some(10), scale: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("z"))),
-					data_type: Double { precision: Some(10), scale: Some(2) },
+					data_type: Box::new(SQLDataType(Double { precision: Some(10), scale: Some(2) })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("aa"))),
-					data_type: Double { precision: None, scale: None },
+					data_type: Box::new(SQLDataType(Double { precision: None, scale: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("ab"))),
-					data_type: Double { precision: Some(10), scale: None },
+					data_type: Box::new(SQLDataType(Double { precision: Some(10), scale: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
 					column: Box::new(SQLIdentifier(String::from("ac"))),
-					data_type: Double { precision: Some(10), scale: Some(2) },
+					data_type: Box::new(SQLDataType(Double { precision: Some(10), scale: Some(2) })),
 					qualifiers: None
 				}
 			],
@@ -656,47 +656,47 @@ fn create_temporal() {
 		    column_list: vec![
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("a"))),
-		            data_type: Date,
+		            data_type: Box::new(SQLDataType(Date)),
 					qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("b"))),
-		            data_type: DateTime {fsp: None},
+		            data_type: Box::new(SQLDataType(DateTime {fsp: None})),
 					qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("c"))),
-		            data_type: DateTime {fsp: Some(6)},
+		            data_type: Box::new(SQLDataType(DateTime {fsp: Some(6)})),
 					qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("d"))),
-		            data_type: Timestamp {fsp: None},
+		            data_type: Box::new(SQLDataType(Timestamp {fsp: None})),
 					qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("e"))),
-		            data_type: Timestamp {fsp: Some(6)},
+		            data_type: Box::new(SQLDataType(Timestamp {fsp: Some(6)})),
 					qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("f"))),
-		            data_type: Time {fsp: None},
+		            data_type: Box::new(SQLDataType(Time {fsp: None})),
 					qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("g"))),
-		            data_type: Time {fsp: Some(6)},
+		            data_type: Box::new(SQLDataType(Time {fsp: Some(6)})),
 					qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("h"))),
-		            data_type: Year {display: None},
+		            data_type: Box::new(SQLDataType(Year {display: None})),
 					qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("i"))),
-		            data_type: Year {display: Some(4)},
+		            data_type: Box::new(SQLDataType(Year {display: Some(4)})),
 					qualifiers: None
 		        }
 		    ],
@@ -759,159 +759,159 @@ fn create_character() {
 		    column_list: vec![
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("a"))),
-		            data_type: NChar {length: None},
+		            data_type: Box::new(SQLDataType(NChar {length: None})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("b"))),
-		            data_type: Char {length: None},
+		            data_type: Box::new(SQLDataType(Char {length: None})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("c"))),
-		            data_type: Char {length: Some(255)},
+		            data_type: Box::new(SQLDataType(Char {length: Some(255)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("d"))),
-		            data_type: NChar {length: None},
+		            data_type: Box::new(SQLDataType(NChar {length: None})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("e"))),
-		            data_type: NChar {length: Some(255)},
+		            data_type: Box::new(SQLDataType(NChar {length: Some(255)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("f"))),
-		            data_type: NChar {length: None},
+		            data_type: Box::new(SQLDataType(NChar {length: None})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("g"))),
-		            data_type: Char {length: None},
+		            data_type: Box::new(SQLDataType(Char {length: None})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("h"))),
-		            data_type: Char {length: Some(255)},
+		            data_type: Box::new(SQLDataType(Char {length: Some(255)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("i"))),
-		            data_type: NVarchar {length: Some(50)},
+		            data_type: Box::new(SQLDataType(NVarchar {length: Some(50)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("j"))),
-		            data_type: Varchar {length: Some(50)},
+		            data_type: Box::new(SQLDataType(Varchar {length: Some(50)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("k"))),
-		            data_type: NVarchar {length: Some(50)},
+		            data_type: Box::new(SQLDataType(NVarchar {length: Some(50)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("l"))),
-		            data_type: Varchar {length: Some(50)},
+		            data_type: Box::new(SQLDataType(Varchar {length: Some(50)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("m"))),
-		            data_type: Binary {length: None},
+		            data_type: Box::new(SQLDataType(Binary {length: None})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("n"))),
-		            data_type: Binary {length: Some(50)},
+		            data_type: Box::new(SQLDataType(Binary {length: Some(50)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("o"))),
-		            data_type: VarBinary {length: Some(50)},
+		            data_type: Box::new(SQLDataType(VarBinary {length: Some(50)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("p"))),
-		            data_type: TinyBlob,
+		            data_type: Box::new(SQLDataType(TinyBlob)),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("q"))),
-		            data_type: TinyText,
+		            data_type: Box::new(SQLDataType(TinyText)),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("r"))),
-		            data_type: Blob {length: None},
+		            data_type: Box::new(SQLDataType(Blob {length: None})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("s"))),
-		            data_type: Blob {length: Some(50)},
+		            data_type: Box::new(SQLDataType(Blob {length: Some(50)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("t"))),
-		            data_type: Text {length: None},
+		            data_type: Box::new(SQLDataType(Text {length: None})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("u"))),
-		            data_type: Text {length: Some(100)},
+		            data_type: Box::new(SQLDataType(Text {length: Some(100)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("v"))),
-		            data_type: MediumBlob,
+		            data_type: Box::new(SQLDataType(MediumBlob)),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("w"))),
-		            data_type: MediumText,
+		            data_type: Box::new(SQLDataType(MediumText)),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("x"))),
-		            data_type: LongBlob,
+		            data_type: Box::new(SQLDataType(LongBlob)),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("y"))),
-		            data_type: LongText,
+		            data_type: Box::new(SQLDataType(LongText)),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("z"))),
-		            data_type: Enum {values: Box::new(SQLExprList(vec![
+		            data_type: Box::new(SQLDataType(Enum {values: Box::new(SQLExprList(vec![
 		                        SQLLiteral(LiteralString(11,String::from("val1"))),
 		                        SQLLiteral(LiteralString(12,String::from("val2"))),
 		                        SQLLiteral(LiteralString(13,String::from("val3")))
 		                    ]
 		                ))
-		            },
+		            })),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("aa"))),
-		            data_type: Set {values: Box::new(SQLExprList(vec![
+		            data_type: Box::new(SQLDataType(Set {values: Box::new(SQLExprList(vec![
 		                        SQLLiteral(LiteralString(14,String::from("val1"))),
 		                        SQLLiteral(LiteralString(15,String::from("val2"))),
 		                        SQLLiteral(LiteralString(16,String::from("val3")))
 		                    ]
 		                ))
-		            },
+		            })),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("ab"))),
-		            data_type: CharByte {length: None},
+		            data_type: Box::new(SQLDataType(CharByte {length: None})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("ac"))),
-		            data_type: CharByte {length: Some(50)},
+		            data_type: Box::new(SQLDataType(CharByte {length: Some(50)})),
 		            qualifiers: None
 		        }
 		    ],
@@ -950,53 +950,52 @@ fn create_column_qualifiers() {
 		    column_list: vec![
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("id"))),
-		            data_type: BigInt {display: None},
+		            data_type: Box::new(SQLDataType(BigInt {display: None})),
 		            qualifiers: Some(vec![
-		                    NotNull,
-		                    AutoIncrement,
-		                    PrimaryKey
+		                    SQLColumnQualifier(NotNull),
+		                    SQLColumnQualifier(AutoIncrement),
+		                    SQLColumnQualifier(PrimaryKey)
 		                ]
 		            )
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("a"))),
-		            data_type: Varchar {length: Some(50)},
+		            data_type: Box::new(SQLDataType(Varchar {length: Some(50)})),
 		            qualifiers: Some(vec![
-		                    CharacterSet(Box::new(SQLIdentifier(String::from("utf8")))),
-		                    Collate(Box::new(SQLIdentifier(String::from("utf8_general_ci")))),
-		                    Null,
-		                    UniqueKey
+		                    SQLColumnQualifier(CharacterSet(Box::new(SQLIdentifier(String::from("utf8"))))),
+		                    SQLColumnQualifier(Collate(Box::new(SQLIdentifier(String::from("utf8_general_ci"))))),
+		                    SQLColumnQualifier(Null),
+		                    SQLColumnQualifier(UniqueKey)
 		                ]
 		            )
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("b"))),
-		            data_type: BigInt {display: None},
+		            data_type: Box::new(SQLDataType(BigInt {display: None})),
 		            qualifiers: Some(vec![
-		                    Signed,
-		                    NotNull,
-		                    Default(Box::new(SQLLiteral(LiteralLong(1,123456789)))
-		                    )
+		                    SQLColumnQualifier(Signed),
+		                    SQLColumnQualifier(NotNull),
+		                    SQLColumnQualifier(Default(Box::new(SQLLiteral(LiteralLong(1,123456789)))))
 		                ]
 		            )
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("c"))),
-		            data_type: TinyInt {display: None},
+		            data_type: Box::new(SQLDataType(TinyInt {display: None})),
 		            qualifiers: Some(vec![
-		                    Unsigned,
-		                    Null,
-		                    Default(Box::new(SQLIdentifier(String::from("NULL")))), // TODO should be literal null ?
-							Comment(Box::new(SQLLiteral(LiteralString(2,String::from("Some Comment")))))
+		                    SQLColumnQualifier(Unsigned),
+		                    SQLColumnQualifier(Null),
+		                    SQLColumnQualifier(Default(Box::new(SQLIdentifier(String::from("NULL"))))), // TODO should be literal null ?
+							SQLColumnQualifier(Comment(Box::new(SQLLiteral(LiteralString(2,String::from("Some Comment"))))))
 		                ]
 		            )
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("d"))),
-		            data_type: Timestamp {fsp: None},
+		            data_type: Box::new(SQLDataType(Timestamp {fsp: None})),
 		            qualifiers: Some(vec![
-		                    Default(Box::new(SQLIdentifier(String::from("CURRENT_TIMESTAMP")))),
-		                    OnUpdate(Box::new(SQLIdentifier(String::from("CURRENT_TIMESTAMP"))))
+		                    SQLColumnQualifier(Default(Box::new(SQLIdentifier(String::from("CURRENT_TIMESTAMP"))))),
+		                    SQLColumnQualifier(OnUpdate(Box::new(SQLIdentifier(String::from("CURRENT_TIMESTAMP")))))
 		                ]
 		            )
 		        }
@@ -1039,49 +1038,49 @@ fn create_tail_keys() {
 		    column_list: vec![
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("id"))),
-		            data_type: BigInt {display: None},
-		            qualifiers: Some(vec![AutoIncrement])
+		            data_type: Box::new(SQLDataType(BigInt {display: None})),
+		            qualifiers: Some(vec![SQLColumnQualifier(AutoIncrement)])
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("a"))),
-		            data_type: Varchar {length: Some(50)},
-		            qualifiers: Some(vec![NotNull])
+		            data_type: Box::new(SQLDataType(Varchar {length: Some(50)})),
+		            qualifiers: Some(vec![SQLColumnQualifier(NotNull)])
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("b"))),
-		            data_type: Timestamp {fsp: None},
-		            qualifiers: Some(vec![NotNull])
+		            data_type: Box::new(SQLDataType(Timestamp {fsp: None})),
+		            qualifiers: Some(vec![SQLColumnQualifier(NotNull)])
 		        }
 		    ],
 		    keys: vec![
-		        Primary {
+		        SQLKeyDef(Primary {
 					symbol: None,
 		            name: None,
 		            columns: vec![SQLIdentifier(String::from("id"))]
-		        },
-		        Unique {
+		        }),
+		        SQLKeyDef(Unique {
 					symbol: None,
 		            name: Some(Box::new(SQLIdentifier(String::from("keyName1")))),
 		            columns: vec![
 		                SQLIdentifier(String::from("id")),
 		                SQLIdentifier(String::from("b"))
 		            ]
-		        },
-		        Index {
+		        }),
+		        SQLKeyDef(Index {
 		            name:  Some(Box::new(SQLIdentifier(String::from("keyName2")))),
 		            columns: vec![SQLIdentifier(String::from("b"))]
-		        },
-		        FullText {
+		        }),
+		        SQLKeyDef(FullText {
 		            name: Some(Box::new(SQLIdentifier(String::from("keyName")))),
 		            columns: vec![SQLIdentifier(String::from("a"))]
-		        },
-		        Foreign {
+		        }),
+		        SQLKeyDef(Foreign {
 					symbol: None,
 		            name: Some(Box::new(SQLIdentifier(String::from("fkeyName")))),
 		            columns: vec![SQLIdentifier(String::from("a"))],
 		            reference_table: Box::new(SQLIdentifier(String::from("bar"))),
 		            reference_columns: vec![SQLIdentifier(String::from("id"))],
-		        }
+		        })
 		    ],
 			table_options: vec![]
 		},
@@ -1120,40 +1119,40 @@ fn create_tail_constraints() {
 		    column_list: vec![
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("id"))),
-		            data_type: BigInt {display: None},
-		            qualifiers: Some(vec![AutoIncrement])
+		            data_type: Box::new(SQLDataType(BigInt {display: None})),
+		            qualifiers: Some(vec![SQLColumnQualifier(AutoIncrement)])
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("a"))),
-		            data_type: Varchar {length: Some(50)},
-		            qualifiers: Some(vec![NotNull])
+		            data_type: Box::new(SQLDataType(Varchar {length: Some(50)})),
+		            qualifiers: Some(vec![SQLColumnQualifier(NotNull)])
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("b"))),
-		            data_type: Timestamp {fsp: None},
-		            qualifiers: Some(vec![NotNull])
+		            data_type: Box::new(SQLDataType(Timestamp {fsp: None})),
+		            qualifiers: Some(vec![SQLColumnQualifier(NotNull)])
 		        }
 		    ],
 		    keys: vec![
-				Primary {
+				SQLKeyDef(Primary {
 					symbol: Some(Box::new(SQLIdentifier(String::from("symbol1")))),
 					name: None,
 					columns: vec![SQLIdentifier(String::from("id"))]
-				},
-				Unique {
+				}),
+				SQLKeyDef(Unique {
 					symbol: Some(Box::new(SQLIdentifier(String::from("symbol2")))),
 					name: Some(Box::new(SQLIdentifier(String::from("keyName1")))),
 					columns: vec![
 						SQLIdentifier(String::from("a"))
 					]
-				},
-				Foreign {
+				}),
+				SQLKeyDef(Foreign {
 					symbol: Some(Box::new(SQLIdentifier(String::from("symbol3")))),
 					name: Some(Box::new(SQLIdentifier(String::from("fkeyName")))),
 					columns: vec![SQLIdentifier(String::from("a"))],
 					reference_table: Box::new(SQLIdentifier(String::from("bar"))),
 					reference_columns: vec![SQLIdentifier(String::from("id"))],
-				}
+				})
 			],
 			table_options: vec![]
 		},
@@ -1186,21 +1185,21 @@ fn create_table_options() {
 		    column_list: vec![
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("id"))),
-		            data_type: BigInt {display: None},
-		            qualifiers: Some(vec![AutoIncrement])
+		            data_type: Box::new(SQLDataType(BigInt {display: None})),
+		            qualifiers: Some(vec![SQLColumnQualifier(AutoIncrement)])
 		        },
 		        SQLColumnDef {
 		            column: Box::new(SQLIdentifier(String::from("a"))),
-		            data_type: Varchar {length: Some(50)},
+		            data_type: Box::new(SQLDataType(Varchar {length: Some(50)})),
 		            qualifiers: None
 		        }
 		    ],
 		    keys: vec![],
 			table_options: vec![
-		        TableOption::Engine(Box::new(SQLIdentifier(String::from("InnoDB")))),
-		        TableOption::Charset(Box::new(SQLIdentifier(String::from("utf8")))),
-		        TableOption::Comment(Box::new(SQLLiteral(LiteralString(1,String::from("Table Comment"))))),
-				TableOption::AutoIncrement(Box::new(SQLLiteral(LiteralLong(2,12345_u64))))
+		        SQLTableOption(TableOption::Engine(Box::new(SQLIdentifier(String::from("InnoDB"))))),
+		        SQLTableOption(TableOption::Charset(Box::new(SQLIdentifier(String::from("utf8"))))),
+		        SQLTableOption(TableOption::Comment(Box::new(SQLLiteral(LiteralString(1,String::from("Table Comment")))))),
+				SQLTableOption(TableOption::AutoIncrement(Box::new(SQLLiteral(LiteralLong(2,12345_u64)))))
 		    ]
 		},
 		parsed

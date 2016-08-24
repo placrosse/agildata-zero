@@ -1,6 +1,6 @@
 use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator,
     SQLUnionType, SQLJoinType, DataType, ColumnQualifier,
-    SQLKeyDef, TableOption};
+    KeyDef, TableOption};
 use std::fmt::Write;
 
 pub trait Writer {
@@ -48,6 +48,7 @@ impl<'a> Writer for SQLWriter<'a> {
     }
 }
 
+// TODO make this even more granular, extensible with methods variants can reuse
 struct DefaultSQLWriter{}
 
 impl ExprWriter for DefaultSQLWriter {
@@ -115,7 +116,7 @@ impl ExprWriter for DefaultSQLWriter {
 
 				for k in keys {
 					builder.push_str(sep);
-					self._write_key_definition(writer, builder, k)?;
+                    writer._write(builder, k);
 					sep = ", ";
 				}
 
@@ -124,22 +125,34 @@ impl ExprWriter for DefaultSQLWriter {
 				sep = " ";
 				for o in table_options {
 					builder.push_str(sep);
-					self._write_table_option(writer, builder, o)?;
+                    writer._write(builder, o);
 				}
 			},
-			&SQLExpr::SQLColumnDef{box ref column, ref data_type, ref qualifiers} => {
+			&SQLExpr::SQLColumnDef{box ref column, box ref data_type, ref qualifiers} => {
 				writer._write(builder, column)?;
-				self._write_data_type(writer, builder, data_type)?;
+                writer._write(builder, data_type)?;
 				match qualifiers {
 					&Some(ref e) => {
 						for q in e.iter() {
-							self._write_column_qualifier(writer, builder, q)?;
+                            writer._write(builder, q)?;
 						}
 					},
 					&None => {}
 				}
 
 			},
+            &SQLExpr::SQLDataType(ref data_type) => {
+                self._write_data_type(writer, builder, data_type)?;
+            },
+            &SQLExpr::SQLKeyDef(ref k) => {
+                self._write_key_definition(writer, builder, k)?;
+            },
+            &SQLExpr::SQLTableOption(ref o) => {
+                self._write_table_option(writer, builder, o)?;
+            },
+            &SQLExpr::SQLColumnQualifier(ref q) => {
+                self._write_column_qualifier(writer, builder, q)?;
+            },
 			&SQLExpr::SQLExprList(ref vector) => {
 				let mut sep = "";
 				for e in vector.iter() {
@@ -388,9 +401,9 @@ impl DefaultSQLWriter {
 		Ok(())
     }
 
-    fn _write_key_definition(&self, writer: &Writer, builder:  &mut String, key: &SQLKeyDef) -> Result<(), String> {
+    fn _write_key_definition(&self, writer: &Writer, builder:  &mut String, key: &KeyDef) -> Result<(), String> {
         match key {
-            &SQLKeyDef::Primary{ref symbol, ref name, ref columns} => {
+            &KeyDef::Primary{ref symbol, ref name, ref columns} => {
 
 				match symbol {
 					&Some(box ref e) => {
@@ -409,7 +422,7 @@ impl DefaultSQLWriter {
 				}
                 self._write_key_column_list(writer, builder, columns)?;
             },
-            &SQLKeyDef::Unique{ref symbol, ref name, ref columns} => {
+            &KeyDef::Unique{ref symbol, ref name, ref columns} => {
 				match symbol {
 					&Some(box ref e) => {
 						builder.push_str(&" CONSTRAINT");
@@ -427,7 +440,7 @@ impl DefaultSQLWriter {
 				}
                 self._write_key_column_list(writer, builder, columns)?;
             },
-            &SQLKeyDef::FullText{ref name, ref columns} => {
+            &KeyDef::FullText{ref name, ref columns} => {
                 builder.push_str(&" FULLTEXT KEY");
 				match name {
 					&Some(box ref e) => {
@@ -437,7 +450,7 @@ impl DefaultSQLWriter {
 				}
                 self._write_key_column_list(writer, builder, columns)?;
             },
-            &SQLKeyDef::Index{ref name, ref columns} => {
+            &KeyDef::Index{ref name, ref columns} => {
                 builder.push_str(&" KEY");
 				match name {
 					&Some(box ref e) => {
@@ -447,7 +460,7 @@ impl DefaultSQLWriter {
 				}
                 self._write_key_column_list(writer, builder, columns)?;
             },
-            &SQLKeyDef::Foreign{ref symbol, ref name, ref columns, box ref reference_table, ref reference_columns} => {
+            &KeyDef::Foreign{ref symbol, ref name, ref columns, box ref reference_table, ref reference_columns} => {
 				match symbol {
 					&Some(box ref e) => {
 						builder.push_str(&" CONSTRAINT");

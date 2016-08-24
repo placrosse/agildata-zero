@@ -2,6 +2,7 @@ use super::super::parser::sql_writer::*;
 use super::super::parser::sql_parser::{SQLExpr, LiteralExpr};
 use std::collections::HashMap;
 use std::fmt::Write;
+use config::*;
 
 pub fn to_hex_string(bytes: &Vec<u8>) -> String {
   let strs: Vec<String> = bytes.iter()
@@ -39,6 +40,27 @@ impl<'a> LiteralReplacingWriter<'a> {
 				&None => Ok(false),
 			},
 			None => Ok(false),
+		}
+	}
+}
+
+struct CreateTranslatingWriter<'a> {
+	config: &'a Config
+}
+
+// QLCreateTable{
+// 	table: Box<SQLExpr>,
+// 	column_list: Vec<SQLExpr>,
+// 	keys: Vec<SQLKeyDef>,
+// 	table_options: Vec<TableOption>
+// }
+impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
+	fn write(&self, writer: &Writer, builder: &mut String, node: &SQLExpr) -> Result<bool, String> {
+		match node {
+			&SQLExpr::SQLCreateTable{box ref table, ref column_list, ref keys, ref table_options} => {
+				Ok(false)
+			},
+			_ => Ok(false)
 		}
 	}
 }
