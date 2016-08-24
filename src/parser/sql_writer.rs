@@ -1,494 +1,580 @@
 use super::sql_parser::{SQLExpr, LiteralExpr, SQLOperator,
     SQLUnionType, SQLJoinType, DataType, ColumnQualifier,
-    SQLKeyDef, TableOption};
+    KeyDef, TableOption};
 use std::fmt::Write;
-use std::collections::HashMap;
 
-pub fn to_hex_string(bytes: &Vec<u8>) -> String {
-  let strs: Vec<String> = bytes.iter()
-                               .map(|b| format!("{:02X}", b))
-                               .collect();
-  strs.join("")
+pub trait Writer {
+    fn write(&self, node: &SQLExpr) -> Result<String, String>;
+	fn _write(&self, builder: &mut String, node: &SQLExpr) -> Result<(), String>;
 }
 
-pub fn write(node:SQLExpr, literals: &HashMap<u32, Option<Vec<u8>>>) -> String {
-	let mut builder = String::new();
-	_write(&mut builder, node, literals);
-	builder
+// returning true/false denotes whether this variant wrote the expression
+pub trait ExprWriter {
+    fn write(&self, writer: &Writer, builder: &mut String, node: &SQLExpr) -> Result<bool, String>;
 }
 
-fn _write(builder: &mut String, node: SQLExpr, literals: &HashMap<u32, Option<Vec<u8>>>) {
-	match node {
-		SQLExpr::SQLSelect{expr_list, relation, selection, order} => {
-			builder.push_str("SELECT");
-			_write(builder, *expr_list, literals);
-			if !relation.is_none() {
-				builder.push_str(" FROM");
-				_write(builder, *relation.unwrap(), literals)
-			}
-			if !selection.is_none() {
-				builder.push_str(" WHERE");
-				_write(builder, *selection.unwrap(), literals)
-			}
-			if !order.is_none() {
-				builder.push_str(" ORDER BY");
-				_write(builder, *order.unwrap(), literals)
-			}
+pub struct SQLWriter<'a> {
+    variants: Vec<&'a ExprWriter>
+}
 
-		},
-		SQLExpr::SQLInsert{table, column_list, values_list} => {
-			builder.push_str("INSERT INTO");
-			_write(builder, *table, literals);
-			builder.push_str(" (");
-			_write(builder, *column_list, literals);
-			builder.push_str(") VALUES(");
-			_write(builder, *values_list, literals);
-			builder.push_str(")");
-		},
-        SQLExpr::SQLUpdate{table, assignments, selection} => {
-            builder.push_str("UPDATE");
-            _write(builder, *table, literals);
-            builder.push_str(" SET");
-            _write(builder, *assignments, literals);
-            if selection.is_some() {
-                builder.push_str(" WHERE");
-                _write(builder, *selection.unwrap(), literals);
-            }
-        },
-        SQLExpr::SQLCreateTable{table, column_list, keys, table_options} => {
-            builder.push_str("CREATE TABLE");
-            _write(builder, *table, literals);
+impl<'a> Default for SQLWriter<'a> {
+	fn default() -> Self {SQLWriter::new(vec![])}
+}
 
-            builder.push_str(&" (");
-            let mut sep = "";
-            for c in column_list {
-                builder.push_str(sep);
-                _write(builder, c, literals);
-                sep = ", ";
-            }
+impl<'a> SQLWriter<'a> {
+	pub fn new(variants: Vec<&'a ExprWriter>) -> Self {
+		SQLWriter{variants: variants}
+	}
+}
 
-            for k in keys {
-                builder.push_str(sep);
-                _write_key_definition(builder, k, literals);
-                sep = ", ";
-            }
+impl<'a> Writer for SQLWriter<'a> {
+    fn write(&self, node: &SQLExpr) -> Result<String, String> {
+        let mut builder = String::new();
+        self._write(&mut builder, node)?;
+        Ok(builder)
+    }
 
-            builder.push_str(&")");
-
-            sep = " ";
-            for o in table_options {
-                builder.push_str(sep);
-                _write_table_option(builder, o, literals);
-            }
-        },
-        SQLExpr::SQLColumnDef{column, data_type, qualifiers} => {
-            _write(builder, *column, literals);
-            _write_data_type(builder, data_type, literals);
-            if qualifiers.is_some() {
-                for q in qualifiers.unwrap() {
-                    _write_column_qualifier(builder, q, literals);
-                }
-            }
-
-        },
-		SQLExpr::SQLExprList(vector) => {
-			let mut sep = "";
-			for e in vector {
-				builder.push_str(sep);
-				_write(builder, e, literals);
-				sep = ",";
+    fn _write(&self, builder: &mut String, node: &SQLExpr) -> Result<(), String> {
+		for v in self.variants.iter() {
+			if v.write(self, builder, node)? {
+				return Ok(())
 			}
-		},
-		SQLExpr::SQLBinary{left, op, right} => {
-			_write(builder, *left, literals);
-			_write_operator(builder, op);
-			_write(builder, *right, literals);
-
-		},
-		SQLExpr::SQLLiteral(lit) => match lit {
-			LiteralExpr::LiteralLong(i, l) => {
-				match literals.get(&i) {
-					Some(value) => match value {
-						// TODO write! escapes the single quotes...
-						// X'...'
-						&Some(ref e) => {
-							write!(builder, "X'{}'", to_hex_string(e)).unwrap(); // must_use
-						},
-						&None => write!(builder, " {}", l).unwrap(),
-					},
-					None => write!(builder, " {}", l).unwrap(),
-				}
-			},
-			LiteralExpr::LiteralBool(_, b) => {
-				write!(builder, "{}", b).unwrap();
-			},
-			LiteralExpr::LiteralDouble(_, d) => {
-				write!(builder, "{}", d).unwrap();
-			},
-			LiteralExpr::LiteralString(i, s) => {
-				match literals.get(&i) {
-					Some(value) => match value {
-						&Some(ref e) => {
-							write!(builder, "X'{}'", to_hex_string(e)).unwrap(); // must_use
-						},
-						&None => write!(builder, " '{}'", s).unwrap(),
-					},
-					None => write!(builder, " '{}'", s).unwrap(),
-				}
-			}
-			//_ => panic!("Unsupported literal for writing {:?}", lit)
-		},
-		SQLExpr::SQLAlias{expr, alias} => {
-			_write(builder, *expr, literals);
-			builder.push_str(" AS");
-			_write(builder, *alias, literals);
-		},
-		SQLExpr::SQLIdentifier(id) => {
-			write!(builder, " {}", id).unwrap();
-		},
-		SQLExpr::SQLNested(expr) => {
-			builder.push_str("(");
-			_write(builder, *expr, literals);
-			builder.push_str(")");
-		},
-		SQLExpr::SQLUnary{operator, expr} => {
-			_write_operator(builder, operator);
-			_write(builder, *expr, literals);
-		},
-		SQLExpr::SQLOrderBy{expr, is_asc} => {
-			_write(builder, *expr, literals);
-			if !is_asc {
-				builder.push_str(" DESC");
-			}
-		},
-		SQLExpr::SQLJoin{left, join_type, right, on_expr} => {
-			_write(builder, *left, literals);
-			_write_join_type(builder, join_type);
-			_write(builder, *right, literals);
-			if !on_expr.is_none() {
-				builder.push_str(" ON");
-				_write(builder, *on_expr.unwrap(), literals);
-			}
-		},
-		SQLExpr::SQLUnion{left, union_type, right} => {
-			_write(builder, *left, literals);
-			_write_union_type(builder, union_type);
-			_write(builder, *right, literals);
 		}
-		//_ => panic!("Unsupported node for writing {:?}", node)
-	}
 
-	fn _write_operator(builder: &mut String, op: SQLOperator) {
-		let op_text = match op {
-			SQLOperator::ADD => "+",
-			SQLOperator::SUB => "-",
-			SQLOperator::MULT => "*",
-			SQLOperator::DIV => "/",
-			SQLOperator::MOD => "%",
-			SQLOperator::GT => ">",
-			SQLOperator::LT => "<",
-			// SQLOperator::GTEQ => ">=",
-			// SQLOperator::LTEQ => "<=",
-			SQLOperator::EQ => "=",
-			// SQLOperator::NEQ => "!=",
-			SQLOperator::OR => "OR",
-			SQLOperator::AND  => "AND"
-		};
-		write!(builder, " {}", op_text).unwrap();
-	}
+		if !(DefaultSQLWriter{}.write(self, builder, node)?) {
+			Err(String::from(format!("No provided ExprWriter writes expr {:?}", node)))
+		} else {
+			Ok(())
+		}
+    }
+}
 
-	fn _write_join_type(builder: &mut String, join_type: SQLJoinType) {
-		let text = match join_type {
-			SQLJoinType::INNER => "INNER JOIN",
-			SQLJoinType::LEFT => "LEFT JOIN",
-			SQLJoinType::RIGHT => "RIGHT JOIN",
-			SQLJoinType::FULL => "FULL OUTER JOIN",
-			SQLJoinType::CROSS => "CROSS JOIN"
-		};
-		write!(builder, " {}", text).unwrap();
-	}
+// TODO make this even more granular, extensible with methods variants can reuse
+struct DefaultSQLWriter{}
 
-	fn _write_union_type(builder: &mut String, union_type: SQLUnionType) {
-		let text = match union_type {
-			SQLUnionType::UNION => "UNION",
-			SQLUnionType::ALL => "UNION ALL",
-			SQLUnionType::DISTINCT => "UNION DISTINCT"
-		};
-		write!(builder, " {} ", text).unwrap();
-	}
+impl ExprWriter for DefaultSQLWriter {
+	fn write(&self, writer: &Writer, builder: &mut String, node: &SQLExpr) -> Result<bool, String> {
+		match node {
+			&SQLExpr::SQLSelect{box ref expr_list, ref relation, ref selection, ref order} => {
+				builder.push_str("SELECT");
+				writer._write(builder, expr_list)?;
+				match relation {
+					&Some(box ref e) => {
+						builder.push_str(" FROM");
+						writer._write(builder, e)?
+					},
+					&None => {}
+				}
+				match selection {
+					&Some(box ref e) => {
+						builder.push_str(" WHERE");
+						writer._write(builder, e)?
+					},
+					&None => {}
+				}
+				match order {
+					&Some(box ref e) => {
+						builder.push_str(" ORDER BY");
+						writer._write(builder, e)?
+					},
+					&None => {}
+				}
 
-    fn _write_data_type(builder: &mut String, data_type: DataType, literals: &HashMap<u32, Option<Vec<u8>>>) {
+			},
+			&SQLExpr::SQLInsert{box ref table, box ref column_list, box ref values_list} => {
+				builder.push_str("INSERT INTO");
+				writer._write(builder, table)?;
+				builder.push_str(" (");
+				writer._write(builder, column_list)?;
+				builder.push_str(") VALUES(");
+				writer._write(builder, values_list)?;
+				builder.push_str(")");
+			},
+			&SQLExpr::SQLUpdate{box ref table, box ref assignments, ref selection} => {
+				builder.push_str("UPDATE");
+				writer._write(builder, table)?;
+				builder.push_str(" SET");
+				writer._write(builder, assignments)?;
+				match selection {
+					&Some(box ref e) => {
+						builder.push_str(" WHERE");
+						writer._write(builder, e)?
+					},
+					&None => {}
+				}
+			},
+			&SQLExpr::SQLCreateTable{box ref table, ref column_list, ref keys, ref table_options} => {
+				builder.push_str("CREATE TABLE");
+				writer._write(builder, table)?;
+
+				builder.push_str(&" (");
+				let mut sep = "";
+				for c in column_list {
+					builder.push_str(sep);
+					writer._write(builder, c)?;
+					sep = ", ";
+				}
+
+				for k in keys {
+					builder.push_str(sep);
+                    writer._write(builder, k)?;
+					sep = ", ";
+				}
+
+				builder.push_str(&")");
+
+				sep = " ";
+				for o in table_options {
+					builder.push_str(sep);
+                    writer._write(builder, o)?;
+				}
+			},
+			&SQLExpr::SQLColumnDef{box ref column, box ref data_type, ref qualifiers} => {
+				writer._write(builder, column)?;
+                writer._write(builder, data_type)?;
+				match qualifiers {
+					&Some(ref e) => {
+						for q in e.iter() {
+                            writer._write(builder, q)?;
+						}
+					},
+					&None => {}
+				}
+
+			},
+            &SQLExpr::SQLDataType(ref data_type) => {
+                self._write_data_type(writer, builder, data_type)?;
+            },
+            &SQLExpr::SQLKeyDef(ref k) => {
+                self._write_key_definition(writer, builder, k)?;
+            },
+            &SQLExpr::SQLTableOption(ref o) => {
+                self._write_table_option(writer, builder, o)?;
+            },
+            &SQLExpr::SQLColumnQualifier(ref q) => {
+                self._write_column_qualifier(writer, builder, q)?;
+            },
+			&SQLExpr::SQLExprList(ref vector) => {
+				let mut sep = "";
+				for e in vector.iter() {
+					builder.push_str(sep);
+					writer._write(builder, e)?;
+					sep = ",";
+				}
+			},
+			&SQLExpr::SQLBinary{box ref left, ref op, box ref right} => {
+				writer._write(builder, left)?;
+				self._write_operator(builder, op);
+				writer._write(builder, right)?;
+
+			},
+			&SQLExpr::SQLLiteral(ref lit) => match lit {
+				&LiteralExpr::LiteralLong(_, ref l) => {
+					write!(builder, " {}", l).unwrap()
+				},
+				&LiteralExpr::LiteralBool(_, ref b) => {
+					write!(builder, "{}", b).unwrap();
+				},
+				&LiteralExpr::LiteralDouble(_, ref d) => {
+					write!(builder, "{}", d).unwrap();
+				},
+				&LiteralExpr::LiteralString(_, ref s) => {
+					write!(builder, " '{}'", s).unwrap()
+				}
+				//_ => panic!("Unsupported literal for writing {:?}", lit)
+			},
+			&SQLExpr::SQLAlias{box ref expr, box ref alias} => {
+				writer._write(builder, expr)?;
+				builder.push_str(" AS");
+				writer._write(builder, alias)?;
+			},
+			&SQLExpr::SQLIdentifier(ref id) => {
+				write!(builder, " {}", id).unwrap();
+			},
+			&SQLExpr::SQLNested(box ref expr) => {
+				builder.push_str("(");
+				writer._write(builder, expr)?;
+				builder.push_str(")");
+			},
+			&SQLExpr::SQLUnary{ref operator, box ref expr} => {
+				self._write_operator(builder, operator);
+				writer._write(builder, expr)?;
+			},
+			&SQLExpr::SQLOrderBy{box ref expr, ref is_asc} => {
+				writer._write(builder, expr)?;
+				if !is_asc {
+					builder.push_str(" DESC");
+				}
+			},
+			&SQLExpr::SQLJoin{box ref left, ref join_type, box ref right, ref on_expr} => {
+				writer._write(builder, left)?;
+				self._write_join_type(builder, join_type);
+				writer._write(builder, right)?;
+				match on_expr {
+					&Some(box ref e) => {
+						builder.push_str(" ON");
+						writer._write(builder, e)?;
+					},
+					&None => {}
+				}
+			},
+			&SQLExpr::SQLUnion{box ref left, ref union_type, box ref right} => {
+				writer._write(builder, left)?;
+				self._write_union_type(builder, union_type);
+				writer._write(builder, right)?;
+			}
+			//_ => panic!("Unsupported node for writing {:?}", node)
+		}
+
+		Ok(true)
+	}
+}
+
+impl DefaultSQLWriter {
+	fn _write_operator(&self, builder: &mut String, op: &SQLOperator) {
+        let op_text = match op {
+            &SQLOperator::ADD => "+",
+            &SQLOperator::SUB => "-",
+            &SQLOperator::MULT => "*",
+            &SQLOperator::DIV => "/",
+            &SQLOperator::MOD => "%",
+            &SQLOperator::GT => ">",
+            &SQLOperator::LT => "<",
+            // SQLOperator::GTEQ => ">=",
+            // SQLOperator::LTEQ => "<=",
+            &SQLOperator::EQ => "=",
+            // SQLOperator::NEQ => "!=",
+            &SQLOperator::OR => "OR",
+            &SQLOperator::AND  => "AND"
+        };
+        write!(builder, " {}", op_text).unwrap();
+    }
+
+    fn _write_join_type(&self, builder: &mut String, join_type: &SQLJoinType) {
+        let text = match join_type {
+            &SQLJoinType::INNER => "INNER JOIN",
+            &SQLJoinType::LEFT => "LEFT JOIN",
+            &SQLJoinType::RIGHT => "RIGHT JOIN",
+            &SQLJoinType::FULL => "FULL OUTER JOIN",
+            &SQLJoinType::CROSS => "CROSS JOIN"
+        };
+        write!(builder, " {}", text).unwrap();
+    }
+
+    fn _write_union_type(&self, builder: &mut String, union_type: &SQLUnionType) {
+        let text = match union_type {
+            &SQLUnionType::UNION => "UNION",
+            &SQLUnionType::ALL => "UNION ALL",
+            &SQLUnionType::DISTINCT => "UNION DISTINCT"
+        };
+        write!(builder, " {} ", text).unwrap();
+    }
+
+    fn _write_data_type(&self, writer: &Writer, builder: &mut String, data_type: &DataType) -> Result<(), String> {
         match data_type {
-            DataType::Bit{display} => {
+            &DataType::Bit{ref display} => {
                 builder.push_str(" BIT");
-                _write_optional_display(builder, display);
+                self._write_optional_display(builder, display);
             },
-            DataType::TinyInt{display} => {
+            &DataType::TinyInt{ref display} => {
                 builder.push_str(" TINYINT");
-                _write_optional_display(builder, display);
+                self._write_optional_display(builder, display);
             },
-            DataType::SmallInt{display} => {
+            &DataType::SmallInt{ref display} => {
                 builder.push_str(" SMALLINT");
-                _write_optional_display(builder, display);
+                self._write_optional_display(builder, display);
             },
-            DataType::MediumInt{display} => {
+            &DataType::MediumInt{ref display} => {
                 builder.push_str(" MEDIUMINT");
-                _write_optional_display(builder, display);
+                self._write_optional_display(builder, display);
             },
-            DataType::Int{display} => {
+            &DataType::Int{ref display} => {
                 builder.push_str(" INTEGER");
-                _write_optional_display(builder, display);
+                self._write_optional_display(builder, display);
             },
-            DataType::BigInt{display} => {
+            &DataType::BigInt{ref display} => {
                 builder.push_str(" BIGINT");
-                _write_optional_display(builder, display);
+                self._write_optional_display(builder, display);
             },
-            DataType::Decimal{precision, scale} => {
+            &DataType::Decimal{ref precision, ref scale} => {
                 builder.push_str(" DECIMAL");
-                _write_optional_precision_and_scale(builder, precision, scale);
+                self._write_optional_precision_and_scale(builder, precision, scale);
             },
-            DataType::Float{precision, scale} => {
+            &DataType::Float{ref precision, ref scale} => {
                 builder.push_str(" FLOAT");
-                _write_optional_precision_and_scale(builder, precision, scale);
+                self._write_optional_precision_and_scale(builder, precision, scale);
             },
-            DataType::Double{precision, scale} => {
+            &DataType::Double{ref precision, ref scale} => {
                 builder.push_str(" DOUBLE");
-                _write_optional_precision_and_scale(builder, precision, scale);
+                self._write_optional_precision_and_scale(builder, precision, scale);
             },
-            DataType::Bool => {
+            &DataType::Bool => {
                 builder.push_str(" BOOLEAN");
             },
-            DataType::Date => {
+            &DataType::Date => {
                 builder.push_str(" DATE");
             },
-            DataType::DateTime{fsp} => {
+            &DataType::DateTime{ref fsp} => {
                 builder.push_str(" DATETIME");
-                _write_optional_display(builder, fsp);
+                self._write_optional_display(builder, fsp);
             },
-            DataType::Timestamp{fsp} => {
+            &DataType::Timestamp{ref fsp} => {
                 builder.push_str(" TIMESTAMP");
-                _write_optional_display(builder, fsp);
+                self._write_optional_display(builder, fsp);
             },
-            DataType::Time{fsp} => {
+            &DataType::Time{ref fsp} => {
                 builder.push_str(" TIME");
-                _write_optional_display(builder, fsp);
+                self._write_optional_display(builder, fsp);
             },
-            DataType::Year{display} => {
+            &DataType::Year{ref display} => {
                 builder.push_str(" YEAR");
-                _write_optional_display(builder, display);
+                self._write_optional_display(builder, display);
             },
-            DataType::Char{length} => {
+            &DataType::Char{ref length} => {
                 builder.push_str(" CHAR");
-                _write_optional_display(builder, length);
+                self._write_optional_display(builder, length);
             },
-            DataType::NChar{length} => {
+            &DataType::NChar{ref length} => {
                 builder.push_str(" NCHAR");
-                _write_optional_display(builder, length);
+                self._write_optional_display(builder, length);
             },
-            DataType::CharByte{length} => {
+            &DataType::CharByte{ref length} => {
                 builder.push_str(" CHAR");
-                _write_optional_display(builder, length);
+                self._write_optional_display(builder, length);
                 builder.push_str(" BYTE");
             },
-            DataType::Varchar{length} => {
+            &DataType::Varchar{ref length} => {
                 builder.push_str(" VARCHAR");
-                _write_optional_display(builder, length);
+                self._write_optional_display(builder, length);
             },
-            DataType::NVarchar{length} => {
+            &DataType::NVarchar{ref length} => {
                 builder.push_str(" NVARCHAR");
-                _write_optional_display(builder, length);
+                self._write_optional_display(builder, length);
             },
-            DataType::Binary{length} => {
+            &DataType::Binary{ref length} => {
                 builder.push_str(" BINARY");
-                _write_optional_display(builder, length);
+                self._write_optional_display(builder, length);
             },
-            DataType::VarBinary{length} => {
+            &DataType::VarBinary{ref length} => {
                 builder.push_str(" VARBINARY");
-                _write_optional_display(builder, length);
+                self._write_optional_display(builder, length);
             },
-            DataType::Blob{length} => {
+            &DataType::Blob{ref length} => {
                 builder.push_str(" BLOB");
-                _write_optional_display(builder, length);
+                self._write_optional_display(builder, length);
             },
-            DataType::Text{length} => {
+            &DataType::Text{ref length} => {
                 builder.push_str(" TEXT");
-                _write_optional_display(builder, length);
+                self._write_optional_display(builder, length);
             },
-            DataType::TinyBlob => {
+            &DataType::TinyBlob => {
                 builder.push_str(" TINYBLOB");
             },
-            DataType::TinyText => {
+            &DataType::TinyText => {
                 builder.push_str(" TINYTEXT");
             },
-            DataType::MediumBlob => {
+            &DataType::MediumBlob => {
                 builder.push_str(" MEDIUMBLOB");
             },
-            DataType::MediumText => {
+            &DataType::MediumText => {
                 builder.push_str(" MEDIUMTEXT");
             },
-            DataType::LongBlob => {
+            &DataType::LongBlob => {
                 builder.push_str(" LONGBLOB");
             },
-            DataType::LongText => {
+            &DataType::LongText => {
                 builder.push_str(" LONGTEXT");
             },
-            DataType::Enum{values} => {
+            &DataType::Enum{box ref values} => {
                 builder.push_str(" ENUM(");
-                _write(builder, *values, literals);
+                writer._write(builder, values)?;
                 builder.push_str(")");
             },
-            DataType::Set{values} => {
+            &DataType::Set{box ref values} => {
                 builder.push_str(" SET(");
-                _write(builder, *values, literals);
+                writer._write(builder, values)?;
                 builder.push_str(")");
             },
             // _ => panic!("Unsupported data type {:?}", data_type)
 
         }
+
+		Ok(())
     }
 
-    fn _write_key_definition(builder:  &mut String, key: SQLKeyDef, literals: &HashMap<u32, Option<Vec<u8>>>) {
+    fn _write_key_definition(&self, writer: &Writer, builder:  &mut String, key: &KeyDef) -> Result<(), String> {
         match key {
-            SQLKeyDef::Primary{symbol, name, columns} => {
+            &KeyDef::Primary{ref symbol, ref name, ref columns} => {
 
-                if symbol.is_some() {
-                    builder.push_str(&" CONSTRAINT");
-                    _write(builder, *symbol.unwrap(), literals);
-                }
+				match symbol {
+					&Some(box ref e) => {
+						builder.push_str(&" CONSTRAINT");
+						writer._write(builder, e)?;
+					},
+					&None => {}
+				}
 
                 builder.push_str(&" PRIMARY KEY");
-                if name.is_some() {
-                    _write(builder, *name.unwrap(), literals);
-                }
-                _write_key_column_list(builder, columns, literals);
+				match name {
+					&Some(box ref e) => {
+						writer._write(builder, e)?;
+					},
+					&None => {}
+				}
+                self._write_key_column_list(writer, builder, columns)?;
             },
-            SQLKeyDef::Unique{symbol, name, columns} => {
-                if symbol.is_some() {
-                    builder.push_str(&" CONSTRAINT");
-                    _write(builder, *symbol.unwrap(), literals);
-                }
+            &KeyDef::Unique{ref symbol, ref name, ref columns} => {
+				match symbol {
+					&Some(box ref e) => {
+						builder.push_str(&" CONSTRAINT");
+						writer._write(builder, e)?;
+					},
+					&None => {}
+				}
 
                 builder.push_str(&" UNIQUE KEY");
-                if name.is_some() {
-                    _write(builder, *name.unwrap(), literals);
-                }
-                _write_key_column_list(builder, columns, literals);
+				match name {
+					&Some(box ref e) => {
+						writer._write(builder, e)?;
+					},
+					&None => {}
+				}
+                self._write_key_column_list(writer, builder, columns)?;
             },
-            SQLKeyDef::FullText{name, columns} => {
+            &KeyDef::FullText{ref name, ref columns} => {
                 builder.push_str(&" FULLTEXT KEY");
-                if name.is_some() {
-                    _write(builder, *name.unwrap(), literals);
-                }
-                _write_key_column_list(builder, columns, literals);
+				match name {
+					&Some(box ref e) => {
+						writer._write(builder, e)?;
+					},
+					&None => {}
+				}
+                self._write_key_column_list(writer, builder, columns)?;
             },
-            SQLKeyDef::Index{name, columns} => {
+            &KeyDef::Index{ref name, ref columns} => {
                 builder.push_str(&" KEY");
-                if name.is_some() {
-                    _write(builder, *name.unwrap(), literals);
-                }
-                _write_key_column_list(builder, columns, literals);
+				match name {
+					&Some(box ref e) => {
+						writer._write(builder, e)?;
+					},
+					&None => {}
+				}
+                self._write_key_column_list(writer, builder, columns)?;
             },
-            SQLKeyDef::Foreign{symbol, name, columns, reference_table, reference_columns} => {
-                if symbol.is_some() {
-                    builder.push_str(&" CONSTRAINT");
-                    _write(builder, *symbol.unwrap(), literals);
-                }
+            &KeyDef::Foreign{ref symbol, ref name, ref columns, box ref reference_table, ref reference_columns} => {
+				match symbol {
+					&Some(box ref e) => {
+						builder.push_str(&" CONSTRAINT");
+						writer._write(builder, e)?;
+					},
+					&None => {}
+				}
 
                 builder.push_str(&" FOREIGN KEY");
-                if name.is_some() {
-                    _write(builder, *name.unwrap(), literals);
-                }
-                _write_key_column_list(builder, columns, literals);
+				match name {
+					&Some(box ref e) => {
+						writer._write(builder, e)?;
+					},
+					&None => {}
+				}
+                self._write_key_column_list(writer, builder, columns)?;
 
                 builder.push_str(&" REFERENCES");
-                _write(builder, *reference_table, literals);
-                _write_key_column_list(builder, reference_columns, literals);
+                writer._write(builder, &*reference_table)?;
+                self._write_key_column_list(writer, builder, reference_columns)?;
             }
         }
+
+		Ok(())
     }
 
-    fn _write_table_option(builder:  &mut String, option: TableOption, literals: &HashMap<u32, Option<Vec<u8>>>) {
+    fn _write_table_option(&self, writer: &Writer, builder:  &mut String, option: &TableOption) -> Result<(), String> {
         match option {
-            TableOption::Comment(e) => {
+            &TableOption::Comment(box ref e) => {
                 builder.push_str(" COMMENT");
-                _write(builder, *e, literals);
+                writer._write(builder, e)?;
             },
-            TableOption::Charset(e) => {
+            &TableOption::Charset(box ref e) => {
                 builder.push_str(" DEFAULT CHARSET");
-                _write(builder, *e, literals);
+                writer._write(builder, e)?;
             },
-            TableOption::Engine(e) => {
+            &TableOption::Engine(box ref e) => {
                 builder.push_str(" ENGINE");
-                _write(builder, *e, literals);
+                writer._write(builder, e)?;
             },
-            TableOption::AutoIncrement(e) => {
+            &TableOption::AutoIncrement(box ref e) => {
                 builder.push_str(" AUTO_INCREMENT");
-                _write(builder, *e, literals);
+                writer._write(builder, e)?;
             }
         }
+
+		Ok(())
     }
 
-    fn _write_key_column_list(builder: &mut String, list: Vec<SQLExpr>, literals: &HashMap<u32, Option<Vec<u8>>>) {
+    fn _write_key_column_list(&self, writer: &Writer, builder: &mut String, list: &Vec<SQLExpr>) -> Result<(), String> {
         builder.push_str(&" (");
         let mut sep = "";
         for c in list {
             builder.push_str(sep);
-            _write(builder, c, literals);
+            writer._write(builder, c)?;
             sep = ", ";
         }
         builder.push_str(&")");
+
+		Ok(())
     }
 
-    fn _write_column_qualifier(builder:  &mut String, q: ColumnQualifier, literals: &HashMap<u32, Option<Vec<u8>>>) {
+    fn _write_column_qualifier(&self, writer: &Writer, builder:  &mut String, q: &ColumnQualifier) -> Result<(), String> {
         match q {
-            ColumnQualifier::CharacterSet(box e) => {
+            &ColumnQualifier::CharacterSet(box ref e) => {
                 builder.push_str(&" CHARACTER SET");
-                _write(builder, e, literals);
+                writer._write(builder, e)?;
             },
-            ColumnQualifier::Collate(box e) => {
+            &ColumnQualifier::Collate(box ref e) => {
                 builder.push_str(&" COLLATE");
-                _write(builder, e, literals);
+                writer._write(builder, e)?;
             },
-            ColumnQualifier::Default(box e) => {
+            &ColumnQualifier::Default(box ref e) => {
                 builder.push_str(&" DEFAULT");
-                _write(builder, e, literals);
+                writer._write(builder, e)?;
             },
-            ColumnQualifier::Signed => builder.push_str(&" SIGNED"),
-            ColumnQualifier::Unsigned => builder.push_str(&" UNSIGNED"),
-            ColumnQualifier::Null => builder.push_str(&" NULL"),
-            ColumnQualifier::NotNull => builder.push_str(&" NOT NULL"),
-            ColumnQualifier::AutoIncrement => builder.push_str(&" AUTO_INCREMENT"),
-            ColumnQualifier::PrimaryKey => builder.push_str(&" PRIMARY KEY"),
-            ColumnQualifier::UniqueKey => builder.push_str(&" UNIQUE"),
-            ColumnQualifier::OnUpdate(box e) => {
+            &ColumnQualifier::Signed => builder.push_str(&" SIGNED"),
+            &ColumnQualifier::Unsigned => builder.push_str(&" UNSIGNED"),
+            &ColumnQualifier::Null => builder.push_str(&" NULL"),
+            &ColumnQualifier::NotNull => builder.push_str(&" NOT NULL"),
+            &ColumnQualifier::AutoIncrement => builder.push_str(&" AUTO_INCREMENT"),
+            &ColumnQualifier::PrimaryKey => builder.push_str(&" PRIMARY KEY"),
+            &ColumnQualifier::UniqueKey => builder.push_str(&" UNIQUE"),
+            &ColumnQualifier::OnUpdate(box ref e) => {
                 builder.push_str(&" ON UPDATE");
-                _write(builder, e, literals);
+                writer._write(builder, e)?;
             },
-            ColumnQualifier::Comment(box e) => {
+            &ColumnQualifier::Comment(box ref e) => {
                 builder.push_str(&" COMMENT");
-                _write(builder, e, literals);
+                writer._write(builder, e)?;
             }
         }
+
+		Ok(())
     }
 
-    fn _write_optional_display(builder: &mut String, display: Option<u32>) {
+    fn _write_optional_display(&self, builder: &mut String, display: &Option<u32>) {
         match display {
-            Some(d) => {write!(builder, "({})", d).unwrap();},
-            None => {}
+            &Some(ref d) => {write!(builder, "({})", d).unwrap();},
+            &None => {}
         }
-        ()
     }
 
-    fn _write_optional_precision_and_scale(builder: &mut String, precision: Option<u32>, scale: Option<u32>) {
+    fn _write_optional_precision_and_scale(&self, builder: &mut String, precision: &Option<u32>, scale: &Option<u32>) {
         match precision {
-            Some(p) => {
+            &Some(ref p) => {
                 write!(builder, "({}", p).unwrap();
                 if scale.is_some() {
                     write!(builder, ",{}", scale.unwrap()).unwrap();
                 }
                 builder.push_str(")");
             },
-            None => {}
+            &None => {}
         }
         ()
     }

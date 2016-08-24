@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use byteorder::*;
 
 use parser::sql_parser::{AnsiSQLParser, SQLExpr};
-use parser::sql_writer;
+use parser::sql_writer::*;
+use super::writers::*;
 
 use mio::{self, TryRead, TryWrite};
 use mio::tcp::*;
@@ -257,7 +258,20 @@ impl<'a> MySQLConnectionHandler <'a> {
                                     }
                                     // encryption_visitor::walk(&mut encrypt_vis, &parsed.unwrap());
 
-                                    let rewritten = sql_writer::write(parsed.unwrap(), encrypt_vis.get_value_map());
+
+                                    let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
+                                    let translator = CreateTranslatingWriter {
+                            			config: &self.config,
+                            			schema: &String::from("babel") // TODO proxy should know its connection schema...
+                            		};
+
+                            		let writer = SQLWriter::new(vec![
+                                        &lit_writer,
+                                        &translator
+                                    ]);
+
+                                    let rewritten = writer.write(&parsed.unwrap()).unwrap();
+
                                     println!("REWRITTEN {}", rewritten);
 
                                     // write packed with new query
