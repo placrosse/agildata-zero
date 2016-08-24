@@ -45,9 +45,9 @@ impl<'a> LiteralReplacingWriter<'a> {
 	}
 }
 
-struct CreateTranslatingWriter<'a> {
-	config: &'a Config,
-	schema: String
+pub struct CreateTranslatingWriter<'a> {
+	pub config: &'a Config,
+	pub schema: &'a String
 }
 
 impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
@@ -60,7 +60,7 @@ impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
 				};
 
 				builder.push_str("CREATE TABLE");
-				writer._write(builder, table);
+				writer._write(builder, table)?;
 				builder.push_str("(");
 
 				let mut sep = "";
@@ -76,9 +76,6 @@ impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
 					};
 
 					let col = self.config.get_column_config(&self.schema, &table_name, &column_name);
-
-					// 	SQLColumnDef{column: Box<SQLExpr>, data_type: Box<SQLExpr>, qualifiers: Option<Vec<SQLExpr>>},
-
 					match col {
 						Some(config) => {
 							match c {
@@ -130,19 +127,29 @@ impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
 	}
 }
 
+// TODO needs to do some real length/display math for different encryption types
 impl<'a> CreateTranslatingWriter<'a> {
 	fn translate_type(&self, data_type: &SQLExpr, encryption: &EncryptionType) -> Result<SQLExpr, String> {
-		match data_type {
-			&SQLExpr::SQLDataType(ref dt) => match dt {
-				&DataType::Int{ref display} => {
+		match (data_type, encryption) {
+			(&SQLExpr::SQLDataType(ref dt), &EncryptionType::AES) => match dt {
+				&DataType::Int{..} => {
+					// TODO length math
 					Ok(SQLExpr::SQLDataType(DataType::VarBinary{length: Some(1024_u32)}))
 				},
 				&DataType::Varchar{ref length} => {
-					Ok(SQLExpr::SQLDataType(DataType::VarBinary{length: Some(1024_u32)}))
+					Ok(SQLExpr::SQLDataType(DataType::VarBinary{length: Some(self.get_encrypted_string_length(length))}))
 				},
-				_ => Err(String::from(format!("Unsupported data type for translation {:?}", dt)))
+				_ => Err(String::from(format!("Unsupported data type for AES translation {:?}", dt)))
 			},
-			_ => Err(String::from(format!("Expected data type, received {:?}", data_type)))
+			_ => Err(String::from(format!("Expected data type and encryption, received data_type: {:?}, encryption: {:?}", data_type, encryption)))
+		}
+	}
+
+	fn get_encrypted_string_length(&self, len: &Option<u32>) -> u32 {
+		if len.is_some() {
+			len.unwrap() + 36
+		} else {
+			1024 + 36
 		}
 	}
 }
@@ -151,15 +158,15 @@ impl<'a> CreateTranslatingWriter<'a> {
 mod tests {
 
 	use super::{CreateTranslatingWriter};
-    use std::collections::HashMap;
 	use parser::sql_parser::AnsiSQLParser;
 	use parser::sql_writer::*;
     use config;
 
 	#[test]
-	fn simple() {
+	fn simple_users() {
 		let parser = AnsiSQLParser {};
 		let config = config::parse_config("example-babel-config.xml");
+		let schema = String::from("babel");
 
 		let sql = "CREATE TABLE users (
 			id INTEGER PRIMARY KEY,
@@ -174,18 +181,18 @@ mod tests {
 
 		let translator = CreateTranslatingWriter {
 			config: &config,
-			schema: String::from("babel")
+			schema: &schema
 		};
 
 		let writer = SQLWriter::new(vec![&translator]);
 
 		let expected = "CREATE TABLE users (
 			id INTEGER PRIMARY KEY,
-			first_name VARBINARY(1024),
-			last_name VARBINARY(1024),
-			ssn VARBINARY(1024),
+			first_name VARBINARY(86),
+			last_name VARBINARY(86),
+			ssn VARBINARY(86),
 			age VARBINARY(1024),
-			sex VARBINARY(1024)
+			sex VARBINARY(86)
 		)";
 
 		let rewritten = writer.write(&parsed).unwrap();

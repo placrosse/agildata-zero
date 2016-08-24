@@ -8,6 +8,7 @@ pub trait Writer {
 	fn _write(&self, builder: &mut String, node: &SQLExpr) -> Result<(), String>;
 }
 
+// returning true/false denotes whether this variant wrote the expression
 pub trait ExprWriter {
     fn write(&self, writer: &Writer, builder: &mut String, node: &SQLExpr) -> Result<bool, String>;
 }
@@ -116,7 +117,7 @@ impl ExprWriter for DefaultSQLWriter {
 
 				for k in keys {
 					builder.push_str(sep);
-                    writer._write(builder, k);
+                    writer._write(builder, k)?;
 					sep = ", ";
 				}
 
@@ -125,7 +126,7 @@ impl ExprWriter for DefaultSQLWriter {
 				sep = " ";
 				for o in table_options {
 					builder.push_str(sep);
-                    writer._write(builder, o);
+                    writer._write(builder, o)?;
 				}
 			},
 			&SQLExpr::SQLColumnDef{box ref column, box ref data_type, ref qualifiers} => {
