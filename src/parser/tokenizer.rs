@@ -1,11 +1,10 @@
 use std::iter::Peekable;
 use std::str::Chars;
-use std::fmt::Write;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use std::ascii::AsciiExt;
 
-use helper::DoesContain;
+// use helper::DoesContain;
 
 #[derive(Debug,PartialEq,Clone)]
 pub enum Token {
@@ -26,7 +25,8 @@ pub enum LiteralToken {
 
 static KEYWORDS: &'static [&'static str] = &["SELECT", "FROM", "WHERE", "AND", "OR", "UNION", "FROM", "AS",
     "WHERE", "ORDER", "BY", "HAVING", "GROUP", "ASC", "DESC", "JOIN", "INNER", "LEFT", "RIGHT", "CROSS",
-    "FULL", "ON", "INSERT", "UPDATE", "SET", "VALUES", "INTO", "SHOW"];
+    "FULL", "ON", "INSERT", "UPDATE", "SET", "VALUES", "INTO", "SHOW", "CREATE", "TABLE", "PRECISION",
+    "PRIMARY", "KEY", "UNIQUE", "FULLTEXT", "FOREIGN", "REFERENCES", "CONSTRAINT"];
 
 fn next_token(it: &mut Peekable<Chars>, lit_index: &AtomicU32) -> Result<Option<Token>, String> {
 
@@ -82,7 +82,7 @@ fn next_token(it: &mut Peekable<Chars>, lit_index: &AtomicU32) -> Result<Option<
                 let mut text = String::new();
                 while let Some(&c) = it.peek() { // will break when it.peek() => None
 
-                    if c.is_alphabetic() || c == '.' || c =='_' {
+                    if c.is_alphabetic() || c.is_numeric() || c == '.' || c == '_' {
                         text.push(c);
                     } else {
                         break; // leave the loop early
@@ -159,7 +159,7 @@ impl Tokenizer for String {
 
         let mut it = self.chars().peekable();
         let mut stream: Vec<Token> = Vec::new();
-        let mut literal_index = AtomicU32::new(0);
+        let literal_index = AtomicU32::new(0);
         loop {
             match next_token(&mut it, &literal_index) {
                 Ok(Some(token)) => stream.push(token),
@@ -176,29 +176,9 @@ impl Tokenizer for String {
 
 }
 
-pub struct Tokens {
-    pub tokens: Vec<Token>,
-    pub index: usize,
-}
-
-impl Iterator for Tokens {
-    type Item = Token;
-
-    fn next(&mut self) -> Option<Token> {
-        // TODO clone?
-        if self.tokens.len() > self.index {
-            let result = self.tokens[self.index].clone();
-            self.index += 1;
-            Some(result)
-        } else {
-            None
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{Token, Tokenizer};
+    use super::Tokenizer;
     use super::Token::*;
     use super::LiteralToken;
 

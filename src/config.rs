@@ -2,9 +2,9 @@ extern crate xml;
 use std::fs::File;
 use std::io::Read;
 use std::collections::HashMap;
-use xml::Xml;
+use std::process;
+use self::xml::Xml;
 
-extern crate encrypt;
 use encrypt::*;
 
 pub fn parse_config(path: &'static str) -> Config {
@@ -13,7 +13,7 @@ pub fn parse_config(path: &'static str) -> Config {
         Ok(file) => file,
         Err(err) => {
             println!("Couldn't open file: {}", err);
-            std::process::exit(1);
+            process::exit(1);
         }
     };
 
@@ -24,7 +24,7 @@ pub fn parse_config(path: &'static str) -> Config {
     let mut string = String::new();
     if let Err(err) = rdr.read_to_string(&mut string) {
         println!("Reading failed: {}", err);
-        std::process::exit(1);
+        process::exit(1);
     };
 
     p.feed_str(&string);
@@ -157,7 +157,7 @@ fn determine_native_type(native_type: &String) -> NativeType {
 fn determine_encryption(encryption: &String) -> EncryptionType {
 	match &encryption.to_uppercase() as &str {
 		"AES" => EncryptionType::AES,
-		"AES-SALTED" => EncryptionType::AES_SALT,
+		// "AES-SALTED" => EncryptionType::AES_SALT,
 		"OPE" => EncryptionType::OPE,
 		"NONE" => EncryptionType::NA,
 		_ => panic!("Unsupported encryption type {}", encryption)
@@ -197,7 +197,7 @@ impl TableConfigBuilder {
 		self.column_map.insert(key, column);
 	}
 
-	fn build(mut self) -> TableConfig {
+	fn build(self) -> TableConfig {
 		TableConfig {name: self.name.unwrap(), column_map: self.column_map}
 	}
 }
@@ -227,7 +227,7 @@ impl SchemaConfigBuilder {
 		self.table_map.insert(key, table);
 	}
 
-	fn build(mut self) -> SchemaConfig {
+	fn build(self) -> SchemaConfig {
 		SchemaConfig{name: self.name.unwrap(), table_map: self.table_map}
 	}
 }
@@ -277,7 +277,7 @@ impl ConfigBuilder {
 		self.conn_props.insert(key, value);
 	}
 
-	fn build(mut self) -> Config {
+	fn build(self) -> Config {
 		Config {
 			schema_map: self.schema_map,
 			connection_config : ConnectionConfig {props: self.conn_props},
@@ -351,7 +351,7 @@ mod tests {
 
 	#[test]
 	fn config_test() {
-		let config = super::parse_config("./src/demo-client-config.xml");
+		let config = super::parse_config("example-babel-config.xml");
 		println!("CONFIG {:#?}", config);
 		println!("HERE {:#?}", config.get_column_config(&String::from("babel"), &String::from("users"), &String::from("age")))
 	}
