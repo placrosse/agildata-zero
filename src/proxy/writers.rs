@@ -1,8 +1,9 @@
 use super::super::parser::sql_writer::*;
-use super::super::parser::sql_parser::{SQLExpr, LiteralExpr};
+use super::super::parser::sql_parser::{SQLExpr, LiteralExpr, DataType};
 use std::collections::HashMap;
 use std::fmt::Write;
 use config::*;
+use encrypt::*;
 
 pub fn to_hex_string(bytes: &Vec<u8>) -> String {
   let strs: Vec<String> = bytes.iter()
@@ -45,22 +46,174 @@ impl<'a> LiteralReplacingWriter<'a> {
 }
 
 struct CreateTranslatingWriter<'a> {
-	config: &'a Config
+	config: &'a Config,
+	schema: String
 }
 
-// QLCreateTable{
-// 	table: Box<SQLExpr>,
-// 	column_list: Vec<SQLExpr>,
-// 	keys: Vec<SQLKeyDef>,
-// 	table_options: Vec<TableOption>
-// }
 impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
 	fn write(&self, writer: &Writer, builder: &mut String, node: &SQLExpr) -> Result<bool, String> {
 		match node {
 			&SQLExpr::SQLCreateTable{box ref table, ref column_list, ref keys, ref table_options} => {
-				Ok(false)
+				let table_name = match table {
+					&SQLExpr::SQLIdentifier(ref t) => t,
+					_ => return Err(String::from(format!("Expected identifier, received {:?}", table)))
+				};
+
+				builder.push_str("CREATE TABLE");
+				writer._write(builder, table);
+				builder.push_str("(");
+
+				let mut sep = "";
+				for c in column_list.iter() {
+					builder.push_str(sep);
+
+					let column_name = match c {
+						&SQLExpr::SQLColumnDef{box ref column, ..} => match column {
+							&SQLExpr::SQLIdentifier(ref t) => t,
+							_ => return Err(String::from(format!("Expected identifier, received {:?}", table)))
+						},
+						_ => return Err(String::from(format!("Expected column definition, received {:?}", table)))
+					};
+
+					let col = self.config.get_column_config(&self.schema, &table_name, &column_name);
+
+					// 	SQLColumnDef{column: Box<SQLExpr>, data_type: Box<SQLExpr>, qualifiers: Option<Vec<SQLExpr>>},
+
+					match col {
+						Some(config) => {
+							match c {
+								&SQLExpr::SQLColumnDef{box ref column, box ref data_type, ref qualifiers} => {
+									writer._write(builder, column)?;
+
+									let encryption_type = &config.encryption;
+									match encryption_type {
+										&EncryptionType::NA => writer._write(builder, data_type)?,
+										_ => writer._write(builder, &self.translate_type(data_type, &config.encryption)?)?
+									}
+
+									match qualifiers {
+										&Some(ref list) => {
+											for q in list.iter() {
+												writer._write(builder, q)?;
+											}
+										},
+										_=> {}
+									}
+
+								},
+								_ => return Err(String::from(format!("Expected column definition, received {:?}", c)))
+							}
+						},
+						_ => {
+							writer._write(builder, c)?;
+						}
+					}
+
+					sep = ", "
+				}
+
+				for k in keys.iter() {
+					builder.push_str(sep);
+					writer._write(builder, k)?;
+				}
+
+				builder.push_str(")");
+
+				for o in table_options.iter() {
+					writer._write(builder, o)?;
+				}
+
+				Ok(true)
 			},
 			_ => Ok(false)
 		}
+	}
+}
+
+impl<'a> CreateTranslatingWriter<'a> {
+	fn translate_type(&self, data_type: &SQLExpr, encryption: &EncryptionType) -> Result<SQLExpr, String> {
+		match data_type {
+			&SQLExpr::SQLDataType(ref dt) => match dt {
+				&DataType::Int{ref display} => {
+					Ok(SQLExpr::SQLDataType(DataType::VarBinary{length: Some(1024_u32)}))
+				},
+				&DataType::Varchar{ref length} => {
+					Ok(SQLExpr::SQLDataType(DataType::VarBinary{length: Some(1024_u32)}))
+				},
+				_ => Err(String::from(format!("Unsupported data type for translation {:?}", dt)))
+			},
+			_ => Err(String::from(format!("Expected data type, received {:?}", data_type)))
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+
+	use super::{CreateTranslatingWriter};
+    use std::collections::HashMap;
+	use parser::sql_parser::AnsiSQLParser;
+	use parser::sql_writer::*;
+    use config;
+
+	#[test]
+	fn simple() {
+		let parser = AnsiSQLParser {};
+		let config = config::parse_config("example-babel-config.xml");
+
+		let sql = "CREATE TABLE users (
+			id INTEGER PRIMARY KEY,
+			first_name VARCHAR(50),
+			last_name VARCHAR(50),
+			ssn VARCHAR(50),
+			age INTEGER,
+			sex VARCHAR(50)
+		)";
+
+		let parsed = parser.parse(sql).unwrap();
+
+		let translator = CreateTranslatingWriter {
+			config: &config,
+			schema: String::from("babel")
+		};
+
+		let writer = SQLWriter::new(vec![&translator]);
+
+		let expected = "CREATE TABLE users (
+			id INTEGER PRIMARY KEY,
+			first_name VARBINARY(1024),
+			last_name VARBINARY(1024),
+			ssn VARBINARY(1024),
+			age VARBINARY(1024),
+			sex VARBINARY(1024)
+		)";
+
+		let rewritten = writer.write(&parsed).unwrap();
+
+		println!("REWRITTEN {}", rewritten);
+
+		assert_eq!(format_sql(&rewritten), format_sql(&expected));
+
+	}
+
+	fn format_sql(sql: &str) -> String {
+
+		sql.to_uppercase()
+
+			// unify datatype synonymns
+			.replace("BOOLEAN", "BOOL").replace("BOOL", "BOOLEAN") // done twice intentionally
+			.replace("INTEGER", "INT").replace(" INT", " INTEGER")
+			.replace("PRECISION", "")
+			.replace("DECIMAL", "DEC").replace("DEC", "DECIMAL")
+			.replace("CHARACTER VARYING", "VARCHAR")
+			.replace("NATIONAL CHARACTER", "NCHAR")
+			.replace("NATIONAL CHAR", "NCHAR")
+			.replace("NATIONAL VARCHAR", "NVARCHAR")
+			.replace("CHARACTER", "CHAR")
+
+			// strip whitespace
+			.replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "")
+
+
 	}
 }
