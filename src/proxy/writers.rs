@@ -17,6 +17,7 @@ pub struct LiteralReplacingWriter<'a> {
 }
 
 impl<'a> ExprWriter for LiteralReplacingWriter<'a> {
+	#[allow(dead_code)] // writer does not need to be used here as there's no expressions to delegate
 	fn write(&self, writer: &Writer, builder: &mut String, node: &SQLExpr) -> Result<bool, String> {
 		match node {
 			&SQLExpr::SQLLiteral(ref e) => match e {
