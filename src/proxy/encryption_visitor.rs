@@ -175,6 +175,9 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 				// TODO union type
 				self.visit_sql_expr(right);
 			},
+			&SQLExpr::SQLCreateTable{..} => {
+				println!("WARN: create table visitation not implemented")
+			},
 			_ => panic!("Unsupported expr {:?}", expr)
 		}
 	}

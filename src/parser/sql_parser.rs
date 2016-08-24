@@ -167,7 +167,7 @@ impl AnsiSQLParser {
 	pub fn parse_expr<'a, It>(&self, stream: &mut Peekable<It>, precedence: u32) -> Result<SQLExpr,  String>
 		where It: Iterator<Item=&'a Token> {
 
-		let mut expr = self.parse_prefix(stream).unwrap();
+		let mut expr = self.parse_prefix(stream)?;
 
 		if expr.is_some() {
 			while let Some(_) = stream.peek() {
@@ -177,7 +177,7 @@ impl AnsiSQLParser {
 					break;
 				}
 
-				expr = self.parse_infix(expr.unwrap(), stream, next_precedence).unwrap();
+				expr = self.parse_infix(expr.unwrap(), stream, next_precedence)?;
 			}
 			Ok(expr.unwrap())
 		} else {

@@ -133,10 +133,12 @@ impl<'a> CreateTranslatingWriter<'a> {
 		match (data_type, encryption) {
 			(&SQLExpr::SQLDataType(ref dt), &EncryptionType::AES) => match dt {
 				&DataType::Int{..} => {
-					// TODO length math
-					Ok(SQLExpr::SQLDataType(DataType::VarBinary{length: Some(1024_u32)}))
+					// TODO currently all are stored as 8 bytes, delegate to encrypt
+					Ok(SQLExpr::SQLDataType(DataType::VarBinary{length: Some(8 + 28)}))
 				},
-				&DataType::Varchar{ref length} => {
+				&DataType::Varchar{ref length} | &DataType::Char{ref length} |
+				&DataType::Blob{ref length} | &DataType::Text{ref length} |
+				&DataType::Binary{ref length} | &DataType::VarBinary{ref length} => {
 					Ok(SQLExpr::SQLDataType(DataType::VarBinary{length: Some(self.get_encrypted_string_length(length))}))
 				},
 				_ => Err(String::from(format!("Unsupported data type for AES translation {:?}", dt)))
@@ -145,11 +147,12 @@ impl<'a> CreateTranslatingWriter<'a> {
 		}
 	}
 
+	// TODO delegate to crypt module
 	fn get_encrypted_string_length(&self, len: &Option<u32>) -> u32 {
 		if len.is_some() {
-			len.unwrap() + 36
+			len.unwrap() + 28
 		} else {
-			1024 + 36
+			1024 + 28
 		}
 	}
 }
@@ -161,6 +164,7 @@ mod tests {
 	use parser::sql_parser::AnsiSQLParser;
 	use parser::sql_writer::*;
     use config;
+	use byteorder::{WriteBytesExt,ReadBytesExt,BigEndian};
 
 	#[test]
 	fn simple_users() {
@@ -188,11 +192,11 @@ mod tests {
 
 		let expected = "CREATE TABLE users (
 			id INTEGER PRIMARY KEY,
-			first_name VARBINARY(86),
-			last_name VARBINARY(86),
-			ssn VARBINARY(86),
-			age VARBINARY(1024),
-			sex VARBINARY(86)
+			first_name VARBINARY(78),
+			last_name VARBINARY(78),
+			ssn VARBINARY(78),
+			age VARBINARY(36),
+			sex VARBINARY(78)
 		)";
 
 		let rewritten = writer.write(&parsed).unwrap();
