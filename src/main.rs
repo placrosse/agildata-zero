@@ -34,6 +34,8 @@ mod proxy;
 
 mod parser;
 
+mod planner;
+
 static STOP: AtomicBool = ATOMIC_BOOL_INIT;
 fn ask_stop() { STOP.store(true, Ordering::SeqCst) }
 fn chk_stop() -> bool {
