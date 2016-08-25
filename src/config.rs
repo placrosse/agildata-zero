@@ -174,8 +174,8 @@ pub struct ColumnConfig {
 
 #[derive(Debug)]
 pub struct TableConfig {
-	name: String,
-	column_map: HashMap<String, ColumnConfig>
+	pub name: String,
+	pub column_map: HashMap<String, ColumnConfig>
 }
 
 struct TableConfigBuilder {

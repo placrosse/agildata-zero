@@ -24,7 +24,7 @@ pub enum EncryptionType {
 	NA,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Display)]
 pub enum NativeType {
 	U64,
 	Varchar(u32),

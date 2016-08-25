@@ -1,4 +1,4 @@
-use super::{Rex, RexNode};
+use super::{Rex, RexNode, TupleType};
 use parser::sql_parser::*;
 
 #[derive(Debug)]
@@ -14,12 +14,12 @@ struct RexExprList {
 impl Rex for RexExprList {}
 
 // TODO how needed is rex, really?
-pub fn to_rex(node: &SQLExpr) -> Result<RexNode, String> {
+pub fn to_rex(node: &SQLExpr, tt: &TupleType) -> Result<RexNode, String> {
 	match node {
 		&SQLExpr::SQLExprList(ref list) => {
 			let mut rexs: Vec<RexNode> = Vec::new();
 			for e in list.iter() {
-				rexs.push(to_rex(e)?)
+				rexs.push(to_rex(e, tt)?)
 			}
 			Ok(Box::new(RexExprList{
 				rex_list: rexs
