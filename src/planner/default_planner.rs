@@ -1,4 +1,4 @@
-use super::{Planner, RelNode, Rel, TupleType, Element, RelType, RelProducer, RelConsumer};
+use super::{Planner, RelNode, TupleType, RelType, Element};
 use parser::sql_parser::*;
 use super::rel::*;
 use super::rex;
@@ -17,7 +17,7 @@ impl<'a> Planner for DefaultQueryPlanner<'a> {
 			&SQLExpr::SQLSelect{box ref expr_list, ref relation, ref selection, ref order} => {
 				let mut input = match relation {
 					&Some(box ref expr) => self.plan(expr)?,
-					_ => Box::new(Dual{})
+					_ => Box::new(Dual::new())
 				};
 
 				// TODO support
@@ -39,10 +39,18 @@ impl<'a> Planner for DefaultQueryPlanner<'a> {
 				))
 			},
 			&SQLExpr::SQLIdentifier{ref id, ref parts} => {
+				// TODO planner needs default schema
+				let default_schema = String::from("babel");
+				let schema = if parts.len() > 1 {
+					&parts[0]
+				} else {
+					&default_schema
+				};
+
 				// TODO actually validate this.
 				Ok(Box::new(TableScan{
 					name: id.clone(),
-					tt: self.get_table_tuple_type(&String::from("babel"), &id)?
+					tt: self.get_table_tuple_type(&schema, &id)?
 				}))
 			}
 			_ => Err(String::from(format!("No planner support for SQLExpr: {:?}", node)))
@@ -90,9 +98,8 @@ impl<'a> DefaultQueryPlanner<'a> {
 #[cfg(test)]
 mod tests {
 	use super::DefaultQueryPlanner;
-	use super::super::{Planner, RelNode, Rel};
+	use super::super::{Planner};
 	use parser::sql_parser::*;
-	use super::super::rel::*;
 	use config;
 
 	#[test]

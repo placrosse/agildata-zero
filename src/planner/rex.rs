@@ -34,12 +34,13 @@ pub fn to_rex(node: &SQLExpr, tt: &TupleType) -> Result<RexNode, String> {
 
 			let name = &parts[parts.len() - 1];
 
+			// TODO implement better solution than iteration
 			for e in tt.elements.iter() {
 				match relation {
 					Some(rel) => {
 						match e.p_relation {
-							Some(ref a) => {panic!("Aliasing not implemented")},
-							None => {panic!("Qualification not implemented")}
+							Some(ref a) => {return Err(String::from("Aliasing not implemented"))},
+							None => {return Err(String::from("Qualification not implemented"))}
 						}
 					},
 					None => {

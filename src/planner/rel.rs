@@ -1,14 +1,25 @@
 use super::{Rel, RelNode, RelConsumer, RelProducer, RexNode, TupleType};
 
 #[derive(Debug)]
-pub struct Dual {}
+pub struct Dual {
+	tt: TupleType
+}
 impl Rel for Dual {
-	fn as_producer(&self) -> Option<&RelProducer> {panic!("NO")}
+	fn as_producer(&self) -> Option<&RelProducer> {Some(self)}
 }
 impl<'a> RelConsumer<'a> for Dual {
 	fn get_child_nodes(&'a self) -> Vec<&'a RelNode> {
 		vec![]
 	}
+}
+impl<'a> RelProducer<'a> for Dual {
+	fn get_tuple_type(&'a self) -> &TupleType {
+		&self.tt
+	}
+}
+
+impl Dual {
+	pub fn new() -> Self {Dual{tt: TupleType::new(vec![])}}
 }
 
 #[derive(Debug)]

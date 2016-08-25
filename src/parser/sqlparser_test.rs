@@ -9,7 +9,6 @@ use super::sql_parser::ColumnQualifier::*;
 use super::sql_parser::KeyDef::*;
 use super::sql_parser::TableOption;
 use super::sql_writer::*;
-use std::collections::HashMap;
 
 #[test]
 fn sqlparser() {
