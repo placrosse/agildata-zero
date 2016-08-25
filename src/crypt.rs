@@ -74,24 +74,24 @@ fn ld_keys() {
     }
 }
 
-pub fn watch() {
-    info!("encryption key monitor is up");
-    let (tx, rx) = channel();
-    let rw: Result<RecommendedWatcher, Error> = Watcher::new(tx);
-    match rw {
-        Ok(mut w) => {
-            ld_keys();
-            w.watch(FILE).expect(FILE);
-
-            while !::chk_stop() {
-                match rx.recv() {
-                    Ok(e) => info!("key file notification {:?}", e),
-                    Err(e) => error!("problem watching key file: {:?}", e),
-                }
-                ld_keys();
-                ::x_sleep();
-            }
-        },
-        Err(e) => panic!("{:?}", e),
-    }
-}
+// pub fn watch() {
+//     info!("encryption key monitor is up");
+//     let (tx, rx) = channel();
+//     let rw: Result<RecommendedWatcher, Error> = Watcher::new(tx);
+//     match rw {
+//         Ok(mut w) => {
+//             ld_keys();
+//             w.watch(FILE).expect(FILE);
+//
+//             while !::chk_stop() {
+//                 match rx.recv() {
+//                     Ok(e) => info!("key file notification {:?}", e),
+//                     Err(e) => error!("problem watching key file: {:?}", e),
+//                 }
+//                 ld_keys();
+//                 ::x_sleep();
+//             }
+//         },
+//         Err(e) => panic!("{:?}", e),
+//     }
+// }
