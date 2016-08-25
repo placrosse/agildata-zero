@@ -4,10 +4,6 @@
 #[macro_use]
 extern crate lazy_static;
 
-#[macro_use]
-extern crate log;
-extern crate log4rs;
-
 extern crate parking_lot;
 
 extern crate byteorder;
@@ -34,7 +30,6 @@ pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 #[allow(deprecated)]
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
-    let _ = log4rs::init_file("babel.toml", Default::default());
 
     let config_path = "example-babel-config.xml";
     let config = config::parse_config(config_path);
