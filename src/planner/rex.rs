@@ -26,11 +26,40 @@ pub fn to_rex(node: &SQLExpr, tt: &TupleType) -> Result<RexNode, String> {
 			}))
 		}
 		&SQLExpr::SQLIdentifier{ref id, ref parts} => {
+			let relation = if parts.len() > 1 {
+				Some(&parts[parts.len() - 2])
+			} else {
+				None
+			};
+
+			let name = &parts[parts.len() - 1];
+
 			for e in tt.elements.iter() {
-				println!("HERE {:?}", e);
+				match relation {
+					Some(rel) => {
+						match e.p_relation {
+							Some(ref a) => {panic!("Aliasing not implemented")},
+							None => {panic!("Qualification not implemented")}
+						}
+					},
+					None => {
+						match e.p_name {
+							Some(ref v) => {
+								if v.to_uppercase() == name.to_uppercase() {
+									return Ok(Box::new(RexIdentifier{name: id.clone()}))
+								}
+							},
+							None => {
+								if e.name.to_uppercase() == name.to_uppercase() {
+									return Ok(Box::new(RexIdentifier{name: id.clone()}))
+								}
+							}
+						}
+					}
+				}
 			}
-			panic!("Here");
-			Ok(Box::new(RexIdentifier{name: id.clone()}))
+			Err(String::from(format!("Invalid identifier {} for tuple type {:?}", id, tt)))
+
 		},
 		_ => Err(String::from(format!("Unsuppported expr to rex {:?}", node)))
 	}

@@ -97,18 +97,18 @@ mod tests {
 
 	#[test]
 	fn test_simple_crud() {
-		// let config = config::parse_config("example-babel-config.xml");
-		//
-		// let parser = AnsiSQLParser {};
-		// let sql = "SELECT id, first_name, last_name, ssn, age, sex FROM users";
-		// let parsed = parser.parse(sql).unwrap();
-		//
-		// let planner = DefaultQueryPlanner{
-		// 	config: &config
-		// };
-		//
-		// let plan = planner.plan(&parsed).unwrap();
-		//
-		// println!("PLAN {:#?}", plan);
+		let config = config::parse_config("example-babel-config.xml");
+
+		let parser = AnsiSQLParser {};
+		let sql = "SELECT id, first_name, last_name, ssn, age, sex FROM users";
+		let parsed = parser.parse(sql).unwrap();
+
+		let planner = DefaultQueryPlanner{
+			config: &config
+		};
+
+		let plan = planner.plan(&parsed).unwrap();
+
+		println!("PLAN {:#?}", plan);
 	}
 }
