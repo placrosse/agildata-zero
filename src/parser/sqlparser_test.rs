@@ -38,8 +38,8 @@ fn sqlparser() {
 						right:  Box::new(SQLLiteral(LiteralLong(2, 1_u64)))
 					},
 					SQLAlias{
-						expr:  Box::new(SQLIdentifier(String::from("a"))),
-						alias:  Box::new(SQLIdentifier(String::from("alias")))
+						expr:  Box::new(SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}),
+						alias:  Box::new(SQLIdentifier{id: String::from("alias"), parts: vec![String::from("alias")]})
 					},
 					SQLNested(
 						 Box::new(SQLBinary {
@@ -59,28 +59,28 @@ fn sqlparser() {
 							operator: SUB,
 							expr:  Box::new(SQLLiteral(LiteralLong(6, 1_u64)))
 						}),
-						alias:  Box::new(SQLIdentifier(String::from("unary")))
+						alias:  Box::new(SQLIdentifier{id: String::from("unary"), parts: vec![String::from("unary")]})
 					},
 					SQLAlias {
 						expr:  Box::new(SQLNested(
 							 Box::new(SQLSelect{
 								expr_list:  Box::new(SQLExprList(
 									vec![
-										SQLIdentifier(String::from("a")),
-										SQLIdentifier(String::from("b")),
-										SQLIdentifier(String::from("c"))
+										SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]},
+										SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]},
+										SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}
 									]
 								)),
-								relation: Some( Box::new(SQLIdentifier(String::from("tTwo")))),
+								relation: Some( Box::new(SQLIdentifier{id: String::from("tTwo"), parts: vec![String::from("tTwo")]})),
 								selection: Some( Box::new(SQLBinary{
-									left:  Box::new(SQLIdentifier(String::from("c"))),
+									left:  Box::new(SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}),
 									op: EQ,
-									right:  Box::new(SQLIdentifier(String::from("a")))
+									right:  Box::new(SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]})
 								})),
 								order: None
 							})
 						)),
-						alias:  Box::new(SQLIdentifier(String::from("subselect")))
+						alias:  Box::new(SQLIdentifier{id: String::from("subselect"), parts: vec![String::from("subselect")]})
 					}
 					]
 				)
@@ -90,27 +90,27 @@ fn sqlparser() {
 					 Box::new(SQLSelect {
 						expr_list:  Box::new(SQLExprList(
 							vec![
-								SQLIdentifier(String::from("a")),
-								SQLIdentifier(String::from("b")),
-								SQLIdentifier(String::from("c"))
+								SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]},
+								SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]},
+								SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}
 							]
 						)),
-						relation: Some( Box::new(SQLIdentifier(String::from("tThree")))),
+						relation: Some( Box::new(SQLIdentifier{id: String::from("tThree"), parts: vec![String::from("tThree")]})),
 						selection: None,
 						order: None
 					})
 				)),
-				alias:  Box::new(SQLIdentifier(String::from("l")))
+				alias:  Box::new(SQLIdentifier{id: String::from("l"), parts: vec![String::from("l")]})
 			})),
 			selection: Some( Box::new(SQLBinary {
 				left:  Box::new(SQLBinary{
-					left:  Box::new(SQLIdentifier(String::from("a"))),
+					left:  Box::new(SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}),
 					op: GT,
 					right:  Box::new(SQLLiteral(LiteralLong(7, 10_u64)))
 				}),
 				op: AND,
 				right:  Box::new(SQLBinary{
-					left:  Box::new(SQLIdentifier(String::from("b"))),
+					left:  Box::new(SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]}),
 					op: EQ,
 					right:  Box::new(SQLLiteral(LiteralBool(8, true)))
 				})
@@ -118,21 +118,21 @@ fn sqlparser() {
 			order: Some( Box::new(SQLExprList(
 				vec![
 					SQLOrderBy{
-						expr:  Box::new(SQLIdentifier(String::from("a"))),
+						expr:  Box::new(SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}),
 						is_asc: false
 					},
 					SQLOrderBy{
 						expr:  Box::new(SQLNested(
 							 Box::new(SQLBinary{
-								left:  Box::new(SQLIdentifier(String::from("a"))),
+								left:  Box::new(SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}),
 								op: ADD,
-								right:  Box::new(SQLIdentifier(String::from("b")))
+								right:  Box::new(SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]})
 							})
 						)),
 						is_asc: true
 					},
 					SQLOrderBy{
-						expr:  Box::new(SQLIdentifier(String::from("c"))),
+						expr:  Box::new(SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}),
 						is_asc: true
 					},
 				]
@@ -165,16 +165,16 @@ fn sql_join() {
 		SQLSelect {
 			expr_list: Box::new(SQLExprList(
 				vec![
-					SQLIdentifier(String::from("l.a")),
-					SQLIdentifier(String::from("r.b")),
-					SQLIdentifier(String::from("l.c"))
+					SQLIdentifier{id: String::from("l.a"), parts: vec![String::from("l"), String::from("a")]},
+					SQLIdentifier{id: String::from("r.b"), parts: vec![String::from("r"), String::from("b")]},
+					SQLIdentifier{id: String::from("l.c"), parts: vec![String::from("l"), String::from("c")]}
 				]
 			)),
 			relation: Some(Box::new(SQLJoin {
 				left: Box::new(
 					SQLAlias {
-						expr: Box::new(SQLIdentifier(String::from("tOne"))),
-						alias: Box::new(SQLIdentifier(String::from("l")))
+						expr: Box::new(SQLIdentifier{id: String::from("tOne"), parts: vec![String::from("tOne")]}),
+						alias: Box::new(SQLIdentifier{id: String::from("l"), parts: vec![String::from("l")]})
 					}
 				),
 				join_type: INNER,
@@ -184,38 +184,38 @@ fn sql_join() {
 							Box::new(SQLSelect{
 								expr_list: Box::new(SQLExprList(
 									vec![
-									SQLIdentifier(String::from("a")),
-									SQLIdentifier(String::from("b")),
-									SQLIdentifier(String::from("c"))
+									SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]},
+									SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]},
+									SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}
 									]
 								)),
-								relation: Some(Box::new(SQLIdentifier(String::from("tTwo")))),
+								relation: Some(Box::new(SQLIdentifier{id: String::from("tTwo"), parts: vec![String::from("tTwo")]})),
 								selection: Some(Box::new(SQLBinary{
-									left: Box::new(SQLIdentifier(String::from("a"))),
+									left: Box::new(SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}),
 									op: GT,
 									right: Box::new(SQLLiteral(LiteralLong(0, 0_u64)))
 								})),
 								order: None
 							})
 						)),
-						alias: Box::new(SQLIdentifier(String::from("r")))
+						alias: Box::new(SQLIdentifier{id: String::from("r"), parts: vec![String::from("r")]})
 					}
 				),
 				on_expr: Some(Box::new(SQLBinary {
-					left: Box::new(SQLIdentifier(String::from("l.a"))),
+					left: Box::new(SQLIdentifier{id: String::from("l.a"), parts: vec![String::from("l"), String::from("a")]}),
 					op: EQ,
-					right: Box::new(SQLIdentifier(String::from("r.a")))
+					right: Box::new(SQLIdentifier{id: String::from("r.a"), parts: vec![String::from("r"), String::from("a")]})
 				}))
 			})),
 			selection: Some(Box::new(SQLBinary{
-				left: Box::new(SQLIdentifier(String::from("l.b"))),
+				left: Box::new(SQLIdentifier{id: String::from("l.b"), parts: vec![String::from("l"), String::from("b")]}),
 				op: GT,
-				right: Box::new(SQLIdentifier(String::from("r.b")))
+				right: Box::new(SQLIdentifier{id: String::from("r.b"), parts: vec![String::from("r"), String::from("b")]})
 			})),
 			order: Some(Box::new(SQLExprList(
 				vec![
 					SQLOrderBy{
-						expr: Box::new(SQLIdentifier(String::from("r.c"))),
+						expr: Box::new(SQLIdentifier{id: String::from("r.c"), parts: vec![String::from("r"), String::from("c")]}),
 						is_asc: false
 					}
 				]
@@ -249,11 +249,11 @@ fn nasty() {
 							Box::new(SQLUnion{
 								left: Box::new(SQLSelect{
 									expr_list: Box::new(SQLExprList(vec![
-										SQLIdentifier(String::from("a")),
-										SQLIdentifier(String::from("b")),
-										SQLIdentifier(String::from("c"))
+										SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]},
+										SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]},
+										SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}
 									])),
-									relation: Some(Box::new(SQLIdentifier(String::from("tOne")))),
+									relation: Some(Box::new(SQLIdentifier{id: String::from("tOne"), parts: vec![String::from("tOne")]})),
 									selection: None,
 									order: None
 								}),
@@ -261,11 +261,11 @@ fn nasty() {
 								right: Box::new(SQLNested(
 									Box::new(SQLSelect{
 										expr_list: Box::new(SQLExprList(vec![
-											SQLIdentifier(String::from("a")),
-											SQLIdentifier(String::from("b")),
-											SQLIdentifier(String::from("c"))
+											SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]},
+											SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]},
+											SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}
 										])),
-										relation: Some(Box::new(SQLIdentifier(String::from("tTwo")))),
+										relation: Some(Box::new(SQLIdentifier{id: String::from("tTwo"), parts: vec![String::from("tTwo")]})),
 										selection: None,
 										order: None
 									})
@@ -282,11 +282,11 @@ fn nasty() {
 						left: Box::new(SQLNested(
 							Box::new(SQLSelect{
 								expr_list: Box::new(SQLExprList(vec![
-									SQLIdentifier(String::from("a")),
-									SQLIdentifier(String::from("b")),
-									SQLIdentifier(String::from("c"))
+									SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]},
+									SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]},
+									SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}
 								])),
-								relation: Some(Box::new(SQLIdentifier(String::from("tThree")))),
+								relation: Some(Box::new(SQLIdentifier{id: String::from("tThree"), parts: vec![String::from("tThree")]})),
 								selection: None,
 								order: None
 							})
@@ -296,11 +296,11 @@ fn nasty() {
 							Box::new(SQLNested(
 								Box::new(SQLSelect{
 									expr_list: Box::new(SQLExprList(vec![
-										SQLIdentifier(String::from("a")),
-										SQLIdentifier(String::from("b")),
-										SQLIdentifier(String::from("c"))
+										SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]},
+										SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]},
+										SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}
 									])),
-									relation: Some(Box::new(SQLIdentifier(String::from("tFour")))),
+									relation: Some(Box::new(SQLIdentifier{id: String::from("tFour"), parts: vec![String::from("tFour")]})),
 									selection: None,
 									order: None
 								})
@@ -331,12 +331,12 @@ fn insert() {
 
 	assert_eq!(
 		SQLInsert{
-			table: Box::new(SQLIdentifier(String::from("foo"))),
+			table: Box::new(SQLIdentifier{id: String::from("foo"), parts: vec![String::from("foo")]}),
 			column_list: Box::new(SQLExprList(
 				vec![
-					SQLIdentifier(String::from("a")),
-					SQLIdentifier(String::from("b")),
-					SQLIdentifier(String::from("c"))
+					SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]},
+					SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]},
+					SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}
 				]
 			)),
 			values_list: Box::new(SQLExprList(
@@ -369,8 +369,8 @@ fn select_wildcard() {
 
 	assert_eq!(
 		SQLSelect {
-			expr_list: Box::new(SQLExprList(vec![SQLIdentifier(String::from("*"))])),
-			relation: Some(Box::new(SQLIdentifier(String::from("foo")))),
+			expr_list: Box::new(SQLExprList(vec![SQLIdentifier{id: String::from("*"), parts: vec![String::from("*")]}])),
+			relation: Some(Box::new(SQLIdentifier{id: String::from("foo"), parts: vec![String::from("foo")]})),
 			selection: None,
 			order: None
 		},
@@ -396,23 +396,23 @@ fn update() {
 
 	assert_eq!(
 		SQLUpdate {
-			table: Box::new(SQLIdentifier(String::from("foo"))),
+			table: Box::new(SQLIdentifier{id: String::from("foo"), parts: vec![String::from("foo")]}),
 			assignments: Box::new(SQLExprList(
 				vec![
 					SQLBinary{
-						left: Box::new(SQLIdentifier(String::from("a"))),
+						left: Box::new(SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}),
 						op: EQ,
 						right: Box::new(SQLLiteral(LiteralString(0, String::from("hello"))))
 					},
 					SQLBinary{
-						left: Box::new(SQLIdentifier(String::from("b"))),
+						left: Box::new(SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]}),
 						op: EQ,
 						right: Box::new(SQLLiteral(LiteralLong(1, 12345_u64)))
 					}
 				]
 			)),
 			selection: Some(Box::new(SQLBinary{
-				left: Box::new(SQLIdentifier(String::from("c"))),
+				left: Box::new(SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}),
 				op: GT,
 				right : Box::new(SQLLiteral(LiteralLong(2, 10_u64)))
 			}))
@@ -469,149 +469,149 @@ fn create_numeric() {
 
 	assert_eq!(
 		SQLCreateTable {
-			table: Box::new(SQLIdentifier(String::from("foo"))),
+			table: Box::new(SQLIdentifier{id: String::from("foo"), parts: vec![String::from("foo")]}),
 			column_list: vec![
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("a"))),
+					column: Box::new(SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}),
 					data_type: Box::new(SQLDataType(Bit { display: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("b"))),
+					column: Box::new(SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]}),
 					data_type: Box::new(SQLDataType(Bit { display: Some(2) })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("c"))),
+					column: Box::new(SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}),
 					data_type: Box::new(SQLDataType(TinyInt { display: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("d"))),
+					column: Box::new(SQLIdentifier{id: String::from("d"), parts: vec![String::from("d")]}),
 					data_type: Box::new(SQLDataType(TinyInt { display: Some(10) })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("e"))),
+					column: Box::new(SQLIdentifier{id: String::from("e"), parts: vec![String::from("e")]}),
 					data_type: Box::new(SQLDataType(Bool)),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("f"))),
+					column: Box::new(SQLIdentifier{id: String::from("f"), parts: vec![String::from("f")]}),
 					data_type: Box::new(SQLDataType(Bool)),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("g"))),
+					column: Box::new(SQLIdentifier{id: String::from("g"), parts: vec![String::from("g")]}),
 					data_type: Box::new(SQLDataType(SmallInt { display: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("h"))),
+					column: Box::new(SQLIdentifier{id: String::from("h"), parts: vec![String::from("h")]}),
 					data_type: Box::new(SQLDataType(SmallInt { display: Some(100) })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("i"))),
+					column: Box::new(SQLIdentifier{id: String::from("i"), parts: vec![String::from("i")]}),
 					data_type: Box::new(SQLDataType(Int { display: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("j"))),
+					column: Box::new(SQLIdentifier{id: String::from("j"), parts: vec![String::from("j")]}),
 					data_type: Box::new(SQLDataType(Int { display: Some(64) })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("k"))),
+					column: Box::new(SQLIdentifier{id: String::from("k"), parts: vec![String::from("k")]}),
 					data_type: Box::new(SQLDataType(Int { display: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("l"))),
+					column: Box::new(SQLIdentifier{id: String::from("l"), parts: vec![String::from("l")]}),
 					data_type: Box::new(SQLDataType(Int { display: Some(64) })),
 					qualifiers: None
 				}, SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("m"))),
+					column: Box::new(SQLIdentifier{id: String::from("m"), parts: vec![String::from("m")]}),
 					data_type: Box::new(SQLDataType(BigInt { display: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("n"))),
+					column: Box::new(SQLIdentifier{id: String::from("n"), parts: vec![String::from("n")]}),
 					data_type: Box::new(SQLDataType(BigInt { display: Some(100) })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("o"))),
+					column: Box::new(SQLIdentifier{id: String::from("o"), parts: vec![String::from("o")]}),
 					data_type: Box::new(SQLDataType(Decimal { precision: None, scale: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("p"))),
+					column: Box::new(SQLIdentifier{id: String::from("p"), parts: vec![String::from("p")]}),
 					data_type: Box::new(SQLDataType(Decimal { precision: Some(10), scale: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("q"))),
+					column: Box::new(SQLIdentifier{id: String::from("q"), parts: vec![String::from("q")]}),
 					data_type: Box::new(SQLDataType(Decimal { precision: Some(10), scale: Some(2) })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("r"))),
+					column: Box::new(SQLIdentifier{id: String::from("r"), parts: vec![String::from("r")]}),
 					data_type: Box::new(SQLDataType(Decimal { precision: None, scale: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("s"))),
+					column: Box::new(SQLIdentifier{id: String::from("s"), parts: vec![String::from("s")]}),
 					data_type: Box::new(SQLDataType(Decimal { precision: Some(10), scale: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("t"))),
+					column: Box::new(SQLIdentifier{id: String::from("t"), parts: vec![String::from("t")]}),
 					data_type: Box::new(SQLDataType(Decimal { precision: Some(10), scale: Some(2) })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("u"))),
+					column: Box::new(SQLIdentifier{id: String::from("u"), parts: vec![String::from("u")]}),
 					data_type: Box::new(SQLDataType(Float { precision: None, scale: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("v"))),
+					column: Box::new(SQLIdentifier{id: String::from("v"), parts: vec![String::from("v")]}),
 					data_type: Box::new(SQLDataType(Float { precision: Some(10), scale: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("w"))),
+					column: Box::new(SQLIdentifier{id: String::from("w"), parts: vec![String::from("w")]}),
 					data_type: Box::new(SQLDataType(Float { precision: Some(10), scale: Some(2) })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("x"))),
+					column: Box::new(SQLIdentifier{id: String::from("x"), parts: vec![String::from("x")]}),
 					data_type: Box::new(SQLDataType(Double { precision: None, scale: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("y"))),
+					column: Box::new(SQLIdentifier{id: String::from("y"), parts: vec![String::from("y")]}),
 					data_type: Box::new(SQLDataType(Double { precision: Some(10), scale: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("z"))),
+					column: Box::new(SQLIdentifier{id: String::from("z"), parts: vec![String::from("z")]}),
 					data_type: Box::new(SQLDataType(Double { precision: Some(10), scale: Some(2) })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("aa"))),
+					column: Box::new(SQLIdentifier{id: String::from("aa"), parts: vec![String::from("aa")]}),
 					data_type: Box::new(SQLDataType(Double { precision: None, scale: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("ab"))),
+					column: Box::new(SQLIdentifier{id: String::from("ab"), parts: vec![String::from("ab")]}),
 					data_type: Box::new(SQLDataType(Double { precision: Some(10), scale: None })),
 					qualifiers: None
 				},
 				SQLColumnDef {
-					column: Box::new(SQLIdentifier(String::from("ac"))),
+					column: Box::new(SQLIdentifier{id: String::from("ac"), parts: vec![String::from("ac")]}),
 					data_type: Box::new(SQLDataType(Double { precision: Some(10), scale: Some(2) })),
 					qualifiers: None
 				}
@@ -652,50 +652,50 @@ fn create_temporal() {
 
 	assert_eq!(
 		SQLCreateTable {
-		    table: Box::new(SQLIdentifier(String::from("foo"))),
+		    table: Box::new(SQLIdentifier{id: String::from("foo"), parts: vec![String::from("foo")]}),
 		    column_list: vec![
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("a"))),
+		            column: Box::new(SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}),
 		            data_type: Box::new(SQLDataType(Date)),
 					qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("b"))),
+		            column: Box::new(SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]}),
 		            data_type: Box::new(SQLDataType(DateTime {fsp: None})),
 					qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("c"))),
+		            column: Box::new(SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}),
 		            data_type: Box::new(SQLDataType(DateTime {fsp: Some(6)})),
 					qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("d"))),
+		            column: Box::new(SQLIdentifier{id: String::from("d"), parts: vec![String::from("d")]}),
 		            data_type: Box::new(SQLDataType(Timestamp {fsp: None})),
 					qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("e"))),
+		            column: Box::new(SQLIdentifier{id: String::from("e"), parts: vec![String::from("e")]}),
 		            data_type: Box::new(SQLDataType(Timestamp {fsp: Some(6)})),
 					qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("f"))),
+		            column: Box::new(SQLIdentifier{id: String::from("f"), parts: vec![String::from("f")]}),
 		            data_type: Box::new(SQLDataType(Time {fsp: None})),
 					qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("g"))),
+		            column: Box::new(SQLIdentifier{id: String::from("g"), parts: vec![String::from("g")]}),
 		            data_type: Box::new(SQLDataType(Time {fsp: Some(6)})),
 					qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("h"))),
+		            column: Box::new(SQLIdentifier{id: String::from("h"), parts: vec![String::from("h")]}),
 		            data_type: Box::new(SQLDataType(Year {display: None})),
 					qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("i"))),
+		            column: Box::new(SQLIdentifier{id: String::from("i"), parts: vec![String::from("i")]}),
 		            data_type: Box::new(SQLDataType(Year {display: Some(4)})),
 					qualifiers: None
 		        }
@@ -755,135 +755,135 @@ fn create_character() {
 
 	assert_eq!(
 		SQLCreateTable {
-		    table: Box::new(SQLIdentifier(String::from("foo"))),
+		    table: Box::new(SQLIdentifier{id: String::from("foo"), parts: vec![String::from("foo")]}),
 		    column_list: vec![
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("a"))),
+		            column: Box::new(SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}),
 		            data_type: Box::new(SQLDataType(NChar {length: None})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("b"))),
+		            column: Box::new(SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]}),
 		            data_type: Box::new(SQLDataType(Char {length: None})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("c"))),
+		            column: Box::new(SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}),
 		            data_type: Box::new(SQLDataType(Char {length: Some(255)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("d"))),
+		            column: Box::new(SQLIdentifier{id: String::from("d"), parts: vec![String::from("d")]}),
 		            data_type: Box::new(SQLDataType(NChar {length: None})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("e"))),
+		            column: Box::new(SQLIdentifier{id: String::from("e"), parts: vec![String::from("e")]}),
 		            data_type: Box::new(SQLDataType(NChar {length: Some(255)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("f"))),
+		            column: Box::new(SQLIdentifier{id: String::from("f"), parts: vec![String::from("f")]}),
 		            data_type: Box::new(SQLDataType(NChar {length: None})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("g"))),
+		            column: Box::new(SQLIdentifier{id: String::from("g"), parts: vec![String::from("g")]}),
 		            data_type: Box::new(SQLDataType(Char {length: None})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("h"))),
+		            column: Box::new(SQLIdentifier{id: String::from("h"), parts: vec![String::from("h")]}),
 		            data_type: Box::new(SQLDataType(Char {length: Some(255)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("i"))),
+		            column: Box::new(SQLIdentifier{id: String::from("i"), parts: vec![String::from("i")]}),
 		            data_type: Box::new(SQLDataType(NVarchar {length: Some(50)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("j"))),
+		            column: Box::new(SQLIdentifier{id: String::from("j"), parts: vec![String::from("j")]}),
 		            data_type: Box::new(SQLDataType(Varchar {length: Some(50)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("k"))),
+		            column: Box::new(SQLIdentifier{id: String::from("k"), parts: vec![String::from("k")]}),
 		            data_type: Box::new(SQLDataType(NVarchar {length: Some(50)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("l"))),
+		            column: Box::new(SQLIdentifier{id: String::from("l"), parts: vec![String::from("l")]}),
 		            data_type: Box::new(SQLDataType(Varchar {length: Some(50)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("m"))),
+		            column: Box::new(SQLIdentifier{id: String::from("m"), parts: vec![String::from("m")]}),
 		            data_type: Box::new(SQLDataType(Binary {length: None})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("n"))),
+		            column: Box::new(SQLIdentifier{id: String::from("n"), parts: vec![String::from("n")]}),
 		            data_type: Box::new(SQLDataType(Binary {length: Some(50)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("o"))),
+		            column: Box::new(SQLIdentifier{id: String::from("o"), parts: vec![String::from("o")]}),
 		            data_type: Box::new(SQLDataType(VarBinary {length: Some(50)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("p"))),
+		            column: Box::new(SQLIdentifier{id: String::from("p"), parts: vec![String::from("p")]}),
 		            data_type: Box::new(SQLDataType(TinyBlob)),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("q"))),
+		            column: Box::new(SQLIdentifier{id: String::from("q"), parts: vec![String::from("q")]}),
 		            data_type: Box::new(SQLDataType(TinyText)),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("r"))),
+		            column: Box::new(SQLIdentifier{id: String::from("r"), parts: vec![String::from("r")]}),
 		            data_type: Box::new(SQLDataType(Blob {length: None})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("s"))),
+		            column: Box::new(SQLIdentifier{id: String::from("s"), parts: vec![String::from("s")]}),
 		            data_type: Box::new(SQLDataType(Blob {length: Some(50)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("t"))),
+		            column: Box::new(SQLIdentifier{id: String::from("t"), parts: vec![String::from("t")]}),
 		            data_type: Box::new(SQLDataType(Text {length: None})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("u"))),
+		            column: Box::new(SQLIdentifier{id: String::from("u"), parts: vec![String::from("u")]}),
 		            data_type: Box::new(SQLDataType(Text {length: Some(100)})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("v"))),
+		            column: Box::new(SQLIdentifier{id: String::from("v"), parts: vec![String::from("v")]}),
 		            data_type: Box::new(SQLDataType(MediumBlob)),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("w"))),
+		            column: Box::new(SQLIdentifier{id: String::from("w"), parts: vec![String::from("w")]}),
 		            data_type: Box::new(SQLDataType(MediumText)),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("x"))),
+		            column: Box::new(SQLIdentifier{id: String::from("x"), parts: vec![String::from("x")]}),
 		            data_type: Box::new(SQLDataType(LongBlob)),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("y"))),
+		            column: Box::new(SQLIdentifier{id: String::from("y"), parts: vec![String::from("y")]}),
 		            data_type: Box::new(SQLDataType(LongText)),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("z"))),
+		            column: Box::new(SQLIdentifier{id: String::from("z"), parts: vec![String::from("z")]}),
 		            data_type: Box::new(SQLDataType(Enum {values: Box::new(SQLExprList(vec![
 		                        SQLLiteral(LiteralString(11,String::from("val1"))),
 		                        SQLLiteral(LiteralString(12,String::from("val2"))),
@@ -894,7 +894,7 @@ fn create_character() {
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("aa"))),
+		            column: Box::new(SQLIdentifier{id: String::from("aa"), parts: vec![String::from("aa")]}),
 		            data_type: Box::new(SQLDataType(Set {values: Box::new(SQLExprList(vec![
 		                        SQLLiteral(LiteralString(14,String::from("val1"))),
 		                        SQLLiteral(LiteralString(15,String::from("val2"))),
@@ -905,12 +905,12 @@ fn create_character() {
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("ab"))),
+		            column: Box::new(SQLIdentifier{id: String::from("ab"), parts: vec![String::from("ab")]}),
 		            data_type: Box::new(SQLDataType(CharByte {length: None})),
 		            qualifiers: None
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("ac"))),
+		            column: Box::new(SQLIdentifier{id: String::from("ac"), parts: vec![String::from("ac")]}),
 		            data_type: Box::new(SQLDataType(CharByte {length: Some(50)})),
 		            qualifiers: None
 		        }
@@ -946,10 +946,10 @@ fn create_column_qualifiers() {
 
 	assert_eq!(
 		SQLCreateTable {
-		    table: Box::new(SQLIdentifier(String::from("foo"))),
+		    table: Box::new(SQLIdentifier{id: String::from("foo"), parts: vec![String::from("foo")]}),
 		    column_list: vec![
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("id"))),
+		            column: Box::new(SQLIdentifier{id: String::from("id"), parts: vec![String::from("id")]}),
 		            data_type: Box::new(SQLDataType(BigInt {display: None})),
 		            qualifiers: Some(vec![
 		                    SQLColumnQualifier(NotNull),
@@ -959,18 +959,18 @@ fn create_column_qualifiers() {
 		            )
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("a"))),
+		            column: Box::new(SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}),
 		            data_type: Box::new(SQLDataType(Varchar {length: Some(50)})),
 		            qualifiers: Some(vec![
-		                    SQLColumnQualifier(CharacterSet(Box::new(SQLIdentifier(String::from("utf8"))))),
-		                    SQLColumnQualifier(Collate(Box::new(SQLIdentifier(String::from("utf8_general_ci"))))),
+		                    SQLColumnQualifier(CharacterSet(Box::new(SQLIdentifier{id: String::from("utf8"), parts: vec![String::from("utf8")]}))),
+		                    SQLColumnQualifier(Collate(Box::new(SQLIdentifier{id: String::from("utf8_general_ci"), parts: vec![String::from("utf8_general_ci")]}))),
 		                    SQLColumnQualifier(Null),
 		                    SQLColumnQualifier(UniqueKey)
 		                ]
 		            )
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("b"))),
+		            column: Box::new(SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]}),
 		            data_type: Box::new(SQLDataType(BigInt {display: None})),
 		            qualifiers: Some(vec![
 		                    SQLColumnQualifier(Signed),
@@ -980,22 +980,22 @@ fn create_column_qualifiers() {
 		            )
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("c"))),
+		            column: Box::new(SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}),
 		            data_type: Box::new(SQLDataType(TinyInt {display: None})),
 		            qualifiers: Some(vec![
 		                    SQLColumnQualifier(Unsigned),
 		                    SQLColumnQualifier(Null),
-		                    SQLColumnQualifier(Default(Box::new(SQLIdentifier(String::from("NULL"))))), // TODO should be literal null ?
+		                    SQLColumnQualifier(Default(Box::new(SQLIdentifier{id: String::from("NULL"), parts: vec![String::from("NULL")]}))), // TODO should be literal null ?
 							SQLColumnQualifier(Comment(Box::new(SQLLiteral(LiteralString(2,String::from("Some Comment"))))))
 		                ]
 		            )
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("d"))),
+		            column: Box::new(SQLIdentifier{id: String::from("d"), parts: vec![String::from("d")]}),
 		            data_type: Box::new(SQLDataType(Timestamp {fsp: None})),
 		            qualifiers: Some(vec![
-		                    SQLColumnQualifier(Default(Box::new(SQLIdentifier(String::from("CURRENT_TIMESTAMP"))))),
-		                    SQLColumnQualifier(OnUpdate(Box::new(SQLIdentifier(String::from("CURRENT_TIMESTAMP")))))
+		                    SQLColumnQualifier(Default(Box::new(SQLIdentifier{id: String::from("CURRENT_TIMESTAMP"), parts: vec![String::from("CURRENT_TIMESTAMP")]}))),
+		                    SQLColumnQualifier(OnUpdate(Box::new(SQLIdentifier{id: String::from("CURRENT_TIMESTAMP"), parts: vec![String::from("CURRENT_TIMESTAMP")]})))
 		                ]
 		            )
 		        }
@@ -1034,20 +1034,20 @@ fn create_tail_keys() {
 
 	assert_eq!(
 		SQLCreateTable {
-		    table: Box::new(SQLIdentifier(String::from("foo"))),
+		    table: Box::new(SQLIdentifier{id: String::from("foo"), parts: vec![String::from("foo")]}),
 		    column_list: vec![
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("id"))),
+		            column: Box::new(SQLIdentifier{id: String::from("id"), parts: vec![String::from("id")]}),
 		            data_type: Box::new(SQLDataType(BigInt {display: None})),
 		            qualifiers: Some(vec![SQLColumnQualifier(AutoIncrement)])
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("a"))),
+		            column: Box::new(SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}),
 		            data_type: Box::new(SQLDataType(Varchar {length: Some(50)})),
 		            qualifiers: Some(vec![SQLColumnQualifier(NotNull)])
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("b"))),
+		            column: Box::new(SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]}),
 		            data_type: Box::new(SQLDataType(Timestamp {fsp: None})),
 		            qualifiers: Some(vec![SQLColumnQualifier(NotNull)])
 		        }
@@ -1056,30 +1056,30 @@ fn create_tail_keys() {
 		        SQLKeyDef(Primary {
 					symbol: None,
 		            name: None,
-		            columns: vec![SQLIdentifier(String::from("id"))]
+		            columns: vec![SQLIdentifier{id: String::from("id"), parts: vec![String::from("id")]}]
 		        }),
 		        SQLKeyDef(Unique {
 					symbol: None,
-		            name: Some(Box::new(SQLIdentifier(String::from("keyName1")))),
+		            name: Some(Box::new(SQLIdentifier{id: String::from("keyName1"), parts: vec![String::from("keyName1")]})),
 		            columns: vec![
-		                SQLIdentifier(String::from("id")),
-		                SQLIdentifier(String::from("b"))
+		                SQLIdentifier{id: String::from("id"), parts: vec![String::from("id")]},
+		                SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]}
 		            ]
 		        }),
 		        SQLKeyDef(Index {
-		            name:  Some(Box::new(SQLIdentifier(String::from("keyName2")))),
-		            columns: vec![SQLIdentifier(String::from("b"))]
+		            name:  Some(Box::new(SQLIdentifier{id: String::from("keyName2"), parts: vec![String::from("keyName2")]})),
+		            columns: vec![SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]}]
 		        }),
 		        SQLKeyDef(FullText {
-		            name: Some(Box::new(SQLIdentifier(String::from("keyName")))),
-		            columns: vec![SQLIdentifier(String::from("a"))]
+		            name: Some(Box::new(SQLIdentifier{id: String::from("keyName"), parts: vec![String::from("keyName")]})),
+		            columns: vec![SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}]
 		        }),
 		        SQLKeyDef(Foreign {
 					symbol: None,
-		            name: Some(Box::new(SQLIdentifier(String::from("fkeyName")))),
-		            columns: vec![SQLIdentifier(String::from("a"))],
-		            reference_table: Box::new(SQLIdentifier(String::from("bar"))),
-		            reference_columns: vec![SQLIdentifier(String::from("id"))],
+		            name: Some(Box::new(SQLIdentifier{id: String::from("fkeyName"), parts: vec![String::from("fkeyName")]})),
+		            columns: vec![SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}],
+		            reference_table: Box::new(SQLIdentifier{id: String::from("bar"), parts: vec![String::from("bar")]}),
+		            reference_columns: vec![SQLIdentifier{id: String::from("id"), parts: vec![String::from("id")]}],
 		        })
 		    ],
 			table_options: vec![]
@@ -1115,43 +1115,43 @@ fn create_tail_constraints() {
 
 	assert_eq!(
 		SQLCreateTable {
-		    table: Box::new(SQLIdentifier(String::from("foo"))),
+		    table: Box::new(SQLIdentifier{id: String::from("foo"), parts: vec![String::from("foo")]}),
 		    column_list: vec![
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("id"))),
+		            column: Box::new(SQLIdentifier{id: String::from("id"), parts: vec![String::from("id")]}),
 		            data_type: Box::new(SQLDataType(BigInt {display: None})),
 		            qualifiers: Some(vec![SQLColumnQualifier(AutoIncrement)])
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("a"))),
+		            column: Box::new(SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}),
 		            data_type: Box::new(SQLDataType(Varchar {length: Some(50)})),
 		            qualifiers: Some(vec![SQLColumnQualifier(NotNull)])
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("b"))),
+		            column: Box::new(SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]}),
 		            data_type: Box::new(SQLDataType(Timestamp {fsp: None})),
 		            qualifiers: Some(vec![SQLColumnQualifier(NotNull)])
 		        }
 		    ],
 		    keys: vec![
 				SQLKeyDef(Primary {
-					symbol: Some(Box::new(SQLIdentifier(String::from("symbol1")))),
+					symbol: Some(Box::new(SQLIdentifier{id: String::from("symbol1"), parts: vec![String::from("symbol1")]})),
 					name: None,
-					columns: vec![SQLIdentifier(String::from("id"))]
+					columns: vec![SQLIdentifier{id: String::from("id"), parts: vec![String::from("id")]}]
 				}),
 				SQLKeyDef(Unique {
-					symbol: Some(Box::new(SQLIdentifier(String::from("symbol2")))),
-					name: Some(Box::new(SQLIdentifier(String::from("keyName1")))),
+					symbol: Some(Box::new(SQLIdentifier{id: String::from("symbol2"), parts: vec![String::from("symbol2")]})),
+					name: Some(Box::new(SQLIdentifier{id: String::from("keyName1"), parts: vec![String::from("keyName1")]})),
 					columns: vec![
-						SQLIdentifier(String::from("a"))
+						SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}
 					]
 				}),
 				SQLKeyDef(Foreign {
-					symbol: Some(Box::new(SQLIdentifier(String::from("symbol3")))),
-					name: Some(Box::new(SQLIdentifier(String::from("fkeyName")))),
-					columns: vec![SQLIdentifier(String::from("a"))],
-					reference_table: Box::new(SQLIdentifier(String::from("bar"))),
-					reference_columns: vec![SQLIdentifier(String::from("id"))],
+					symbol: Some(Box::new(SQLIdentifier{id: String::from("symbol3"), parts: vec![String::from("symbol3")]})),
+					name: Some(Box::new(SQLIdentifier{id: String::from("fkeyName"), parts: vec![String::from("fkeyName")]})),
+					columns: vec![SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}],
+					reference_table: Box::new(SQLIdentifier{id: String::from("bar"), parts: vec![String::from("bar")]}),
+					reference_columns: vec![SQLIdentifier{id: String::from("id"), parts: vec![String::from("id")]}],
 				})
 			],
 			table_options: vec![]
@@ -1181,23 +1181,23 @@ fn create_table_options() {
 
 	assert_eq!(
 		SQLCreateTable {
-		    table: Box::new(SQLIdentifier(String::from("foo"))),
+		    table: Box::new(SQLIdentifier{id: String::from("foo"), parts: vec![String::from("foo")]}),
 		    column_list: vec![
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("id"))),
+		            column: Box::new(SQLIdentifier{id: String::from("id"), parts: vec![String::from("id")]}),
 		            data_type: Box::new(SQLDataType(BigInt {display: None})),
 		            qualifiers: Some(vec![SQLColumnQualifier(AutoIncrement)])
 		        },
 		        SQLColumnDef {
-		            column: Box::new(SQLIdentifier(String::from("a"))),
+		            column: Box::new(SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}),
 		            data_type: Box::new(SQLDataType(Varchar {length: Some(50)})),
 		            qualifiers: None
 		        }
 		    ],
 		    keys: vec![],
 			table_options: vec![
-		        SQLTableOption(TableOption::Engine(Box::new(SQLIdentifier(String::from("InnoDB"))))),
-		        SQLTableOption(TableOption::Charset(Box::new(SQLIdentifier(String::from("utf8"))))),
+		        SQLTableOption(TableOption::Engine(Box::new(SQLIdentifier{id: String::from("InnoDB"), parts: vec![String::from("InnoDB")]}))),
+		        SQLTableOption(TableOption::Charset(Box::new(SQLIdentifier{id: String::from("utf8"), parts: vec![String::from("utf8")]}))),
 		        SQLTableOption(TableOption::Comment(Box::new(SQLLiteral(LiteralString(1,String::from("Table Comment")))))),
 				SQLTableOption(TableOption::AutoIncrement(Box::new(SQLLiteral(LiteralLong(2,12345_u64)))))
 		    ]

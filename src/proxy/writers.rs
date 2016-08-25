@@ -56,7 +56,7 @@ impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
 		match node {
 			&SQLExpr::SQLCreateTable{box ref table, ref column_list, ref keys, ref table_options} => {
 				let table_name = match table {
-					&SQLExpr::SQLIdentifier(ref t) => t,
+					&SQLExpr::SQLIdentifier{id: ref t, ..} => t,
 					_ => return Err(String::from(format!("Expected identifier, received {:?}", table)))
 				};
 
@@ -70,7 +70,7 @@ impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
 
 					let column_name = match c {
 						&SQLExpr::SQLColumnDef{box ref column, ..} => match column {
-							&SQLExpr::SQLIdentifier(ref t) => t,
+							&SQLExpr::SQLIdentifier{id: ref t, ..} => t,
 							_ => return Err(String::from(format!("Expected identifier, received {:?}", table)))
 						},
 						_ => return Err(String::from(format!("Expected column definition, received {:?}", table)))

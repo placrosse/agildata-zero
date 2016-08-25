@@ -8,7 +8,7 @@ pub enum SQLExpr {
 	SQLExprList(Vec<SQLExpr>),
 	SQLBinary{left: Box<SQLExpr>, op: SQLOperator, right: Box<SQLExpr>},
 	SQLLiteral(LiteralExpr),
-	SQLIdentifier(String),
+	SQLIdentifier{id: String, parts: Vec<String>},
 	SQLAlias{expr: Box<SQLExpr>, alias: Box<SQLExpr>},
 	SQLNested(Box<SQLExpr>),
 	SQLUnary{operator: SQLOperator, expr: Box<SQLExpr>},
@@ -922,13 +922,17 @@ impl AnsiSQLParser {
 
 		println!("parse_identifier()");
 		match tokens.next().unwrap() {
-			&Token::Identifier(ref v) => Ok(SQLExpr::SQLIdentifier(v.clone())),
+			&Token::Identifier(ref v) => Ok(SQLExpr::SQLIdentifier{id: v.clone(), parts: self.get_identifier_parts(v)?}),
 			&Token::Operator(ref o) => match &o as &str {
-				"*" => Ok(SQLExpr::SQLIdentifier(o.clone())),
+				"*" => Ok(SQLExpr::SQLIdentifier{id: o.clone(), parts: vec![o.clone()]}),
 				_ => Err(format!("Unsupported operator as identifier {}", o))
 			},
 			_ => Err(format!("Illegal state"))
 		}
+	}
+
+	fn get_identifier_parts(&self, id: &String) -> Result<Vec<String>, String> {
+		Ok(id.split(".").map(|s| s.to_string()).collect())
 	}
 
 	fn parse_nested<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<SQLExpr,  String>

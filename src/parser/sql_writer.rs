@@ -188,7 +188,7 @@ impl ExprWriter for DefaultSQLWriter {
 				builder.push_str(" AS");
 				writer._write(builder, alias)?;
 			},
-			&SQLExpr::SQLIdentifier(ref id) => {
+			&SQLExpr::SQLIdentifier{ref id, ..} => {
 				write!(builder, " {}", id).unwrap();
 			},
 			&SQLExpr::SQLNested(box ref expr) => {

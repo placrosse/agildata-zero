@@ -25,7 +25,13 @@ pub fn to_rex(node: &SQLExpr, tt: &TupleType) -> Result<RexNode, String> {
 				rex_list: rexs
 			}))
 		}
-		&SQLExpr::SQLIdentifier(ref t) => Ok(Box::new(RexIdentifier{name: t.clone()})),
+		&SQLExpr::SQLIdentifier{ref id, ref parts} => {
+			for e in tt.elements.iter() {
+				println!("HERE {:?}", e);
+			}
+			panic!("Here");
+			Ok(Box::new(RexIdentifier{name: id.clone()}))
+		},
 		_ => Err(String::from(format!("Unsuppported expr to rex {:?}", node)))
 	}
 }

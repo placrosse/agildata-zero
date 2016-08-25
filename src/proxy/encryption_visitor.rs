@@ -15,7 +15,7 @@ pub struct EncryptionVisitor<'a> {
 impl<'a> EncryptionVisitor<'a> {
 	fn is_identifier(&self, expr: &SQLExpr) -> bool {
 		match expr {
-			&SQLExpr::SQLIdentifier(_) => true,
+			&SQLExpr::SQLIdentifier{..} => true,
 			_ => false
 		}
 	}
@@ -61,7 +61,7 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 			},
 			&SQLExpr::SQLInsert{box ref table, box ref column_list, box ref values_list} => {
 				let table = match table {
-					&SQLExpr::SQLIdentifier(ref v) => v,
+					&SQLExpr::SQLIdentifier{id: ref v, ..} => v,
 					_ => panic!("Illegal")
 				};
 				match column_list {
@@ -70,7 +70,7 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 							&SQLExpr::SQLExprList(ref values) => {
 								for (i, e) in columns.iter().enumerate() {
 									match e {
-										&SQLExpr::SQLIdentifier(ref name) => {
+										&SQLExpr::SQLIdentifier{id: ref name, ..} => {
 											let col = self.config.get_column_config(&String::from("babel"), table, name);
 											if col.is_some() {
 												match values[i] {
@@ -112,7 +112,7 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 					&SQLOperator::EQ => {
 						if self.is_identifier(left) && self.is_literal(right) {
 							let ident = match left {
-								&SQLExpr::SQLIdentifier(ref v) => v,
+								&SQLExpr::SQLIdentifier{id: ref v, ..} => v,
 								_ => panic!("Unreachable")
 							};
 							let col = self.config.get_column_config(&String::from("babel"), &String::from("users"), ident);
@@ -147,7 +147,7 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 				self.visit_sql_expr(&expr);
 				self.visit_sql_expr(&alias);
 			},
-			&SQLExpr::SQLIdentifier(_) => {
+			&SQLExpr::SQLIdentifier{..} => {
 				// TODO end of visit arm
 			},
 			&SQLExpr::SQLNested(ref expr) => {
