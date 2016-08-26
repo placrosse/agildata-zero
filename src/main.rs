@@ -40,27 +40,22 @@
 #![feature(inclusive_range_syntax, question_mark,
            box_syntax, box_patterns, integer_atomics)]
 
-extern crate byteorder;
-extern crate mio;
-extern crate bytes;
-
-mod encrypt;
-mod config;
-mod protocol;
-mod proxy;
-mod parser;
-
 pub const APP_NAME: &'static str = "AgilData Zero Gateway";
 pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 #[macro_use]
 extern crate log;
 extern crate env_logger;
+
 #[macro_use]
 extern crate futures;
 extern crate futures_io;
 extern crate futures_mio;
 extern crate futures_cpupool;
+
+extern crate byteorder;
+extern crate mio;
+extern crate bytes;
 
 use std::cell::RefCell;
 use std::env;
@@ -77,6 +72,12 @@ use futures::stream::Stream;
 use futures_cpupool::CpuPool;
 use futures_io::{IoFuture, read_exact, write_all, Window};
 use futures_mio::{Loop, LoopData, LoopHandle, TcpStream};
+
+mod encrypt;
+mod config;
+mod protocol;
+mod proxy;
+mod parser;
 
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
