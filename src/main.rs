@@ -1,16 +1,10 @@
 #![feature(custom_derive, const_fn, inclusive_range_syntax, question_mark,
            box_syntax, box_patterns, stmt_expr_attributes, plugin, integer_atomics)]
 
-#[macro_use]
-extern crate lazy_static;
-
-extern crate parking_lot;
-
 extern crate byteorder;
 
 extern crate mio;
 extern crate bytes;
-extern crate chrono;
 
 use std::env;
 

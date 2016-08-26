@@ -2,16 +2,17 @@
 authors = ["Paul LaCrosse <paul.lacrosse@gmail.com>"]
 publish = false
 name = "babel"
-version = "0.0.3"
+version = "0.0.4"
 
 [dependencies]
-parking_lot = "0.2.7"
-regex = "0.1.73"
-notify = "2.6.3"
-lazy_static = "0.2.1"
 rust-crypto = "0.2.36"
-chrono = { version = "0.2.22" }
 byteorder = "*"
 RustyXML = "0.1.1"
 bytes = "0.2.10"
 mio = "0.4.4"
+log = "0.3"
+futures = { path = "../futures-rs", version = "0.1" }
+futures-io = { path = "../futures-rs/futures-io", version = "0.1" }
+futures-mio = { path = "../futures-rs/futures-mio", version = "0.1" }
+futures-cpupool = { path = "../futures-rs/futures-cpupool", version = "0.1" }
+env_logger = "0.3"
