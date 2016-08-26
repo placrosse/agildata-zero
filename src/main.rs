@@ -37,8 +37,8 @@
 //! You can try out this server with `cargo test` or just `cargo run` and
 //! throwing connections at it yourself, and there should be plenty of comments
 //! below to help walk you through the implementation as well!
-#![feature(custom_derive, const_fn, inclusive_range_syntax, question_mark,
-           box_syntax, box_patterns, stmt_expr_attributes, plugin, integer_atomics)]
+#![feature(inclusive_range_syntax, question_mark,
+           box_syntax, box_patterns, integer_atomics)]
 
 extern crate byteorder;
 extern crate mio;
