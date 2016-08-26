@@ -6,13 +6,13 @@ version = "0.0.4"
 
 [dependencies]
 rust-crypto = "0.2.36"
-byteorder = "*"
+byteorder = "0.5.3"
 RustyXML = "0.1.1"
 bytes = "0.2.10"
 mio = "0.4.4"
 log = "0.3"
-futures = { path = "../futures-rs", version = "0.1" }
-futures-io = { path = "../futures-rs/futures-io", version = "0.1" }
-futures-mio = { path = "../futures-rs/futures-mio", version = "0.1" }
-futures-cpupool = { path = "../futures-rs/futures-cpupool", version = "0.1" }
+futures = { git = "https://github.com/alexcrichton/futures-rs" }
+futures-io = { git = "https://github.com/alexcrichton/futures-rs" }
+futures-mio = { git = "https://github.com/alexcrichton/futures-rs" }
+futures-cpupool = { git = "https://github.com/alexcrichton/futures-rs" }
 env_logger = "0.3"
