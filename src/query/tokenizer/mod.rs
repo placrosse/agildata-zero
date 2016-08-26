@@ -22,7 +22,6 @@ impl<D: Dialect<T>, T: IToken> Tokenizer<D, T> for String {
 			.filter(|t| match t { &Token::Whitespace => false, _ => true })
 			.collect::<Vec<_>>()
 		)
-		//Ok(tokens)
 	}
 }
 
