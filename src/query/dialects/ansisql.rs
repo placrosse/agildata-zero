@@ -1,5 +1,8 @@
 use super::Dialect;
 use super::super::tokenizer::*;
+use super::super::parser::*;
+use super::super::planner::*;
+
 use std::iter::Peekable;
 use std::str::Chars;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -32,7 +35,14 @@ impl IToken for SQLToken {}
 impl AnsiSQLDialect {
 	pub fn new() -> Self {AnsiSQLDialect{lit_index: AtomicU32::new(0)}}
 }
-impl Dialect<SQLToken> for AnsiSQLDialect {
+
+pub enum SQLAST {}
+impl IAST for SQLAST{}
+
+pub enum SQLRel {}
+impl IRel for SQLRel {}
+
+impl Dialect<SQLToken, SQLAST, SQLRel> for AnsiSQLDialect {
 
 	fn get_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<Token<SQLToken>>, String> {
 		match chars.peek() {
@@ -148,7 +158,6 @@ impl Dialect<SQLToken> for AnsiSQLDialect {
 	                chars.next();
 	                Ok(Some(Token::Punctuator(ch.to_string())))
 	            },
-	            // just playing around ...
 	            _ => {
 	                Err(format!("Unsupported char {:?}", ch))
 	            }
@@ -156,4 +165,6 @@ impl Dialect<SQLToken> for AnsiSQLDialect {
 	        None => Ok(None),
 	    }
 	}
+
+
 }

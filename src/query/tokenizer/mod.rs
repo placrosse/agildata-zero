@@ -1,12 +1,14 @@
 use std::iter::Peekable;
 use std::str::Chars;
 use super::dialects::Dialect;
+use super::parser::IAST;
+use super::planner::IRel;
 
-pub trait Tokenizer<D: Dialect<T>, T: IToken> {
+pub trait Tokenizer<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> {
 	fn tokenize(&self, dialects: &Vec<D>) -> Result<Vec<Token<T>>, String>;
 }
 
-impl<D: Dialect<T>, T: IToken> Tokenizer<D, T> for String {
+impl<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> Tokenizer<D, T, A, R> for String {
 	fn tokenize(&self, dialects: &Vec<D>) -> Result<Vec<Token<T>>, String> {
 		let mut chars = self.chars().peekable();
 		let mut tokens: Vec<Token<T>> = Vec::new();
@@ -25,7 +27,7 @@ impl<D: Dialect<T>, T: IToken> Tokenizer<D, T> for String {
 	}
 }
 
-fn get_dialect_token<D: Dialect<T>, T: IToken> (dialects: &Vec<D>, chars: &mut Peekable<Chars>) -> Result<Option<Token<T>>, String> {
+fn get_dialect_token<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> (dialects: &Vec<D>, chars: &mut Peekable<Chars>) -> Result<Option<Token<T>>, String> {
 	for d in dialects.iter() {
 		let token = d.get_token(chars)?;
 		match token {
