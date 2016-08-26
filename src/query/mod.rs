@@ -1,7 +1,10 @@
-mod tokenizer;
-mod parser;
-mod planner;
-mod dialects;
+pub mod tokenizer;
+pub mod parser;
+pub mod planner;
+pub mod dialects;
+
+#[cfg(test)]
+mod tests;
 
 // use parser::sql_parser::*;
 //

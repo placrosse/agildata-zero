@@ -2,11 +2,11 @@ use std::iter::Peekable;
 use std::str::Chars;
 use super::dialects::Dialect;
 
-pub trait Tokenizer<D, T> where D: Dialect<T>, T: IToken {
+pub trait Tokenizer<D: Dialect<T>, T: IToken> {
 	fn tokenize(&self, dialects: &Vec<D>) -> Result<Vec<Token<T>>, String>;
 }
 
-impl<D, T> Tokenizer<D, T> for String where D: Dialect<T>, T: IToken {
+impl<D: Dialect<T>, T: IToken> Tokenizer<D, T> for String {
 	fn tokenize(&self, dialects: &Vec<D>) -> Result<Vec<Token<T>>, String> {
 		let mut chars = self.chars().peekable();
 		let mut tokens: Vec<Token<T>> = Vec::new();
@@ -16,11 +16,17 @@ impl<D, T> Tokenizer<D, T> for String where D: Dialect<T>, T: IToken {
 				Some(token) => tokens.push(token)
 			}
 		}
-		Ok(tokens)
+
+		return Ok(tokens
+			.into_iter()
+			.filter(|t| match t { &Token::Whitespace => false, _ => true })
+			.collect::<Vec<_>>()
+		)
+		//Ok(tokens)
 	}
 }
 
-fn get_dialect_token<D, T>(dialects: &Vec<D>, chars: &mut Peekable<Chars>) -> Result<Option<Token<T>>, String> where D: Dialect<T>, T: IToken {
+fn get_dialect_token<D: Dialect<T>, T: IToken> (dialects: &Vec<D>, chars: &mut Peekable<Chars>) -> Result<Option<Token<T>>, String> {
 	for d in dialects.iter() {
 		let token = d.get_token(chars)?;
 		match token {
@@ -33,7 +39,8 @@ fn get_dialect_token<D, T>(dialects: &Vec<D>, chars: &mut Peekable<Chars>) -> Re
 	Ok(None)
 }
 
-pub enum Token<T> where T: IToken {
+#[derive(Debug,PartialEq,Clone)]
+pub enum Token<T: IToken>  {
 	Whitespace,
 	Keyword(String),
 	Identifier(String),
@@ -44,3 +51,5 @@ pub enum Token<T> where T: IToken {
 }
 
 pub trait IToken{}
+
+impl<T> IToken for Token<T> where T: IToken {}
