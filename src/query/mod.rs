@@ -8,21 +8,57 @@ pub mod dialects;
 #[cfg(test)]
 mod tests;
 
+
+// sql.tokenize(&dialects).parse().plan()
 // Dialect api
-pub trait Dialect<T: IToken, A: IAST, P: IRel> {
+pub trait Dialect<T: IToken, A: IAST, R: IRel> {
 	fn get_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<Token<T>>, String>;
 
-	//fn parse_prefix<It: Iterator<Item=Token<T>>>(&self, parser: &PrattParser<T, A, R>, tokens: It) -> Result<Option<ASTNode<A>>, String>;
-	// fn get_token_precedence();
-	//
-	// fn parse();
-	//
+	fn parse_prefix<'a, D: Dialect<T, A, R>>(&self, tokens: &Tokens<'a, D, T, A, R>) -> Result<Option<ASTNode<A>>, String>;
+
+	fn get_precedence<'a, D: Dialect<T, A, R>>(&self, tokens: &Tokens<'a, D, T, A, R>) -> Result<u8, String>;
+
+	fn parse_infix<'a, D: Dialect<T, A, R>>(&self, tokens: &Tokens<'a, D, T, A, R>, left: ASTNode<A>, precedence: u8) -> Result<Option<ASTNode<A>>, String>;
+
 	// fn plan();
 }
 
 // Tokenizer apis
 pub trait Tokenizer<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> {
 	fn tokenize<'a>(&self, dialects: &'a Vec<D>) -> Result<Tokens<'a, D, T, A, R>, String>;
+}
+
+impl<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> Tokenizer<D, T, A, R> for String {
+	fn tokenize<'a>(&self, dialects: &'a Vec<D>) -> Result<Tokens<'a, D, T, A, R>, String> {
+		let mut chars = self.chars().peekable();
+		let mut tokens: Vec<Token<T>> = Vec::new();
+		while let Some(&ch) = chars.peek() {
+			match get_dialect_token(&dialects, &mut chars)? {
+				None => return Err(String::from(format!("No token dialect support for character {:?}", ch))),
+				Some(token) => tokens.push(token)
+			}
+		}
+
+		let stream = tokens
+			.into_iter()
+			.filter(|t| match t { &Token::Whitespace => false, _ => true })
+			.collect::<Vec<_>>();
+
+		Ok(Tokens::new(dialects, stream))
+	}
+}
+
+fn get_dialect_token<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> (dialects: &Vec<D>, chars: &mut Peekable<Chars>) -> Result<Option<Token<T>>, String> {
+	for d in dialects.iter() {
+		let token = d.get_token(chars)?;
+		match token {
+			Some(t) => {
+				return Ok(Some(t));
+			},
+			None => {}
+		}
+	}
+	Ok(None)
 }
 
 #[derive(Debug)]
@@ -65,39 +101,6 @@ impl<'a, D: 'a + Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> Tokens<'a, D, T,
 	}
 }
 
-impl<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> Tokenizer<D, T, A, R> for String {
-	fn tokenize<'a>(&self, dialects: &'a Vec<D>) -> Result<Tokens<'a, D, T, A, R>, String> {
-		let mut chars = self.chars().peekable();
-		let mut tokens: Vec<Token<T>> = Vec::new();
-		while let Some(&ch) = chars.peek() {
-			match get_dialect_token(&dialects, &mut chars)? {
-				None => return Err(String::from(format!("No token dialect support for character {:?}", ch))),
-				Some(token) => tokens.push(token)
-			}
-		}
-
-		let stream = tokens
-			.into_iter()
-			.filter(|t| match t { &Token::Whitespace => false, _ => true })
-			.collect::<Vec<_>>();
-
-		Ok(Tokens::new(dialects, stream))
-	}
-}
-
-fn get_dialect_token<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> (dialects: &Vec<D>, chars: &mut Peekable<Chars>) -> Result<Option<Token<T>>, String> {
-	for d in dialects.iter() {
-		let token = d.get_token(chars)?;
-		match token {
-			Some(t) => {
-				return Ok(Some(t));
-			},
-			None => {}
-		}
-	}
-	Ok(None)
-}
-
 #[derive(Debug,PartialEq,Clone)]
 pub enum Token<T: IToken>  {
 	Whitespace,
@@ -116,14 +119,65 @@ impl<T> IToken for Token<T> where T: IToken {}
 // Parser APIs
 pub trait Parser<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> {
 	fn parse(&self) -> Result<Option<ASTNode<A>>, String>;
+	fn parse_expr(&self, precedence: u8) -> Result<Option<ASTNode<A>>, String>;
 }
 
 
 impl<'a, D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> Parser<D, T, A, R> for Tokens<'a, D, T, A, R> {
-	fn parse(&self) -> Result<Option<ASTNode<A>>, String> {
-		//self.iter().peekable().parse(dialects)
-		panic!("HERE")
+	fn parse(&self) -> Result<Option<ASTNode<A>>, String> { self.parse_expr(0) }
+
+	fn parse_expr(&self, precedence: u8) -> Result<Option<ASTNode<A>>, String> {
+		match get_dialect_ast(&self.dialects, self, precedence)? {
+			Some(node) => Ok(Some(node)),
+			None => Err(String::from("No dialect support for token prefix TBD")) // TODO
+		}
 	}
+
+}
+
+fn get_dialect_ast<'a, D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel>
+	(dialects: &Vec<D>, tokens: &Tokens<'a, D, T, A, R>, precedence: u8) ->
+	Result<Option<ASTNode<A>>, String> {
+
+	let mut expr = get_dialect_prefix(dialects, tokens)?;
+	if expr.is_some() {
+		return get_dialect_infix(dialects, tokens, expr.unwrap(), precedence)
+	} else {
+		Ok(expr)
+	}
+}
+
+fn get_dialect_prefix<'a, D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel>
+	(dialects: &Vec<D>, tokens: &Tokens<'a, D, T, A, R>) ->
+	Result<Option<ASTNode<A>>, String> {
+
+	for d in dialects.iter() {
+		let expr = d.parse_prefix(tokens)?;
+		if expr.is_some() {
+			return Ok(expr)
+		}
+	}
+
+	Ok(None)
+}
+
+fn get_dialect_infix<'a, D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel>
+	(dialects: &Vec<D>, tokens: &Tokens<'a, D, T, A, R>, left: ASTNode<A>, precedence: u8) ->
+	Result<Option<ASTNode<A>>, String> {
+
+	for d in dialects.iter() {
+		let next_precedence = d.get_precedence(tokens)?;
+
+		if precedence >= next_precedence {
+			continue;
+		}
+		match d.parse_infix(tokens, left, next_precedence)? {
+			Some(e) => return Ok(Some(e)),
+			None => return Err(String::from("Illegal state!"))
+		}
+	}
+
+	Ok(Some(left))
 }
 
 

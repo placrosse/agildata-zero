@@ -34,7 +34,45 @@ impl AnsiSQLDialect {
 	pub fn new() -> Self {AnsiSQLDialect{lit_index: AtomicU32::new(0)}}
 }
 
-pub enum SQLAST {}
+pub enum SQLAST {
+    // SQLExprList(Vec<SQLAST>),
+    // SQLBinary{left: Box<SQLAST>, op: SQLOperator, right: Box<SQLAST>},
+    // SQLLiteral(LiteralExpr),
+    // SQLIdentifier{id: String, parts: Vec<String>},
+    // SQLAlias{expr: Box<SQLAST>, alias: Box<SQLAST>},
+    // SQLNested(Box<SQLAST>),
+    // SQLUnary{operator: SQLOperator, expr: Box<SQLAST>},
+    // SQLOrderBy{expr: Box<SQLAST>, is_asc: bool},
+    // SQLSelect{
+    //     expr_list: Box<SQLAST>,
+    //     relation: Option<Box<SQLAST>>,
+    //     selection: Option<Box<SQLAST>>,
+    //     order: Option<Box<SQLAST>>
+    // },
+    // SQLInsert {
+    //     table: Box<SQLAST>,
+    //     column_list: Box<SQLAST>,
+    //     values_list: Box<SQLAST>
+    // },
+    // SQLUpdate {
+    //     table: Box<SQLAST>,
+    //     assignments: Box<SQLAST>,
+    //     selection: Option<Box<SQLAST>>
+    // },
+    // SQLUnion{left: Box<SQLAST>, union_type: SQLUnionType, right: Box<SQLAST>},
+    // SQLJoin{left: Box<SQLAST>, join_type: SQLJoinType, right: Box<SQLAST>, on_expr: Option<Box<SQLAST>>},
+    // SQLCreateTable{
+    //     table: Box<SQLAST>,
+    //     column_list: Vec<SQLAST>,
+    //     keys: Vec<SQLAST>,
+    //     table_options: Vec<SQLAST>
+    // },
+    // SQLColumnDef{column: Box<SQLAST>, data_type: Box<SQLAST>, qualifiers: Option<Vec<SQLAST>>},
+    // SQLKeyDef(KeyDef),
+    // SQLColumnQualifier(ColumnQualifier),
+    // SQLDataType(DataType),
+    // SQLTableOption(TableOption)
+}
 impl IAST for SQLAST{}
 
 pub enum SQLRel {}
@@ -163,6 +201,26 @@ impl Dialect<SQLToken, SQLAST, SQLRel> for AnsiSQLDialect {
 	        None => Ok(None),
 	    }
 	}
+
+    fn parse_prefix<'a, D: Dialect<SQLToken, SQLAST, SQLRel>>
+        (&self, tokens: &Tokens<'a, D, SQLToken, SQLAST, SQLRel>) ->
+            Result<Option<ASTNode<SQLAST>>, String> {
+
+        Err(String::from("parse_prefix() not implemented"))
+    }
+
+    fn get_precedence<'a, D:  Dialect<SQLToken, SQLAST, SQLRel>>
+        (&self, tokens: &Tokens<'a, D, SQLToken, SQLAST, SQLRel>)
+            -> Result<u8, String> {
+        Err(String::from("get_precedence() not implemented"))
+    }
+
+    fn parse_infix<'a, D: Dialect<SQLToken, SQLAST, SQLRel>>
+        (&self, tokens: &Tokens<'a, D, SQLToken, SQLAST, SQLRel>, left: ASTNode<SQLAST>, precedence: u8)
+            -> Result<Option<ASTNode<SQLAST>>, String> {
+        Err(String::from("parse_infix() not implemented"))
+    }
+
 
     // fn parse_prefix<It: Iterator<Item=Token<SQLToken>>>(&self, parser: &PrattParser<SQLToken, SQLAST, SQLRel>, tokens: It) -> Result<Option<ASTNode<SQLAST>>, String> {
     //     Err(String::from("parse_prefix() Not implemented!"))
