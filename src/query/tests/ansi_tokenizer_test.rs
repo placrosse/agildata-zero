@@ -1,4 +1,4 @@
-use super::super::tokenizer::*;
+use super::super::*;
 use super::super::dialects::ansisql::*;
 
 #[test]

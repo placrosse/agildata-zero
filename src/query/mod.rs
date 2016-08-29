@@ -1,81 +1,104 @@
-pub mod tokenizer;
-pub mod parser;
-pub mod planner;
+use std::iter::Peekable;
+use std::str::Chars;
+
 pub mod dialects;
 
 #[cfg(test)]
 mod tests;
 
-// use parser::sql_parser::*;
-//
-// pub enum RelNode<T: Rel> {
-// 	RelExtension{r: T}
-// }
-//
-// pub trait Rel {}
-//
-// trait PlannerDialect<T> where T: Rel {
-// 	fn plan_expr(&self, planner: &QueryPlanner, node: &SQLExpr) -> T;
-// }
-//
-// trait Expr {
-//
-// }
-// enum TestSQLExpr<T> where T: Expr{
-// 	SQLLiteral(String),
-// 	SQLIdentifier(String),
-// 	SQLExtension(T)
-// }
-//
-// trait Dialect<E, R> {
-// 	fn parse(expr: E) -> Result<Option<R>, String>>;
-// }
-//
-// struct DefaultDialect {
-// }
-//
-// struct MySQLDialect {
-// }
-//
-// struct Planner { //}<D> where D: Dialect {
-// 	default: Dialect,
-// 	variant: Dialect
-// }
-//
-// let dialects = vec![MySQL, ANSIISQL]
-//"select 1".tokenize(&dialects).parse().plan().write()
-// impl Tokenizer<T> for String where T: Dialect {
-//
-// 	fn tokenize(dialects: Vec<T>) -> TokenStream;
-//
-// }
-//
-// struct TokenStream {
-// 	tokens: Vec<Token>,
-// 	dialects: &'a Vec<T>
-// }
-//
-//
-// impl Parser for Vec<Token> {
-// }
-//
-// impl Planner for ParsedExpr {
-//
-// }
-//
-// impl Planner {
-// 	fn plan(sql: String) -> Result<Option<RelNode>, String> {
-// 		match dialect.parse(&self, expr) {
-// 			Some(e) => Ok(e),
-// 			None => default.parse(&self,expr)
-// 		}
-// 	}
-// }
-//
-// // struct QueryPlanner<T> where T: Rel{}
-// //
-// // impl<T> QueryPlanner<T> where T: Rel {
-// // 	fn plan(&self, dialect: &PlannerDialect<T>, node: &SQLExpr) -> RelNode {
-// // 		panic!("Here")
-// // 	}
-// // }
+// Dialect api
+pub trait Dialect<T: IToken, A: IAST, P: IRel> {
+	fn get_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<Token<T>>, String>;
+
+	// fn parse_prefix<It: Iterator<Item=Token<T>>>(&self, parser: &PrattParser<T, A, R>, tokens: It) -> Result<Option<ASTNode<A>>, String>;
+	// fn get_token_precedence();
+	//
+	// fn parse();
+	//
+	// fn plan();
+}
+
+// Tokenizer apis
+pub trait Tokenizer<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> {
+	fn tokenize(&self, dialects: &Vec<D>) -> Result<Vec<Token<T>>, String>;
+}
+
+impl<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> Tokenizer<D, T, A, R> for String {
+	fn tokenize(&self, dialects: &Vec<D>) -> Result<Vec<Token<T>>, String> {
+		let mut chars = self.chars().peekable();
+		let mut tokens: Vec<Token<T>> = Vec::new();
+		while let Some(&ch) = chars.peek() {
+			match get_dialect_token(&dialects, &mut chars)? {
+				None => return Err(String::from(format!("No token dialect support for character {:?}", ch))),
+				Some(token) => tokens.push(token)
+			}
+		}
+
+		return Ok(tokens
+			.into_iter()
+			.filter(|t| match t { &Token::Whitespace => false, _ => true })
+			.collect::<Vec<_>>()
+		)
+	}
+}
+
+fn get_dialect_token<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> (dialects: &Vec<D>, chars: &mut Peekable<Chars>) -> Result<Option<Token<T>>, String> {
+	for d in dialects.iter() {
+		let token = d.get_token(chars)?;
+		match token {
+			Some(t) => {
+				return Ok(Some(t));
+			},
+			None => {}
+		}
+	}
+	Ok(None)
+}
+
+#[derive(Debug,PartialEq,Clone)]
+pub enum Token<T: IToken>  {
+	Whitespace,
+	Keyword(String),
+	Identifier(String),
+	//Literal(LiteralToken),
+	Operator(String),
+	Punctuator(String),
+	TokenExtension(T)
+}
+
+pub trait IToken{}
+
+impl<T> IToken for Token<T> where T: IToken {}
+
+// Parser APIs
+pub trait Parser<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> {
+	fn parse(&self, dialects: Vec<D>) -> Result<Option<ASTNode<A>>, String>;
+}
+
+impl<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> Parser<D, T, A, R> for Vec<Token<T>> {
+	fn parse(&self, dialects: Vec<D>) -> Result<Option<ASTNode<A>>, String> {
+		self.iter().peekable().parse(dialects)
+	}
+}
+
+impl<'a, D: Dialect<T, A, R>, T: 'a + IToken, A: IAST, R: IRel, It: Iterator<Item=&'a Token<T>>> Parser<D, T, A, R> for Peekable<It> {
+	fn parse(&self, dialects: Vec<D>) -> Result<Option<ASTNode<A>>, String> {
+		panic!("HERE")
+	}
+}
+
+pub enum ASTNode<A: IAST> {
+	AST(A)
+}
+pub trait IAST{}
+
+
+// Planner APIs
+pub trait Planner<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> {
+	fn plan(&self, dialects: D, ast: A) -> Result<Option<RelNode<R>>, String>;
+}
+
+pub trait IRel {}
+pub enum RelNode<R: IRel> {
+	Rel(R)
+}
