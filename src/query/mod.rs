@@ -1,6 +1,7 @@
 use std::iter::Peekable;
 use std::str::Chars;
 use std::marker::PhantomData;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 pub mod dialects;
 
@@ -24,12 +25,44 @@ pub trait Tokenizer<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> {
 	fn tokenize<'a>(&self, dialects: &'a Vec<D>) -> Result<Tokens<'a, D, T, A, R>, String>;
 }
 
-#[derive(Debug,PartialEq,Clone)]
+#[derive(Debug)]
 pub struct Tokens<'a, D: 'a + Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> {
 	pub dialects: &'a Vec<D>,
 	pub tokens: Vec<Token<T>>,
+	pub index: AtomicU32,
 	_p1: PhantomData<A>,
 	_p2: PhantomData<R>
+}
+
+impl<'a, D: 'a + Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> Tokens<'a, D, T, A, R> {
+	pub fn new(dialects: &'a Vec<D>, tokens: Vec<Token<T>>) -> Self {
+		Tokens {
+			dialects: dialects,
+			tokens: tokens,
+			index: AtomicU32::new(0),
+			_p1: PhantomData,
+			_p2: PhantomData
+		}
+	}
+
+	pub fn peek(&'a self) -> Option<&'a Token<T>> {
+		let i = self.index.load(Ordering::SeqCst) as usize;
+		if (i < (self.tokens.len() - 1)) {
+			Some(&self.tokens[i as usize])
+		} else {
+			None
+		}
+	}
+
+	pub fn next(&'a self) -> Option<&'a Token<T>> {
+		let i = self.index.load(Ordering::SeqCst) as usize;
+		if (i < (self.tokens.len() - 1)) {
+			self.index.fetch_add(1, Ordering::SeqCst);
+			Some(&self.tokens[i as usize])
+		} else {
+			panic!("Index out of bounds")
+		}
+	}
 }
 
 impl<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> Tokenizer<D, T, A, R> for String {
@@ -48,12 +81,7 @@ impl<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> Tokenizer<D, T, A, R> for
 			.filter(|t| match t { &Token::Whitespace => false, _ => true })
 			.collect::<Vec<_>>();
 
-		Ok(Tokens{
-			dialects: dialects,
-			tokens: stream,
-			_p1: PhantomData,
-			_p2: PhantomData
-		})
+		Ok(Tokens::new(dialects, stream))
 	}
 }
 
@@ -87,22 +115,17 @@ impl<T> IToken for Token<T> where T: IToken {}
 
 // Parser APIs
 pub trait Parser<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> {
-	fn parse(&self, dialects: Vec<D>) -> Result<Option<ASTNode<A>>, String>;
+	fn parse(&self) -> Result<Option<ASTNode<A>>, String>;
 }
 
-impl<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> Parser<D, T, A, R> for Vec<Token<T>> {
-	fn parse(&self, dialects: Vec<D>) -> Result<Option<ASTNode<A>>, String> {
-		self.iter().peekable().parse(dialects)
-	}
-}
 
-// sql.tokenize(&dialects).iter().peekable().parse()
-
-impl<'a, D: Dialect<T, A, R>, T: 'a + IToken, A: IAST, R: IRel, It: Iterator<Item=&'a Token<T>>> Parser<D, T, A, R> for Peekable<It> {
-	fn parse(&self, dialects: Vec<D>) -> Result<Option<ASTNode<A>>, String> {
+impl<'a, D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> Parser<D, T, A, R> for Tokens<'a, D, T, A, R> {
+	fn parse(&self) -> Result<Option<ASTNode<A>>, String> {
+		//self.iter().peekable().parse(dialects)
 		panic!("HERE")
 	}
 }
+
 
 pub enum ASTNode<A: IAST> {
 	AST(A)
