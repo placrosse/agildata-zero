@@ -10,7 +10,7 @@ mod tests;
 pub trait Dialect<T: IToken, A: IAST, P: IRel> {
 	fn get_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<Token<T>>, String>;
 
-	// fn parse_prefix<It: Iterator<Item=Token<T>>>(&self, parser: &PrattParser<T, A, R>, tokens: It) -> Result<Option<ASTNode<A>>, String>;
+	//fn parse_prefix<It: Iterator<Item=Token<T>>>(&self, parser: &PrattParser<T, A, R>, tokens: It) -> Result<Option<ASTNode<A>>, String>;
 	// fn get_token_precedence();
 	//
 	// fn parse();
@@ -22,6 +22,11 @@ pub trait Dialect<T: IToken, A: IAST, P: IRel> {
 pub trait Tokenizer<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> {
 	fn tokenize(&self, dialects: &Vec<D>) -> Result<Vec<Token<T>>, String>;
 }
+
+// struct Tokens<'a, D: 'a + Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> {
+// 	dialects: &'a Vec<D>,
+// 	tokens: Vec<Token<T>>
+// }
 
 impl<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> Tokenizer<D, T, A, R> for String {
 	fn tokenize(&self, dialects: &Vec<D>) -> Result<Vec<Token<T>>, String> {
@@ -80,6 +85,8 @@ impl<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> Parser<D, T, A, R> for Ve
 		self.iter().peekable().parse(dialects)
 	}
 }
+
+// sql.tokenize(&dialects).iter().peekable().parse()
 
 impl<'a, D: Dialect<T, A, R>, T: 'a + IToken, A: IAST, R: IRel, It: Iterator<Item=&'a Token<T>>> Parser<D, T, A, R> for Peekable<It> {
 	fn parse(&self, dialects: Vec<D>) -> Result<Option<ASTNode<A>>, String> {
