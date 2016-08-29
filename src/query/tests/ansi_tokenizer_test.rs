@@ -10,7 +10,7 @@ fn simple_tokenize() {
 			Token::Operator("+".to_string()),
 			Token::TokenExtension(SQLToken::Literal(LiteralToken::LiteralLong(1, "1".to_string())))
 		],
-		String::from("SELECT 1 + 1").tokenize(&dialects).unwrap()
+		String::from("SELECT 1 + 1").tokenize(&dialects).unwrap().tokens
 	);
 
 	#[test]
@@ -32,7 +32,7 @@ fn simple_tokenize() {
                 Token::Operator("!=".to_string()),
                 Token::TokenExtension(SQLToken::Literal(LiteralToken::LiteralBool(2, "true".to_string())))
 			],
-            String::from("SELECT a, 'hello' FROM tOne WHERE b > 2.22 AND c != true").tokenize(&dialects).unwrap()
+            String::from("SELECT a, 'hello' FROM tOne WHERE b > 2.22 AND c != true").tokenize(&dialects).unwrap().tokens
         );
     }
 }

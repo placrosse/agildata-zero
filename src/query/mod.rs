@@ -1,5 +1,6 @@
 use std::iter::Peekable;
 use std::str::Chars;
+use std::marker::PhantomData;
 
 pub mod dialects;
 
@@ -20,16 +21,19 @@ pub trait Dialect<T: IToken, A: IAST, P: IRel> {
 
 // Tokenizer apis
 pub trait Tokenizer<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> {
-	fn tokenize(&self, dialects: &Vec<D>) -> Result<Vec<Token<T>>, String>;
+	fn tokenize<'a>(&self, dialects: &'a Vec<D>) -> Result<Tokens<'a, D, T, A, R>, String>;
 }
 
-// struct Tokens<'a, D: 'a + Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> {
-// 	dialects: &'a Vec<D>,
-// 	tokens: Vec<Token<T>>
-// }
+#[derive(Debug,PartialEq,Clone)]
+pub struct Tokens<'a, D: 'a + Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> {
+	pub dialects: &'a Vec<D>,
+	pub tokens: Vec<Token<T>>,
+	_p1: PhantomData<A>,
+	_p2: PhantomData<R>
+}
 
 impl<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> Tokenizer<D, T, A, R> for String {
-	fn tokenize(&self, dialects: &Vec<D>) -> Result<Vec<Token<T>>, String> {
+	fn tokenize<'a>(&self, dialects: &'a Vec<D>) -> Result<Tokens<'a, D, T, A, R>, String> {
 		let mut chars = self.chars().peekable();
 		let mut tokens: Vec<Token<T>> = Vec::new();
 		while let Some(&ch) = chars.peek() {
@@ -39,11 +43,17 @@ impl<D: Dialect<T, A, R>, T: IToken, A: IAST, R: IRel> Tokenizer<D, T, A, R> for
 			}
 		}
 
-		return Ok(tokens
+		let stream = tokens
 			.into_iter()
 			.filter(|t| match t { &Token::Whitespace => false, _ => true })
-			.collect::<Vec<_>>()
-		)
+			.collect::<Vec<_>>();
+
+		Ok(Tokens{
+			dialects: dialects,
+			tokens: stream,
+			_p1: PhantomData,
+			_p2: PhantomData
+		})
 	}
 }
 
