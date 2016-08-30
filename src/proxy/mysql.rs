@@ -104,9 +104,6 @@ pub trait MySQLConnection {
 impl MySQLConnection for net::TcpStream {
 
     fn read_packet(&mut self) -> Result<MySQLPacket, &'static str> {
-
-        println!("read_packet() BEGIN");
-
         // read header
         let mut header_vec = vec![0_u8; 4];
         match self.read(&mut header_vec) {
@@ -120,8 +117,6 @@ impl MySQLConnection for net::TcpStream {
                 let mut payload_vec = vec![0_u8; payload_len];
                 assert!(payload_len == self.read(&mut payload_vec).unwrap());
                 header_vec.extend_from_slice(&payload_vec);
-
-                println!("read_packet() END");
 
                 Ok(MySQLPacket { bytes: header_vec })
             },
@@ -139,10 +134,11 @@ struct ColumnMetaData {
 
 #[derive(Debug)]
 pub struct MySQLConnectionHandler<'a> {
-    pub socket: TcpStream,
+    pub socket: TcpStream, // this is the socket from the client
     token: mio::Token,
     state: State,
-    remote: net::TcpStream,
+    remote: net::TcpStream, // this is the connection to the remote mysql server
+    schema: Option<String>, // the current schema
     config: &'a Config
     //authenticating: bool
 }
@@ -171,6 +167,7 @@ impl<'a> MySQLConnectionHandler <'a> {
             token: token,
             state: State::Writing(Take::new(buf, len)),
             remote: mysql,
+            schema: None,
             config: &config
             // authenticating: true
         }
@@ -190,6 +187,7 @@ impl<'a> MySQLConnectionHandler <'a> {
         }
     }
 
+    /// process a single mysql packet from the client
     pub fn read(&mut self, event_loop: &mut mio::EventLoop<Proxy>) {
 
         println!("Reading from client");
@@ -200,6 +198,9 @@ impl<'a> MySQLConnectionHandler <'a> {
                 self.state = State::Closed;
             }
             Ok(Some(n)) => {
+
+                // this is very verbose debug logging, please leave disabled when you push to master
+                /*
                 println!("read {} bytes", n);
                 print!("Bytes read [");
                 for i in 0..buf.len() {
@@ -212,6 +213,7 @@ impl<'a> MySQLConnectionHandler <'a> {
                     if i%8==0 { println!(""); }
                     print!("{:#04x} ",buf[i]);
                 }
+                */
 
                 // do we have the complete request packet yet?
                 if buf.len() > 3 {
@@ -223,18 +225,37 @@ impl<'a> MySQLConnectionHandler <'a> {
 
                     if buf.len() >= packet_len+4 {
                         match buf[4] {
+
+                            // COM_INIT_DB
+                            0x02 => {
+                                let schema = parse_string(&buf[5 as usize .. (packet_len+4) as usize]);
+                                println!("COM_INIT_DB: {}", schema);
+                                self.schema = Some(schema);
+                                self.mysql_send(&buf[0 .. packet_len+4]);
+
+                            },
+
+                            // COM_QUERY
                             0x03 => {
                                 println!("0x03");
 
                                 let query = parse_string(&buf[5 as usize .. (packet_len+4) as usize]);
-                                println!("QUERY : {}", query);
+                                println!("COM_QUERY : {}", query);
 
                                 // parse query
                                 let parser = AnsiSQLParser {};
                                 let result = parser.parse(&query);
 
                                 let parsed: Option<SQLExpr> = match result {
-                                    Ok(p) => Some(p),
+                                    Ok(p) => {
+                                        match p {
+                                            SQLExpr::SQLUse(ref schema) => {
+                                                self.schema = Some(schema.clone())
+                                            },
+                                            _ => {}
+                                        };
+                                        Some(p)
+                                    },
                                     Err(e) => {
                                         println!("Failed to parse due to {:?}", e);
                                         None
@@ -507,8 +528,8 @@ impl<'a> MySQLConnectionHandler <'a> {
                             new_header.pop();
                             new_header.push(sequence_id);
 
-                            println!("Modified Header: {:?}", &new_header);
-                            println!("Modified Payload: {:?}", &wtr);
+//                            println!("Modified Header: {:?}", &new_header);
+//                            println!("Modified Payload: {:?}", &wtr);
 
                             write_buf.extend_from_slice(&new_header);
                             write_buf.extend_from_slice(&wtr);

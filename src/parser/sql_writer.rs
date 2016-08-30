@@ -222,6 +222,10 @@ impl ExprWriter for DefaultSQLWriter {
 				writer._write(builder, left)?;
 				self._write_union_type(builder, union_type);
 				writer._write(builder, right)?;
+			},
+            &SQLExpr::SQLUse(ref schema) => {
+                builder.push_str("USE ");
+                builder.push_str(schema);
 			}
 			//_ => panic!("Unsupported node for writing {:?}", node)
 		}
