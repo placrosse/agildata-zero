@@ -227,13 +227,7 @@ impl<'a> MySQLConnectionHandler <'a> {
                         match buf[4] {
 
                             // COM_INIT_DB
-                            0x02 => {
-                                let schema = parse_string(&buf[5 as usize .. (packet_len+4) as usize]);
-                                println!("COM_INIT_DB: {}", schema);
-                                self.schema = Some(schema);
-                                self.mysql_send(&buf[0 .. packet_len+4]);
-
-                            },
+                            0x02 => self.process_init_db(&buf, packet_len),
 
                             // COM_QUERY
                             0x03 => {
@@ -348,6 +342,13 @@ impl<'a> MySQLConnectionHandler <'a> {
                 panic!("got an error trying to read; err={:?}", e);
             }
         }
+    }
+
+    fn process_init_db(&mut self, buf: &Vec<u8>, packet_len: usize) {
+        let schema = parse_string(&buf[5 as usize .. (packet_len+4) as usize]);
+        println!("COM_INIT_DB: {}", schema);
+        self.schema = Some(schema);
+        self.mysql_send(&buf[0 .. packet_len+4]);
     }
 
     fn mysql_send(&mut self, request: &[u8]) {
