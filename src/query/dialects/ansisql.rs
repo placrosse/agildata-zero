@@ -17,6 +17,7 @@ pub struct AnsiSQLDialect {
 }
 
 impl AnsiSQLDialect {
+
 	pub fn new() -> Self {AnsiSQLDialect{lit_index: AtomicU32::new(0)}}
 }
 

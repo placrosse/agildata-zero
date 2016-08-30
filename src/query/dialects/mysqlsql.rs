@@ -6,9 +6,9 @@ use std::str::Chars;
 static KEYWORDS: &'static [&'static str] = &["SHOW", "CREATE", "TABLE", "PRECISION",
 	"PRIMARY", "KEY", "UNIQUE", "FULLTEXT", "FOREIGN", "REFERENCES", "CONSTRAINT"];
 
-struct MySQLSQLDialect{}
+pub struct MySQLDialect{}
 
-impl Dialect for MySQLSQLDialect {
+impl Dialect for MySQLDialect {
 
 	fn get_keywords(&self) -> &'static [&'static str] {
         KEYWORDS
@@ -60,4 +60,8 @@ impl Dialect for MySQLSQLDialect {
         Err(String::from("parse_infix() not implemented"))
     }
 
+}
+
+impl MySQLDialect {
+	pub fn new() -> Self {MySQLDialect{}}
 }
