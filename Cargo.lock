@@ -1,6 +1,6 @@
 [root]
 name = "agildata-zero"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "RustyXML 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
