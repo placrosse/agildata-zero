@@ -228,92 +228,8 @@ impl<'a> MySQLConnectionHandler <'a> {
 
                             // COM_INIT_DB
                             0x02 => self.process_init_db(&buf, packet_len),
-
                             // COM_QUERY
-                            0x03 => {
-                                println!("0x03");
-
-                                let query = parse_string(&buf[5 as usize .. (packet_len+4) as usize]);
-                                println!("COM_QUERY : {}", query);
-
-                                // parse query
-                                let parser = AnsiSQLParser {};
-                                let result = parser.parse(&query);
-
-                                let parsed: Option<SQLExpr> = match result {
-                                    Ok(p) => {
-                                        match p {
-                                            SQLExpr::SQLUse(box SQLExpr::SQLIdentifier(ref schema)) => {
-                                                self.schema = Some(schema.clone())
-                                            },
-                                            _ => {}
-                                        };
-                                        Some(p)
-                                    },
-                                    Err(e) => {
-                                        println!("Failed to parse due to {:?}", e);
-                                        None
-                                    }
-                                };
-
-                                // visit and conditionally encrypt query
-
-
-                                // reqwrite query
-                                if parsed.is_some() {
-
-                                    let value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
-                                    let mut encrypt_vis = EncryptionVisitor {
-                                        config: self.config,
-                                        valuemap: value_map
-                                    };
-                                    match parsed {
-                                        Some(ref expr) => super::encryption_visitor::walk(&mut encrypt_vis, expr),
-                                        None => {}
-                                    }
-                                    // encryption_visitor::walk(&mut encrypt_vis, &parsed.unwrap());
-
-
-                                    let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
-                                    let translator = CreateTranslatingWriter {
-                            			config: &self.config,
-                            			schema: &String::from("zero") // TODO proxy should know its connection schema...
-                            		};
-
-                            		let writer = SQLWriter::new(vec![
-                                        &lit_writer,
-                                        &translator
-                                    ]);
-
-                                    let rewritten = writer.write(&parsed.unwrap()).unwrap();
-
-                                    println!("REWRITTEN {}", rewritten);
-
-                                    // write packed with new query
-                                    //let n_buf: Vec<u8> = Vec::new();
-                                    let slice: &[u8] = rewritten.as_bytes();
-
-                                    let mut wtr: Vec<u8> = vec![];
-                                    wtr.write_u32::<LittleEndian>((slice.len() + 1) as u32).unwrap();
-                                    assert!(0x00 == wtr[3]);
-                                    wtr.push(0x03); // packet type for COM_Query
-                                    wtr.extend_from_slice(slice);
-
-                                    println!("SENDING {:?}", wtr);
-                                    self.mysql_send(&wtr);
-
-                                } else {
-                                    let send = &buf[0 .. packet_len+4];
-                                    println!("SENDING:");
-                                    for i in 0..send.len() {
-                                        if i%8==0 { println!(""); }
-                                        print!("{:#04x} ",send[i]);
-                                    }
-                                    //println!("SENDING {:?}", send);
-                                    self.mysql_send(&buf[0 .. packet_len+4]);
-                                }
-
-                            },
+                            0x03 => self.process_query(&buf, packet_len),
                             _ => {
                                 self.mysql_send(&buf[0 .. packet_len+4]);
                             }
@@ -349,6 +265,90 @@ impl<'a> MySQLConnectionHandler <'a> {
         println!("COM_INIT_DB: {}", schema);
         self.schema = Some(schema);
         self.mysql_send(&buf[0 .. packet_len+4]);
+    }
+
+    fn process_query(&mut self, buf: &Vec<u8>, packet_len: usize) {
+        println!("0x03");
+
+        let query = parse_string(&buf[5 as usize .. (packet_len+4) as usize]);
+        println!("COM_QUERY : {}", query);
+
+        // parse query
+        let parser = AnsiSQLParser {};
+        let result = parser.parse(&query);
+
+        let parsed: Option<SQLExpr> = match result {
+            Ok(p) => {
+                match p {
+                    SQLExpr::SQLUse(box SQLExpr::SQLIdentifier(ref schema)) => {
+                        self.schema = Some(schema.clone())
+                    },
+                    _ => {}
+                };
+                Some(p)
+            },
+            Err(e) => {
+                println!("Failed to parse due to {:?}", e);
+                None
+            }
+        };
+
+        // visit and conditionally encrypt query
+
+
+        // reqwrite query
+        if parsed.is_some() {
+
+            let value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
+            let mut encrypt_vis = EncryptionVisitor {
+                config: self.config,
+                valuemap: value_map
+            };
+            match parsed {
+                Some(ref expr) => super::encryption_visitor::walk(&mut encrypt_vis, expr),
+                None => {}
+            }
+            // encryption_visitor::walk(&mut encrypt_vis, &parsed.unwrap());
+
+
+            let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
+            let translator = CreateTranslatingWriter {
+                config: &self.config,
+                schema: &String::from("zero") // TODO proxy should know its connection schema...
+            };
+
+            let writer = SQLWriter::new(vec![
+                                        &lit_writer,
+                                        &translator
+                                    ]);
+
+            let rewritten = writer.write(&parsed.unwrap()).unwrap();
+
+            println!("REWRITTEN {}", rewritten);
+
+            // write packed with new query
+            //let n_buf: Vec<u8> = Vec::new();
+            let slice: &[u8] = rewritten.as_bytes();
+
+            let mut wtr: Vec<u8> = vec![];
+            wtr.write_u32::<LittleEndian>((slice.len() + 1) as u32).unwrap();
+            assert!(0x00 == wtr[3]);
+            wtr.push(0x03); // packet type for COM_Query
+            wtr.extend_from_slice(slice);
+
+            println!("SENDING {:?}", wtr);
+            self.mysql_send(&wtr);
+
+        } else {
+            let send = &buf[0 .. packet_len+4];
+            println!("SENDING:");
+            for i in 0..send.len() {
+                if i%8==0 { println!(""); }
+                print!("{:#04x} ",send[i]);
+            }
+            //println!("SENDING {:?}", send);
+            self.mysql_send(&buf[0 .. packet_len+4]);
+        }
     }
 
     fn mysql_send(&mut self, request: &[u8]) {
