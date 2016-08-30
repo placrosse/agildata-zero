@@ -189,10 +189,32 @@ impl Dialect for AnsiSQLDialect {
 		}
     }
 
-    fn get_precedence<'a, D:  Dialect>
-        (&self, tokens: &Tokens<'a, D>)
-            -> Result<u8, String> {
-        Err(String::from("get_precedence() not implemented"))
+    fn get_precedence<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>)-> Result<u8, String> {
+        println!("get_precedence() token={:?}", tokens.peek());
+        let prec = match tokens.peek() {
+            Some(token) => match token {
+                &Token::Operator(ref t) => match &t as &str {
+                    "<" | "<=" | ">" | ">=" | "<>" | "!=" => 20,
+                    "-" | "+" => 33,
+                    "*" | "/" => 40,
+                    "=" => 11,
+                    "AND" => 9,
+                    "OR" => 7,
+
+                    _ => return Err(String::from(format!("Unsupported operator {}", t)))
+                },
+                &Token::Keyword(ref t) => match &t as &str {
+                    "UNION" => 3,
+                    "JOIN" | "INNER" | "RIGHT" | "LEFT" | "CROSS" | "FULL" => 5,
+                    "AS" => 6,
+                    _ => 0
+                },
+                _ => 0
+            },
+            None => 0
+        };
+
+        Ok(prec)
     }
 
     fn parse_infix<'a, D: Dialect>
@@ -236,18 +258,20 @@ impl AnsiSQLDialect {
 
 	}
 
-	fn parse_select<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String>
-		 {
+	fn parse_select<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String> {
 
 		println!("parse_select()");
 		// consume the SELECT
 		tokens.next();
 		let proj = Box::new(try!(self.parse_expr_list(tokens)));
 
+        println!("HERE {:?}", tokens.peek());
 		let from = match tokens.peek() {
 			Some(&Token::Keyword(ref t)) => match &t as &str {
 				"FROM" => {
-					tokens.next();
+                    println!("THERE");
+					println!("HITHER {:?}",tokens.next());
+                    println!("THITHER {:?}", tokens.peek());
 					Some(Box::new(try!(self.parse_relation(tokens))))
 				},
 				_ => None

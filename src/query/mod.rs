@@ -85,7 +85,7 @@ impl<'a, D: 'a + Dialect> Tokens<'a, D> {
 
 	pub fn peek(&self) -> Option<&Token> {
 		let i = self.index.load(Ordering::SeqCst) as usize;
-		if (i < (self.tokens.len() - 1)) {
+		if (i < (self.tokens.len())) {
 			Some(&self.tokens[i as usize])
 		} else {
 			None
@@ -94,7 +94,8 @@ impl<'a, D: 'a + Dialect> Tokens<'a, D> {
 
 	pub fn next(&self) -> Option<&Token> {
 		let i = self.index.load(Ordering::SeqCst) as usize;
-		if (i < (self.tokens.len() - 1)) {
+		//println!("next() i={}", i);
+		if (i < (self.tokens.len())) {
 			self.index.fetch_add(1, Ordering::SeqCst);
 			Some(&self.tokens[i as usize])
 		} else {
