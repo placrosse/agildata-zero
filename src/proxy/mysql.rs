@@ -262,7 +262,7 @@ impl<'a> MySQLConnectionHandler <'a> {
                                     let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
                                     let translator = CreateTranslatingWriter {
                             			config: &self.config,
-                            			schema: &String::from("babel") // TODO proxy should know its connection schema...
+                            			schema: &String::from("zero") // TODO proxy should know its connection schema...
                             		};
 
                             		let writer = SQLWriter::new(vec![

@@ -169,8 +169,8 @@ mod tests {
 	#[test]
 	fn simple_users() {
 		let parser = AnsiSQLParser {};
-		let config = config::parse_config("example-babel-config.xml");
-		let schema = String::from("babel");
+		let config = config::parse_config("example-zero-config.xml");
+		let schema = String::from("zero");
 
 		let sql = "CREATE TABLE users (
 			id INTEGER PRIMARY KEY,

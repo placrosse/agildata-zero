@@ -71,7 +71,7 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 								for (i, e) in columns.iter().enumerate() {
 									match e {
 										&SQLExpr::SQLIdentifier(ref name) => {
-											let col = self.config.get_column_config(&String::from("babel"), table, name);
+											let col = self.config.get_column_config(&String::from("zero"), table, name);
 											if col.is_some() {
 												match values[i] {
 													SQLExpr::SQLLiteral(ref l) => match l {
@@ -115,7 +115,7 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 								&SQLExpr::SQLIdentifier(ref v) => v,
 								_ => panic!("Unreachable")
 							};
-							let col = self.config.get_column_config(&String::from("babel"), &String::from("users"), ident);
+							let col = self.config.get_column_config(&String::from("zero"), &String::from("users"), ident);
 							if col.is_some() {
 								match right {
 									&SQLExpr::SQLLiteral(ref l) => match l {
@@ -210,7 +210,7 @@ mod tests {
 		let sql = "SELECT age, first_name, last_name FROM users WHERE age = 1";
 		let parsed = parser.parse(sql).unwrap();
 
-		let config = config::parse_config("example-babel-config.xml");
+		let config = config::parse_config("example-zero-config.xml");
 		let value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
 		let mut encrypt_vis = EncryptionVisitor {
 			config: &config,
@@ -227,7 +227,7 @@ mod tests {
 		let sql = "INSERT INTO users (id, first_name, last_name, ssn, age, sex) VALUES(1, 'Janis', 'Joplin', '123456789', 27, 'F')";
 		let parsed = parser.parse(sql).unwrap();
 
-		let config = config::parse_config("example-babel-config.xml");
+		let config = config::parse_config("example-zero-config.xml");
 		let value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
 		let mut encrypt_vis = EncryptionVisitor {
 			config: &config,
@@ -244,7 +244,7 @@ mod tests {
 		let sql = "UPDATE users SET age = 31, ssn = '987654321' WHERE first_name = 'Janis' AND last_name = 'Joplin'";
 		let parsed = parser.parse(sql).unwrap();
 
-		let config = config::parse_config("example-babel-config.xml");
+		let config = config::parse_config("example-zero-config.xml");
 		let value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
 		let mut encrypt_vis = EncryptionVisitor {
 			config: &config,

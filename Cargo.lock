@@ -1,5 +1,5 @@
 [root]
-name = "babel"
+name = "agildata_zero"
 version = "0.0.4"
 dependencies = [
  "RustyXML 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
