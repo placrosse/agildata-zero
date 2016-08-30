@@ -42,7 +42,7 @@ pub enum SQLExpr {
 	SQLColumnQualifier(ColumnQualifier),
 	SQLDataType(DataType),
 	SQLTableOption(TableOption),
-	SQLUse(String)
+	SQLUse(Box<SQLExpr>)
 }
 
 #[derive(Debug, PartialEq)]
@@ -340,12 +340,7 @@ impl AnsiSQLParser {
 		where It: Iterator<Item=&'a Token> {
 
 		assert!(self.consume_keyword("USE", tokens));
-
-		match tokens.next() {
-			Some(&Token::Identifier(ref id)) => Ok(SQLExpr::SQLUse(id.clone())),
-			_ => Err(String::from("Expected identifier after USE"))
-		}
-
+		Ok(SQLExpr::SQLUse(Box::new(self.parse_identifier(tokens)?)))
 	}
 
 	fn parse_table_options<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<Vec<SQLExpr>, String>

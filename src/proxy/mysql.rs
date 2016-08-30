@@ -197,7 +197,7 @@ impl<'a> MySQLConnectionHandler <'a> {
             Ok(Some(0)) => {
                 self.state = State::Closed;
             }
-            Ok(Some(n)) => {
+            Ok(Some(_)) => {
 
                 // this is very verbose debug logging, please leave disabled when you push to master
                 /*
@@ -249,7 +249,7 @@ impl<'a> MySQLConnectionHandler <'a> {
                                 let parsed: Option<SQLExpr> = match result {
                                     Ok(p) => {
                                         match p {
-                                            SQLExpr::SQLUse(ref schema) => {
+                                            SQLExpr::SQLUse(box SQLExpr::SQLIdentifier(ref schema)) => {
                                                 self.schema = Some(schema.clone())
                                             },
                                             _ => {}
