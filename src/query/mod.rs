@@ -143,6 +143,8 @@ fn get_dialect_ast<'a, D: Dialect>(dialects: &Vec<D>, tokens: &Tokens<'a, D>, pr
 	Result<Option<ASTNode>, String> {
 
 	let mut expr = get_dialect_prefix(dialects, tokens)?;
+
+	// Handle infixing across dialects
 	if expr.is_some() {
 		'infix: while let Some(_) = tokens.peek() {
 			'dialects: for d in dialects.iter() {
