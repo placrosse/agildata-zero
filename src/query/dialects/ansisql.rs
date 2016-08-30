@@ -15,21 +15,6 @@ pub struct AnsiSQLDialect {
 	lit_index: AtomicU32
 }
 
-#[derive(Debug,PartialEq,Clone)]
-pub enum SQLToken {
-	Literal(LiteralToken)
-}
-
-#[derive(Debug,PartialEq,Clone)]
-pub enum LiteralToken {
-    LiteralString(u32, String),
-    LiteralLong(u32, String),
-    LiteralDouble(u32, String),
-    LiteralBool(u32, String),
-}
-
-impl IToken for SQLToken {}
-
 impl AnsiSQLDialect {
 	pub fn new() -> Self {AnsiSQLDialect{lit_index: AtomicU32::new(0)}}
 }
@@ -73,14 +58,10 @@ pub enum SQLAST {
     // SQLDataType(DataType),
     // SQLTableOption(TableOption)
 }
-impl IAST for SQLAST{}
 
-pub enum SQLRel {}
-impl IRel for SQLRel {}
+impl Dialect for AnsiSQLDialect {
 
-impl Dialect<SQLToken, SQLAST, SQLRel> for AnsiSQLDialect {
-
-	fn get_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<Token<SQLToken>>, String> {
+	fn get_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<Token>, String> {
 		match chars.peek() {
 	        Some(&ch) => match ch {
 	            ' ' | '\t' | '\n' => {
@@ -121,13 +102,9 @@ impl Dialect<SQLToken, SQLAST, SQLRel> for AnsiSQLDialect {
 	                }
 
 	                if text.as_str().contains('.') {
-						let token = SQLToken::Literal(LiteralToken::LiteralDouble(self.lit_index.fetch_add(1, Ordering::SeqCst), text));
-	                    Ok(Some(
-							Token::TokenExtension(token)
-						))
+						Ok(Some(Token::Literal(LiteralToken::LiteralDouble(self.lit_index.fetch_add(1, Ordering::SeqCst), text))))
 	                } else {
-						let token = SQLToken::Literal(LiteralToken::LiteralLong(self.lit_index.fetch_add(1, Ordering::SeqCst), text));
-	                    Ok(Some(Token::TokenExtension(token)))
+						Ok(Some(Token::Literal(LiteralToken::LiteralLong(self.lit_index.fetch_add(1, Ordering::SeqCst), text))))
 	                }
 	            },
 	            'a'...'z' | 'A'...'Z' => { // TODO this should really be any valid char for an identifier..
@@ -144,8 +121,7 @@ impl Dialect<SQLToken, SQLAST, SQLRel> for AnsiSQLDialect {
 	                }
 
 	                if "true".eq_ignore_ascii_case(&text) || "false".eq_ignore_ascii_case(&text) {
-	                    let token = SQLToken::Literal(LiteralToken::LiteralBool(self.lit_index.fetch_add(1, Ordering::SeqCst), text));
-						Ok(Some(Token::TokenExtension(token)))
+	                    Ok(Some(Token::Literal(LiteralToken::LiteralBool(self.lit_index.fetch_add(1, Ordering::SeqCst), text))))
 	                } else if KEYWORDS.iter().position(|&r| r.eq_ignore_ascii_case(&text)).is_none() {
 	                    Ok(Some(Token::Identifier(text)))
 	                } else if "AND".eq_ignore_ascii_case(&text) || "OR".eq_ignore_ascii_case(&text) {
@@ -187,8 +163,7 @@ impl Dialect<SQLToken, SQLAST, SQLRel> for AnsiSQLDialect {
 	                    }
 	                }
 
-					let token = SQLToken::Literal(LiteralToken::LiteralString(self.lit_index.fetch_add(1, Ordering::SeqCst), s));
-					Ok(Some(Token::TokenExtension(token)))
+					Ok(Some(Token::Literal(LiteralToken::LiteralString(self.lit_index.fetch_add(1, Ordering::SeqCst), s))))
 	            },
 	            ',' | '(' | ')' => {
 	                chars.next();
@@ -202,28 +177,22 @@ impl Dialect<SQLToken, SQLAST, SQLRel> for AnsiSQLDialect {
 	    }
 	}
 
-    fn parse_prefix<'a, D: Dialect<SQLToken, SQLAST, SQLRel>>
-        (&self, tokens: &Tokens<'a, D, SQLToken, SQLAST, SQLRel>) ->
-            Result<Option<ASTNode<SQLAST>>, String> {
+    fn parse_prefix<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) ->
+            Result<Option<ASTNode>, String> {
 
         Err(String::from("parse_prefix() not implemented"))
     }
 
-    fn get_precedence<'a, D:  Dialect<SQLToken, SQLAST, SQLRel>>
-        (&self, tokens: &Tokens<'a, D, SQLToken, SQLAST, SQLRel>)
+    fn get_precedence<'a, D:  Dialect>
+        (&self, tokens: &Tokens<'a, D>)
             -> Result<u8, String> {
         Err(String::from("get_precedence() not implemented"))
     }
 
-    fn parse_infix<'a, D: Dialect<SQLToken, SQLAST, SQLRel>>
-        (&self, tokens: &Tokens<'a, D, SQLToken, SQLAST, SQLRel>, left: ASTNode<SQLAST>, precedence: u8)
-            -> Result<Option<ASTNode<SQLAST>>, String> {
+    fn parse_infix<'a, D: Dialect>
+        (&self, tokens: &Tokens<'a, D>, left: ASTNode, precedence: u8)
+            -> Result<Option<ASTNode>, String> {
         Err(String::from("parse_infix() not implemented"))
     }
-
-
-    // fn parse_prefix<It: Iterator<Item=Token<SQLToken>>>(&self, parser: &PrattParser<SQLToken, SQLAST, SQLRel>, tokens: It) -> Result<Option<ASTNode<SQLAST>>, String> {
-    //     Err(String::from("parse_prefix() Not implemented!"))
-    // }
 
 }

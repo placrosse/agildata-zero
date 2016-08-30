@@ -4,12 +4,6 @@ use std::iter::Peekable;
 use std::str::Chars;
 
 #[derive(Debug,PartialEq,Clone)]
-pub enum MySQLToken {
-	MySQLIdentifier(String) // encapsulated with ``
-}
-impl IToken for MySQLToken {}
-
-#[derive(Debug,PartialEq,Clone)]
 pub enum MySQLAST {
     // SQLCreateTable{
     //     table: Box<SQLAST>,
@@ -23,17 +17,12 @@ pub enum MySQLAST {
     // SQLDataType(DataType),
     // SQLTableOption(TableOption)
 }
-impl IAST for MySQLAST{}
-
-#[derive(Debug,PartialEq,Clone)]
-pub enum MySQLRel {}
-impl IRel for MySQLRel {}
 
 struct MySQLSQLDialect{}
 
-impl Dialect<MySQLToken, MySQLAST, MySQLRel> for MySQLSQLDialect {
+impl Dialect for MySQLSQLDialect {
 
-	fn get_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<Token<MySQLToken>>, String> {
+	fn get_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<Token>, String> {
 		match chars.peek() {
 			Some(&ch) => match ch {
 				'`' => {
@@ -49,7 +38,7 @@ impl Dialect<MySQLToken, MySQLAST, MySQLRel> for MySQLSQLDialect {
 						}
 	                }
 
-					Ok(Some(Token::TokenExtension(MySQLToken::MySQLIdentifier(text))))
+					Ok(Some(Token::Identifier(text)))
 				},
 				_ => Ok(None)
 			},
@@ -57,13 +46,11 @@ impl Dialect<MySQLToken, MySQLAST, MySQLRel> for MySQLSQLDialect {
 		}
 	}
 
-	fn parse_prefix<'a, D: Dialect<MySQLToken, MySQLAST, MySQLRel>>
-        (&self, tokens: &Tokens<'a, D, MySQLToken, MySQLAST, MySQLRel>) ->
-            Result<Option<ASTNode<MySQLAST>>, String> {
+	fn parse_prefix<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) ->
+            Result<Option<ASTNode>, String> {
 
         match tokens.peek() {
 			Some(&Token::Identifier(ref v))
-				| Some(&Token::TokenExtension(MySQLToken::MySQLIdentifier(ref v)))
 				| Some(&Token::Keyword(ref v)) => match &v as &str {
 
 				"CREATE" => Err(String::from("CREATE not supported")),
@@ -73,15 +60,11 @@ impl Dialect<MySQLToken, MySQLAST, MySQLRel> for MySQLSQLDialect {
 		}
     }
 
-    fn get_precedence<'a, D:  Dialect<MySQLToken, MySQLAST, MySQLRel>>
-        (&self, tokens: &Tokens<'a, D, MySQLToken, MySQLAST, MySQLRel>)
-            -> Result<u8, String> {
+    fn get_precedence<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>)-> Result<u8, String> {
         Err(String::from("get_precedence() not implemented"))
     }
 
-    fn parse_infix<'a, D: Dialect<MySQLToken, MySQLAST, MySQLRel>>
-        (&self, tokens: &Tokens<'a, D, MySQLToken, MySQLAST, MySQLRel>, left: ASTNode<MySQLAST>, precedence: u8)
-            -> Result<Option<ASTNode<MySQLAST>>, String> {
+    fn parse_infix<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>, left: ASTNode, precedence: u8)-> Result<Option<ASTNode>, String> {
         Err(String::from("parse_infix() not implemented"))
     }
 
