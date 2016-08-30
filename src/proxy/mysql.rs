@@ -215,7 +215,7 @@ impl<'a> MySQLConnectionHandler <'a> {
                 }
                 */
 
-                // do we have the complete request packet yet?
+                // do we have enough bytes to read the packet len?
                 if buf.len() > 3 {
 
                     let packet_len = MySQLPacket::parse_packet_length(&buf);
@@ -223,21 +223,14 @@ impl<'a> MySQLConnectionHandler <'a> {
                     println!("incoming packet_len = {}", packet_len);
                     println!("Buf len {}", buf.len());
 
+                    // do we have the full packet?
                     if buf.len() >= packet_len+4 {
-                        match buf[4] {
-
-                            // COM_INIT_DB
+                        let packet_type = buf[4];
+                        match packet_type {
                             0x02 => self.process_init_db(&buf, packet_len),
-                            // COM_QUERY
                             0x03 => self.process_query(&buf, packet_len),
-                            _ => {
-                                self.mysql_send(&buf[0 .. packet_len+4]);
-                            }
+                            _ => self.mysql_send(&buf[0 .. packet_len+4])
                         }
-                        // self.mysql_send(&buf[0 .. packet_len+4]);
-
-                        //self.authenticating = false;
-
                     } else {
                         println!("do not have full packet!");
                     }
