@@ -3,26 +3,18 @@ use super::super::*;
 use std::iter::Peekable;
 use std::str::Chars;
 
-#[derive(Debug,PartialEq,Clone)]
-pub enum MySQLAST {
-    // SQLCreateTable{
-    //     table: Box<SQLAST>,
-    //     column_list: Vec<SQLAST>,
-    //     keys: Vec<SQLAST>,
-    //     table_options: Vec<SQLAST>
-    // },
-    // SQLColumnDef{column: Box<SQLAST>, data_type: Box<SQLAST>, qualifiers: Option<Vec<SQLAST>>},
-    // SQLKeyDef(KeyDef),
-    // SQLColumnQualifier(ColumnQualifier),
-    // SQLDataType(DataType),
-    // SQLTableOption(TableOption)
-}
+static KEYWORDS: &'static [&'static str] = &["SHOW", "CREATE", "TABLE", "PRECISION",
+	"PRIMARY", "KEY", "UNIQUE", "FULLTEXT", "FOREIGN", "REFERENCES", "CONSTRAINT"];
 
 struct MySQLSQLDialect{}
 
 impl Dialect for MySQLSQLDialect {
 
-	fn get_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<Token>, String> {
+	fn get_keywords(&self) -> &'static [&'static str] {
+        KEYWORDS
+    }
+
+	fn get_token(&self, chars: &mut Peekable<Chars>, keywords: &Vec<&'static str>) -> Result<Option<Token>, String> {
 		match chars.peek() {
 			Some(&ch) => match ch {
 				'`' => {
