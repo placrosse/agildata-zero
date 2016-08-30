@@ -94,7 +94,6 @@ impl<'a, D: 'a + Dialect> Tokens<'a, D> {
 
 	pub fn next(&self) -> Option<&Token> {
 		let i = self.index.load(Ordering::SeqCst) as usize;
-		//println!("next() i={}", i);
 		if (i < (self.tokens.len())) {
 			self.index.fetch_add(1, Ordering::SeqCst);
 			Some(&self.tokens[i as usize])
@@ -145,10 +144,27 @@ fn get_dialect_ast<'a, D: Dialect>(dialects: &Vec<D>, tokens: &Tokens<'a, D>, pr
 
 	let mut expr = get_dialect_prefix(dialects, tokens)?;
 	if expr.is_some() {
-		return get_dialect_infix(dialects, tokens, expr.unwrap(), precedence)
-	} else {
-		Ok(expr)
+		'infix: while let Some(_) = tokens.peek() {
+			'dialects: for d in dialects.iter() {
+				let next_precedence = d.get_precedence(tokens)?;
+				if precedence >= next_precedence {
+					continue 'dialects;
+				}
+
+				match d.parse_infix(tokens, expr.unwrap(), next_precedence)? {
+					Some(e) => {
+						expr = Some(e);
+						continue 'infix;
+					},
+					None => return Err(String::from("Illegal state!"))
+				}
+			}
+
+			break 'infix;
+		}
 	}
+	Ok(expr)
+
 }
 
 fn get_dialect_prefix<'a, D: Dialect>
@@ -165,35 +181,15 @@ fn get_dialect_prefix<'a, D: Dialect>
 	Ok(None)
 }
 
-fn get_dialect_infix<'a, D: Dialect>(dialects: &Vec<D>, tokens: &Tokens<'a, D>, left: ASTNode, precedence: u8) ->
-	Result<Option<ASTNode>, String> {
-
-	for d in dialects.iter() {
-		let next_precedence = d.get_precedence(tokens)?;
-
-		if precedence >= next_precedence {
-			continue;
-		}
-		match d.parse_infix(tokens, left, next_precedence)? {
-			Some(e) => return Ok(Some(e)),
-			None => return Err(String::from("Illegal state!"))
-		}
-	}
-
-	Ok(Some(left))
-}
-
-
 #[derive(Debug, PartialEq)]
 pub enum ASTNode {
 	// ANSISQL nodes
 	SQLIdentifier{id: String, parts: Vec<String>},
-	SQLBinary{left: Box<ASTNode>, op: Box<ASTNode>, right: Box<ASTNode>},
+	SQLBinary{left: Box<ASTNode>, op: Operator, right: Box<ASTNode>},
 	SQLNested(Box<ASTNode>),
-	SQLUnary{operator: Box<ASTNode>, expr: Box<ASTNode>},
+	SQLUnary{operator: Operator, expr: Box<ASTNode>},
 	SQLLiteral(LiteralExpr),
 	SQLAlias{expr: Box<ASTNode>, alias: Box<ASTNode>},
-	SQLOperator(Operator),
 	SQLExprList(Vec<ASTNode>),
     SQLOrderBy{expr: Box<ASTNode>, is_asc: bool},
     SQLSelect{
@@ -212,10 +208,8 @@ pub enum ASTNode {
         assignments: Box<ASTNode>,
         selection: Option<Box<ASTNode>>
     },
-    SQLUnion{left: Box<ASTNode>, union_type: Box<ASTNode>, right: Box<ASTNode>},
-    SQLJoin{left: Box<ASTNode>, join_type: Box<ASTNode>, right: Box<ASTNode>, on_expr: Option<Box<ASTNode>>},
-	SQLJoinType(JoinType),
-	SQLUnionType(UnionType),
+    SQLUnion{left: Box<ASTNode>, union_type: UnionType, right: Box<ASTNode>},
+    SQLJoin{left: Box<ASTNode>, join_type: JoinType, right: Box<ASTNode>, on_expr: Option<Box<ASTNode>>},
 
 	// MySQL
     MySQLCreateTable{

@@ -217,10 +217,28 @@ impl Dialect for AnsiSQLDialect {
         Ok(prec)
     }
 
-    fn parse_infix<'a, D: Dialect>
-        (&self, tokens: &Tokens<'a, D>, left: ASTNode, precedence: u8)
-            -> Result<Option<ASTNode>, String> {
-        Err(String::from("parse_infix() not implemented"))
+    fn parse_infix<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>, left: ASTNode, precedence: u8)-> Result<Option<ASTNode>, String> {
+        println!("parse_infix() {}", precedence);
+		match tokens.peek() {
+			Some(token) => match token {
+				&Token::Operator(_) => Ok(Some(try!(self.parse_binary(left, tokens)))),
+				&Token::Keyword(ref t) => match &t as &str {
+					"UNION" => Ok(Some(try!(self.parse_union(left, tokens)))),
+					"JOIN" | "INNER" | "RIGHT" | "LEFT" | "CROSS" | "FULL" => Ok(Some(try!(self.parse_join(left, tokens)))),
+					"AS" => Ok(Some(try!(self.parse_alias(left, tokens)))),
+					_ => {
+						println!("Returning no infix for keyword {:?}", t);
+						Ok(None)
+					}
+				},
+				_ => {
+					println!("Returning no infix for token {:?}", token);
+					Ok(None)
+				}
+
+			},
+			None => Ok(None)
+		}
     }
 
 }
@@ -265,14 +283,11 @@ impl AnsiSQLDialect {
 		tokens.next();
 		let proj = Box::new(try!(self.parse_expr_list(tokens)));
 
-        println!("HERE {:?}", tokens.peek());
 		let from = match tokens.peek() {
 			Some(&Token::Keyword(ref t)) => match &t as &str {
 				"FROM" => {
-                    println!("THERE");
-					println!("HITHER {:?}",tokens.next());
-                    println!("THITHER {:?}", tokens.peek());
-					Some(Box::new(try!(self.parse_relation(tokens))))
+                    tokens.next();
+					Some(Box::new(self.parse_relation(tokens)?))
 				},
 				_ => None
 			},
@@ -395,22 +410,22 @@ impl AnsiSQLDialect {
 		// determine operator
 		let operator = match tokens.next().unwrap() {
 			&Token::Operator(ref t) => match &t as &str {
-				"+" => ASTNode::SQLOperator(Operator::ADD),
-				"-" => ASTNode::SQLOperator(Operator::SUB),
-				"*" => ASTNode::SQLOperator(Operator::MULT),
-				"/" => ASTNode::SQLOperator(Operator::DIV),
-				"%" => ASTNode::SQLOperator(Operator::MOD),
-				">" => ASTNode::SQLOperator(Operator::GT),
-				"<" => ASTNode::SQLOperator(Operator::LT),
-				"=" => ASTNode::SQLOperator(Operator::EQ),
-				"AND" => ASTNode::SQLOperator(Operator::AND),
-				"OR" => ASTNode::SQLOperator(Operator::OR),
+				"+" => Operator::ADD,
+				"-" => Operator::SUB,
+				"*" => Operator::MULT,
+				"/" => Operator::DIV,
+				"%" => Operator::MOD,
+				">" => Operator::GT,
+				"<" => Operator::LT,
+				"=" => Operator::EQ,
+				"AND" => Operator::AND,
+				"OR" => Operator::OR,
 				_ => return Err(format!("Unsupported operator {}", t))
 			},
 			_ => return Err(format!("Expected operator, received something else"))
 		};
 
-		Ok(ASTNode::SQLBinary {left: Box::new(left), op: Box::new(operator), right: Box::new(tokens.parse_expr(precedence)?)})
+		Ok(ASTNode::SQLBinary {left: Box::new(left), op: operator, right: Box::new(tokens.parse_expr(precedence)?)})
 	}
 
 	fn parse_identifier<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String>
@@ -455,13 +470,13 @@ impl AnsiSQLDialect {
 		let precedence = self.get_precedence(tokens)?;
 		let op = match tokens.next() {
 			Some(&Token::Operator(ref o)) => match &o as &str {
-				"+" => ASTNode::SQLOperator(Operator::ADD),
-				"-" => ASTNode::SQLOperator(Operator::SUB),
+				"+" => Operator::ADD,
+				"-" => Operator::SUB,
 				_ => return Err(format!("Illegal operator for unary {}", o))
 			},
 			_ => return Err(format!("Illegal state"))
 		};
-		Ok(ASTNode::SQLUnary{operator: Box::new(op), expr: Box::new(tokens.parse_expr(precedence)?)})
+		Ok(ASTNode::SQLUnary{operator: op, expr: Box::new(tokens.parse_expr(precedence)?)})
 
 	}
 
@@ -473,16 +488,16 @@ impl AnsiSQLDialect {
 
 		let union_type = match tokens.peek() {
 			Some(&Token::Keyword(ref t)) => match &t as &str {
-				"ALL" => ASTNode::SQLUnionType(UnionType::ALL),
-				"DISTINCT" => ASTNode::SQLUnionType(UnionType::DISTINCT),
-				_ => ASTNode::SQLUnionType(UnionType::UNION)
+				"ALL" => UnionType::ALL,
+				"DISTINCT" => UnionType::DISTINCT,
+				_ => UnionType::UNION
 			},
-			_ => ASTNode::SQLUnionType(UnionType::UNION)
+			_ => UnionType::UNION
 		};
 
 		let right = Box::new(tokens.parse_expr(0)?);
 
-		Ok(ASTNode::SQLUnion{left: Box::new(left), union_type: Box::new(union_type), right: right})
+		Ok(ASTNode::SQLUnion{left: Box::new(left), union_type: union_type, right: right})
 
 	}
 
@@ -493,22 +508,22 @@ impl AnsiSQLDialect {
 		let join_type = {
 			if self.consume_keyword("JOIN", tokens) || self.consume_keyword("INNER", tokens) {
 				self.consume_keyword("JOIN", tokens);
-				ASTNode::SQLJoinType(JoinType::INNER)
+				JoinType::INNER
 			} else if self.consume_keyword("LEFT", tokens) {
 				self.consume_keyword("OUTER", tokens);
 				self.consume_keyword("JOIN", tokens);
-				ASTNode::SQLJoinType(JoinType::LEFT)
+				JoinType::LEFT
 			} else if self.consume_keyword("RIGHT", tokens) {
 				self.consume_keyword("OUTER", tokens);
 				self.consume_keyword("JOIN", tokens);
-				ASTNode::SQLJoinType(JoinType::RIGHT)
+				JoinType::RIGHT
 			} else if self.consume_keyword("FULL", tokens) {
 				self.consume_keyword("OUTER", tokens);
 				self.consume_keyword("JOIN", tokens);
-				ASTNode::SQLJoinType(JoinType::FULL)
+				JoinType::FULL
 			} else if self.consume_keyword("CROSS", tokens) {
 				self.consume_keyword("JOIN", tokens);
-				ASTNode::SQLJoinType(JoinType::LEFT)
+				JoinType::LEFT
 			} else {
 				return Err(format!("Unsupported join keyword {:?}", tokens.peek()))
 			}
@@ -519,14 +534,14 @@ impl AnsiSQLDialect {
 		let on = {
 			if self.consume_keyword("ON", tokens) {
 				Some(Box::new(tokens.parse_expr(0)?))
-			} else if join_type != ASTNode::SQLJoinType(JoinType::CROSS) {
+			} else if join_type != JoinType::CROSS {
 				return Err(format!("Expected ON, received token {:?}", tokens.peek()))
 			} else {
 				None
 			}
 		};
 
-		Ok(ASTNode::SQLJoin {left: Box::new(left), join_type: Box::new(join_type), right: right, on_expr: on})
+		Ok(ASTNode::SQLJoin {left: Box::new(left), join_type: join_type, right: right, on_expr: on})
 	}
 
 	fn parse_alias<'a, D: Dialect>(&self, left: ASTNode, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String>
