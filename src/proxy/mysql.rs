@@ -28,6 +28,10 @@ pub struct MySQLPacket {
 
 impl MySQLPacket {
 
+    pub fn new(buf: Vec<u8>) -> Self {
+        MySQLPacket { bytes: buf }
+    }
+
     pub fn parse_packet_length(header: &[u8]) -> usize {
         (((header[2] as u32) << 16) |
             ((header[1] as u32) << 8) |
@@ -59,6 +63,12 @@ impl<'a> MySQLPacketParser<'a> {
         MySQLPacketParser { payload: &packet.bytes, pos: 4 }
     }
 
+    pub fn skip(&mut self, n: usize) {
+//        println!("Skipping {} bytes:", n);
+//        print_packet_bytes(&self.payload[self.pos..self.pos+n]);
+        self.pos += n;
+    }
+
     /// read the length of a length-encoded field
     pub fn read_len(&mut self) -> usize {
         let n = self.payload[self.pos] as usize;
@@ -67,15 +77,31 @@ impl<'a> MySQLPacketParser<'a> {
         match n {
             //NOTE: depending on context, 0xfb could mean null and 0xff could mean error
             0xfc | 0xfd | 0xfe => panic!("no support yet for length >= 251"),
-            _ => n
+            _ => {
+                //println!("read_len() returning {}", n);
+                n
+            }
         }
     }
 
-    pub fn read_string(&mut self) -> Option<String> {
+    /// reads a length-encoded string
+    pub fn read_lenenc_string(&mut self) -> Option<String> {
         match self.read_bytes() {
             Some(s) => Some(String::from_utf8(s.to_vec()).expect("Invalid UTF-8")),
             None => None
         }
+    }
+
+    /// reads a null terminated string
+    pub fn read_c_string(&mut self) -> Option<String> {
+        let start = self.pos;
+        while self.payload[self.pos] != 0x00 {
+            self.pos += 1;
+        }
+        let mut v : Vec<u8> = vec![];
+        v.extend_from_slice(&self.payload[start..self.pos]);
+        self.pos += 1; // skip the NULL byte
+        Some(String::from_utf8(v).expect("Invalid UTF-8"))
     }
 
     pub fn read_bytes(&mut self) -> Option<Vec<u8>> {
@@ -91,6 +117,23 @@ impl<'a> MySQLPacketParser<'a> {
         }
     }
 
+}
+
+fn print_packet_chars(buf: &[u8]) {
+    print!("[");
+    for i in 0..buf.len() {
+        print!("{} ", buf[i] as char);
+    }
+    println!("]");
+}
+
+fn print_packet_bytes(buf: &[u8]) {
+    print!("[");
+    for i in 0..buf.len() {
+        if i%8==0 { println!(""); }
+        print!("{:#04x} ",buf[i]);
+    }
+    println!("]");
 }
 
 fn parse_string(bytes: &[u8]) -> String {
@@ -133,10 +176,16 @@ struct ColumnMetaData {
 }
 
 #[derive(Debug)]
+enum ConnectionPhase {
+    Handshake, Query
+}
+
+#[derive(Debug)]
 pub struct MySQLConnectionHandler<'a> {
     pub socket: TcpStream, // this is the socket from the client
     token: mio::Token,
     state: State,
+    phase: ConnectionPhase,
     remote: net::TcpStream, // this is the connection to the remote mysql server
     schema: Option<String>, // the current schema
     config: &'a Config
@@ -166,6 +215,7 @@ impl<'a> MySQLConnectionHandler <'a> {
             socket: socket,
             token: token,
             state: State::Writing(Take::new(buf, len)),
+            phase: ConnectionPhase::Handshake,
             remote: mysql,
             schema: None,
             config: &config
@@ -199,37 +249,24 @@ impl<'a> MySQLConnectionHandler <'a> {
             }
             Ok(Some(_)) => {
 
-                // this is very verbose debug logging, please leave disabled when you push to master
-                /*
-                println!("read {} bytes", n);
-                print!("Bytes read [");
-                for i in 0..buf.len() {
-                    print!("{} ",buf[i] as char);
-                }
-                println!("]");
-
-                println!("Bytes read:");
-                for i in 0..buf.len() {
-                    if i%8==0 { println!(""); }
-                    print!("{:#04x} ",buf[i]);
-                }
-                */
-
                 // do we have enough bytes to read the packet len?
                 if buf.len() > 3 {
-
-                    let packet_len = MySQLPacket::parse_packet_length(&buf);
-
-                    println!("incoming packet_len = {}", packet_len);
-                    println!("Buf len {}", buf.len());
-
                     // do we have the full packet?
+                    let packet_len = MySQLPacket::parse_packet_length(&buf);
                     if buf.len() >= packet_len+4 {
-                        let packet_type = buf[4];
-                        match packet_type {
-                            0x02 => self.process_init_db(&buf, packet_len),
-                            0x03 => self.process_query(&buf, packet_len),
-                            _ => self.mysql_send(&buf[0 .. packet_len+4])
+                        match self.phase {
+                            ConnectionPhase::Handshake => {
+                                self.process_handshake_response(&buf, packet_len);
+                                self.phase = ConnectionPhase::Query;
+                            },
+                            ConnectionPhase::Query => {
+                                let packet_type = buf[4];
+                                match packet_type {
+                                    0x02 => self.process_init_db(&buf, packet_len),
+                                    0x03 => self.process_query(&buf, packet_len),
+                                    _ => self.mysql_send(&buf[0..packet_len + 4])
+                                }
+                            }
                         }
                     } else {
                         println!("do not have full packet!");
@@ -251,6 +288,32 @@ impl<'a> MySQLConnectionHandler <'a> {
                 panic!("got an error trying to read; err={:?}", e);
             }
         }
+    }
+
+    fn process_handshake_response(&mut self, buf: &Vec<u8>, packet_len: usize) {
+        // see https://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeResponse
+        //NOTE: this code makes assumptions about what 'capabilities' are active
+
+        //print_packet_bytes(&buf);
+
+        let p = MySQLPacket::new(buf.clone());
+        let mut r = MySQLPacketParser::new(&p);
+        r.skip(4); // capability flags, CLIENT_PROTOCOL_41 always set
+        r.skip(4); // max-packet size
+        r.skip(1); // character set
+        r.skip(23); // reserved
+        let username = r.read_c_string().unwrap(); // username
+        println!("user: {}", username);
+        let auth_response = r.read_bytes().unwrap(); // auth-response
+        println!("auth_response: {:?}", auth_response);
+
+        if let Some(schema) = r.read_c_string() {
+            println!("HANDSHAKE: schema={}", schema);
+            self.schema = Some(schema);
+        }
+
+        // pass along to MySQL
+        self.mysql_send(&buf[0..packet_len + 4])
     }
 
     fn process_init_db(&mut self, buf: &Vec<u8>, packet_len: usize) {
@@ -406,12 +469,12 @@ impl<'a> MySQLConnectionHandler <'a> {
                     let mut r = MySQLPacketParser::new(&field_packet);
 
                     //TODO: assumes these values can never be NULL
-                    let catalog = r.read_string().unwrap();
-                    let schema = r.read_string().unwrap();
-                    let table = r.read_string().unwrap();
-                    let org_table = r.read_string().unwrap();
-                    let name = r.read_string().unwrap();
-                    let org_name = r.read_string().unwrap();
+                    let catalog = r.read_lenenc_string().unwrap();
+                    let schema = r.read_lenenc_string().unwrap();
+                    let table = r.read_lenenc_string().unwrap();
+                    let org_table = r.read_lenenc_string().unwrap();
+                    let name = r.read_lenenc_string().unwrap();
+                    let org_name = r.read_lenenc_string().unwrap();
 
                     println!("ALL catalog {}, schema {}, table {}, org_table {}, name {}, org_name {}",
                              catalog, schema, table, org_table, name, org_name);
@@ -476,19 +539,19 @@ impl<'a> MySQLConnectionHandler <'a> {
 
                                 let value = match column_config {
 
-                                    None => r.read_string(),
+                                    None => r.read_lenenc_string(),
                                     Some(cc) => match cc {
                                         &ColumnConfig {ref encryption, ref native_type, ..} => {
                                             match native_type {
                                                 &NativeType::U64 => {
                                                     match encryption {
-                                                        &EncryptionType::NA => r.read_string(),
+                                                        &EncryptionType::NA => r.read_lenenc_string(),
                                                         _ => Some(format!("{}", u64::decrypt(&r.read_bytes().unwrap(), encryption)))
                                                     }
                                                 },
                                                 &NativeType::Varchar(_) => {
                                                     match encryption {
-                                                        &EncryptionType::NA => r.read_string(),
+                                                        &EncryptionType::NA => r.read_lenenc_string(),
                                                         _ => Some(String::decrypt(&r.read_bytes().unwrap(), encryption))
                                                     }
                                                 }
