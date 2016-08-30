@@ -90,6 +90,7 @@ impl<'a> mio::Handler for Proxy<'a> {
                 }
             }
             _ => {
+                // new data is available to read from a client connection
                 self.connections[token].ready(event_loop, events);
 
                 // If handling the event resulted in a closed socket, then

@@ -139,10 +139,10 @@ struct ColumnMetaData {
 
 #[derive(Debug)]
 pub struct MySQLConnectionHandler<'a> {
-    pub socket: TcpStream,
+    pub socket: TcpStream, // this is the socket from the client
     token: mio::Token,
     state: State,
-    remote: net::TcpStream,
+    remote: net::TcpStream, // this is the connection to the remote mysql server
     config: &'a Config
     //authenticating: bool
 }
@@ -190,6 +190,7 @@ impl<'a> MySQLConnectionHandler <'a> {
         }
     }
 
+    /// process a single mysql packet from the client
     pub fn read(&mut self, event_loop: &mut mio::EventLoop<Proxy>) {
 
         println!("Reading from client");
@@ -200,6 +201,8 @@ impl<'a> MySQLConnectionHandler <'a> {
                 self.state = State::Closed;
             }
             Ok(Some(n)) => {
+
+                // debug logging to show the bytes read so far
                 println!("read {} bytes", n);
                 print!("Bytes read [");
                 for i in 0..buf.len() {
@@ -221,10 +224,12 @@ impl<'a> MySQLConnectionHandler <'a> {
                     println!("incoming packet_len = {}", packet_len);
                     println!("Buf len {}", buf.len());
 
+                    // do we have a full packet?
                     if buf.len() >= packet_len+4 {
+
+                        // look at the packet type
                         match buf[4] {
                             0x03 => {
-                                println!("0x03");
 
                                 let query = parse_string(&buf[5 as usize .. (packet_len+4) as usize]);
                                 println!("QUERY : {}", query);
