@@ -17,8 +17,7 @@ pub struct LiteralReplacingWriter<'a> {
 }
 
 impl<'a> ExprWriter for LiteralReplacingWriter<'a> {
-	#[allow(dead_code)] // writer does not need to be used here as there's no expressions to delegate
-	fn write(&self, writer: &Writer, builder: &mut String, node: &SQLExpr) -> Result<bool, String> {
+	fn write(&self, _: &Writer, builder: &mut String, node: &SQLExpr) -> Result<bool, String> {
 		match node {
 			&SQLExpr::SQLLiteral(ref e) => match e {
 				&LiteralExpr::LiteralLong(ref i, _) => self.optionally_write_literal(i, builder),
@@ -170,8 +169,8 @@ mod tests {
 	#[test]
 	fn simple_users() {
 		let parser = AnsiSQLParser {};
-		let config = config::parse_config("example-babel-config.xml");
-		let schema = String::from("babel");
+		let config = config::parse_config("example-zero-config.xml");
+		let schema = String::from("zero");
 
 		let sql = "CREATE TABLE users (
 			id INTEGER PRIMARY KEY,

@@ -1,19 +1,16 @@
 [package]
 authors = ["Paul LaCrosse <paul.lacrosse@gmail.com>"]
 publish = false
-name = "babel"
-version = "0.0.3"
+name = "agildata-zero"
+version = "0.0.5"
 
 [dependencies]
-log = "0.3.6"
-log4rs = { version = "0.4.8", features = ["toml"] }
-parking_lot = "0.2.7"
-regex = "0.1.73"
-notify = "2.6.3"
-lazy_static = "0.2.1"
 rust-crypto = "0.2.36"
-chrono = { version = "0.2.22" }
-byteorder = "*"
+byteorder = "0.5.3"
 RustyXML = "0.1.1"
 bytes = "0.2.10"
 mio = "0.4.4"
+log = "0.3"
+futures = { git = "https://github.com/alexcrichton/futures-rs" }
+futures-cpupool = { git = "https://github.com/alexcrichton/futures-rs" }
+env_logger = "0.3"

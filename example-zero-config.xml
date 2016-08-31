@@ -11,13 +11,13 @@
 	<connection>
 		<property name="dbms" value="mysql"/>
 		<property name="host" value="127.0.0.1"/>
-		<property name="schema" value="babel"/>
+		<property name="schema" value="zero"/>
 		<property name="user" value="root"/>
 		<property name="password" value="admin"/>
 		<property name="driverClassName" value="com.mysql.jdbc.Driver"/>
 	</connection>
 
-	<schema name="babel">
+	<schema name="zero">
 		<table name="users">
 			<column name="id" type="INTEGER" encryption="none" pkOrdinal="0"/>
 			<column name="first_name" type="VARCHAR(50)" encryption="aes"/>

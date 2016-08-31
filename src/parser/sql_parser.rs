@@ -41,7 +41,8 @@ pub enum SQLExpr {
 	SQLKeyDef(KeyDef),
 	SQLColumnQualifier(ColumnQualifier),
 	SQLDataType(DataType),
-	SQLTableOption(TableOption)
+	SQLTableOption(TableOption),
+	SQLUse(Box<SQLExpr>)
 }
 
 #[derive(Debug, PartialEq)]
@@ -196,6 +197,7 @@ impl AnsiSQLParser {
 					"INSERT" => Ok(Some(try!(self.parse_insert(tokens)))),
 					"UPDATE" => Ok(Some(try!(self.parse_update(tokens)))),
 					"CREATE" => Ok(Some(try!(self.parse_create(tokens)))),
+					"USE" => Ok(Some(try!(self.parse_use(tokens)))),
 					_ => Err(format!("Unsupported prefix {:?}", v))
 				},
 				&Token::Literal(ref v) => match v {
@@ -332,6 +334,13 @@ impl AnsiSQLParser {
 			Err(String::from(format!("Unexpected token after CREATE {:?}", tokens.peek())))
 		}
 
+	}
+
+	fn parse_use<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<SQLExpr, String>
+		where It: Iterator<Item=&'a Token> {
+
+		assert!(self.consume_keyword("USE", tokens));
+		Ok(SQLExpr::SQLUse(Box::new(self.parse_identifier(tokens)?)))
 	}
 
 	fn parse_table_options<'a, It>(&self, tokens: &mut Peekable<It>) -> Result<Vec<SQLExpr>, String>
