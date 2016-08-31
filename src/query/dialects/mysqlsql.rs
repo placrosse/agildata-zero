@@ -1,4 +1,5 @@
 use super::super::*;
+use super::ansisql::*;
 
 use std::iter::Peekable;
 use std::str::Chars;
@@ -6,9 +7,11 @@ use std::str::Chars;
 static KEYWORDS: &'static [&'static str] = &["SHOW", "CREATE", "TABLE", "PRECISION",
 	"PRIMARY", "KEY", "UNIQUE", "FULLTEXT", "FOREIGN", "REFERENCES", "CONSTRAINT"];
 
-pub struct MySQLDialect{}
+pub struct MySQLDialect<'d>{
+	ansi: &'d AnsiSQLDialect
+}
 
-impl Dialect for MySQLDialect {
+impl <'d> Dialect for MySQLDialect<'d> {
 
 	fn get_keywords(&self) -> &'static [&'static str] {
         KEYWORDS
@@ -32,9 +35,9 @@ impl Dialect for MySQLDialect {
 
 					Ok(Some(Token::Identifier(text)))
 				},
-				_ => Ok(None)
+				_ => self.ansi.get_token(chars, keywords)
 			},
-			_ => Ok(None)
+			_ => self.ansi.get_token(chars, keywords)
 		}
 	}
 
@@ -42,13 +45,11 @@ impl Dialect for MySQLDialect {
             Result<Option<ASTNode>, String> {
 
         match tokens.peek() {
-			Some(&Token::Identifier(ref v))
-				| Some(&Token::Keyword(ref v)) => match &v as &str {
-
+			Some(&Token::Keyword(ref v)) => match &v as &str {
 				"CREATE" => Err(String::from("CREATE not supported")),
-				_ => Ok(None)
+				_ => self.ansi.parse_prefix(tokens)
 			},
-			_ => Ok(None)
+			_ => self.ansi.parse_prefix(tokens)
 		}
     }
 
@@ -62,6 +63,6 @@ impl Dialect for MySQLDialect {
 
 }
 
-impl MySQLDialect {
-	pub fn new() -> Self {MySQLDialect{}}
+impl<'d> MySQLDialect<'d> {
+	pub fn new(ansi: &'d AnsiSQLDialect) -> Self {MySQLDialect{ansi: ansi}}
 }
