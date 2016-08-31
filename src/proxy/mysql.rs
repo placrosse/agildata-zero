@@ -200,6 +200,10 @@ impl<'a> MySQLConnectionHandler <'a> {
         // let saddr = std::net::SocketAddr::new(std::net::IpAddr::V4(ip), 3306);
         // let mut tcps = TcpStream::connect(&saddr).unwrap();
 
+        let client_props = config.get_client_config().props;
+        let client_host = client_props.get("host");
+        let client_port = client_props.get("port");
+
         // connect to real MySQL
         let mut mysql = net::TcpStream::connect("127.0.0.1:3306").unwrap();
 
