@@ -3,8 +3,8 @@ use super::super::dialects::ansisql::*;
 
 #[test]
 fn simple_tokenize() {
-	let dialects = vec![AnsiSQLDialect::new()];
-	let tokens = String::from("SELECT 1 + 1").tokenize(&dialects).unwrap();
+	let dialect = AnsiSQLDialect::new();
+	let tokens = String::from("SELECT 1 + 1").tokenize(&dialect).unwrap();
 	assert_eq!(
 		vec![Token::Keyword("SELECT".to_string()),
 			Token::Literal(LiteralToken::LiteralLong(0, "1".to_string())),
@@ -19,7 +19,7 @@ fn simple_tokenize() {
 
 #[test]
 fn complex_tokenize() {
-	let dialects = vec![AnsiSQLDialect::new()];
+	let dialect = AnsiSQLDialect::new();
     assert_eq!(
         vec![Token::Keyword("SELECT".to_string()),
             Token::Identifier("a".to_string()),
@@ -36,7 +36,7 @@ fn complex_tokenize() {
             Token::Operator("!=".to_string()),
             Token::Literal(LiteralToken::LiteralBool(2, "true".to_string()))
 		],
-        String::from("SELECT a, 'hello' FROM tOne WHERE b > 2.22 AND c != true").tokenize(&dialects).unwrap().tokens
+        String::from("SELECT a, 'hello' FROM tOne WHERE b > 2.22 AND c != true").tokenize(&dialect).unwrap().tokens
     );
 
 }

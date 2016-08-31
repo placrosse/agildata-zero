@@ -8,9 +8,9 @@ use super::super::dialects::ansisql::*;
 
 #[test]
 fn select_wildcard() {
-	let dialects = vec![AnsiSQLDialect::new()];
+	let dialect = AnsiSQLDialect::new();
 	let sql = String::from("SELECT * FROM foo");
-	let tokens = sql.tokenize(&dialects).unwrap();
+	let tokens = sql.tokenize(&dialect).unwrap();
 	let parsed = tokens.parse().unwrap();
 
 	assert_eq!(
@@ -35,7 +35,7 @@ fn select_wildcard() {
 
 #[test]
 fn sqlparser() {
-	let dialects = vec![AnsiSQLDialect::new()];
+	let dialect = AnsiSQLDialect::new();
 	let sql = String::from("SELECT 1 + 1 + 1,
 		a AS alias,
 		(3 * (1 + 2)),
@@ -44,7 +44,7 @@ fn sqlparser() {
 		FROM (SELECT a, b, c FROM tThree) AS l
 		WHERE a > 10 AND b = true
 		ORDER BY a DESC, (a + b) ASC, c");
-	let tokens = sql.tokenize(&dialects).unwrap();
+	let tokens = sql.tokenize(&dialect).unwrap();
 	let parsed = tokens.parse().unwrap();
 
 	assert_eq!(
@@ -177,14 +177,14 @@ fn sqlparser() {
 #[test]
 fn sql_join() {
 
-	let dialects = vec![AnsiSQLDialect::new()];
+	let dialect = AnsiSQLDialect::new();
 	let sql = String::from("SELECT l.a, r.b, l.c FROM tOne AS l
 		JOIN (SELECT a, b, c FROM tTwo WHERE a > 0) AS r
 		ON l.a = r.a
 		WHERE l.b > r.b
 		ORDER BY r.c DESC");
 
-	let tokens = sql.tokenize(&dialects).unwrap();
+	let tokens = sql.tokenize(&dialect).unwrap();
 	let parsed = tokens.parse().unwrap();
 
 	assert_eq!(
@@ -262,9 +262,9 @@ fn sql_join() {
 #[test]
 fn nasty() {
 
-	let dialects = vec![AnsiSQLDialect::new()];
+	let dialect = AnsiSQLDialect::new();
 	let sql = String::from("((((SELECT a, b, c FROM tOne UNION (SELECT a, b, c FROM tTwo))))) UNION (((SELECT a, b, c FROM tThree) UNION ((SELECT a, b, c FROM tFour))))");
-	let tokens = sql.tokenize(&dialects).unwrap();
+	let tokens = sql.tokenize(&dialect).unwrap();
 	let parsed = tokens.parse().unwrap();
 
 	assert_eq!(
@@ -352,9 +352,9 @@ fn nasty() {
 #[test]
 fn insert() {
 
-	let dialects = vec![AnsiSQLDialect::new()];
+	let dialect = AnsiSQLDialect::new();
 	let sql = String::from("INSERT INTO foo (a, b, c) VALUES(1, 20.45, 'abcdefghijk')");
-	let tokens = sql.tokenize(&dialects).unwrap();
+	let tokens = sql.tokenize(&dialect).unwrap();
 	let parsed = tokens.parse().unwrap();
 
 	assert_eq!(
@@ -391,9 +391,9 @@ fn insert() {
 #[test]
 fn update() {
 
-	let dialects = vec![AnsiSQLDialect::new()];
+	let dialect = AnsiSQLDialect::new();
 	let sql = String::from("UPDATE foo SET a = 'hello', b = 12345 WHERE c > 10");
-	let tokens = sql.tokenize(&dialects).unwrap();
+	let tokens = sql.tokenize(&dialect).unwrap();
 	let parsed = tokens.parse().unwrap();
 
 	assert_eq!(
