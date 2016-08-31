@@ -482,90 +482,12 @@ impl<'a> MySQLConnectionHandler <'a> {
                     match row_packet.packet_type() {
                         // break on receiving Err_Packet, or EOF_Packet
                         0xfe | 0xff => {
-
                             println!("End of result rows");
                             write_buf.extend_from_slice(&row_packet.bytes);
                             break
                         },
-
                         _ => {
-                            println!("Received row");
-
-                            //TODO: if this result set does not contain any encrypted values
-                            // then we can just write the packet straight to the client and
-                            // skip all of this processing
-
-                            //TODO do decryption here if required
-                            let mut r = MySQLPacketParser::new(&row_packet);
-
-                            let mut wtr: Vec<u8> = vec![];
-
-                            for i in 0 .. field_count {
-                                // let is_encrypted = false;
-
-                                //println!("Value {} is {:?}", i, orig_value);
-
-                                let column_config = self.config.get_column_config(
-                                    &(column_meta[i as usize].schema),
-                                    &(column_meta[i as usize].table_name),
-                                    &(column_meta[i as usize].column_name));
-
-                                println!("config is {:?}", column_config);
-
-                                let value = match column_config {
-
-                                    None => r.read_lenenc_string(),
-                                    Some(cc) => match cc {
-                                        &ColumnConfig {ref encryption, ref native_type, ..} => {
-                                            match native_type {
-                                                &NativeType::U64 => {
-                                                    match encryption {
-                                                        &EncryptionType::NA => r.read_lenenc_string(),
-                                                        _ => Some(format!("{}", u64::decrypt(&r.read_bytes().unwrap(), encryption)))
-                                                    }
-                                                },
-                                                &NativeType::Varchar(_) => {
-                                                    match encryption {
-                                                        &EncryptionType::NA => r.read_lenenc_string(),
-                                                        _ => Some(String::decrypt(&r.read_bytes().unwrap(), encryption))
-                                                    }
-                                                }
-                                                _ => panic!("Native type {:?} not implemented", native_type)
-                                            }
-                                        }
-                                    }
-
-                                    /*match cc.encryption {
-                                        EncryptionType::AES => orig_value,
-                                        _ => orig_value
-                                    }*/
-                                };
-
-                                // encode this field in the new packet
-                                match value {
-                                    None => wtr.push(0xfb),
-                                    Some(v) => {
-                                        let slice = v.as_bytes();
-                                        //TODO: hacked to assume single byte for string length
-                                        wtr.write_u8(slice.len() as u8).unwrap();
-                                        wtr.extend_from_slice(&slice);
-                                    }
-                                }
-
-                            }
-
-                            let mut new_header: Vec<u8> = vec![];
-                            let sequence_id = row_packet.sequence_id();
-                            new_header.write_u32::<LittleEndian>(wtr.len() as u32).unwrap();
-                            new_header.pop();
-                            new_header.push(sequence_id);
-
-//                            println!("Modified Header: {:?}", &new_header);
-//                            println!("Modified Payload: {:?}", &wtr);
-
-                            write_buf.extend_from_slice(&new_header);
-                            write_buf.extend_from_slice(&wtr);
-
+                            self.process_result_row(&row_packet, &column_meta, &mut write_buf);
                         }
                     }
                 }
@@ -624,6 +546,91 @@ impl<'a> MySQLConnectionHandler <'a> {
         }
 
         Ok(column_meta)
+    }
+
+    fn process_result_row(&self,
+                          row_packet: &MySQLPacket,
+                          column_meta: &Vec<ColumnMetaData>,
+                          write_buf: &mut Vec<u8>) -> Result<(), String> {
+        println!("Received row");
+
+        //TODO: if this result set does not contain any encrypted values
+        // then we can just write the packet straight to the client and
+        // skip all of this processing
+
+        //TODO do decryption here if required
+        let mut r = MySQLPacketParser::new(&row_packet);
+
+        let mut wtr: Vec<u8> = vec![];
+
+        for i in 0 .. column_meta.len() {
+            // let is_encrypted = false;
+
+            //println!("Value {} is {:?}", i, orig_value);
+
+            let column_config = self.config.get_column_config(
+                &(column_meta[i as usize].schema),
+                &(column_meta[i as usize].table_name),
+                &(column_meta[i as usize].column_name));
+
+            println!("config is {:?}", column_config);
+
+            let value = match column_config {
+
+                None => r.read_lenenc_string(),
+                Some(cc) => match cc {
+                    &ColumnConfig {ref encryption, ref native_type, ..} => {
+                        match native_type {
+                            &NativeType::U64 => {
+                                match encryption {
+                                    &EncryptionType::NA => r.read_lenenc_string(),
+                                    _ => Some(format!("{}", u64::decrypt(&r.read_bytes().unwrap(), encryption)))
+                                }
+                            },
+                            &NativeType::Varchar(_) => {
+                                match encryption {
+                                    &EncryptionType::NA => r.read_lenenc_string(),
+                                    _ => Some(String::decrypt(&r.read_bytes().unwrap(), encryption))
+                                }
+                            }
+                            _ => panic!("Native type {:?} not implemented", native_type)
+                        }
+                    }
+                }
+
+                /*match cc.encryption {
+                    EncryptionType::AES => orig_value,
+                    _ => orig_value
+                }*/
+            };
+
+            // encode this field in the new packet
+            match value {
+                None => wtr.push(0xfb),
+                Some(v) => {
+                    let slice = v.as_bytes();
+                    //TODO: hacked to assume single byte for string length
+                    wtr.write_u8(slice.len() as u8).unwrap();
+                    wtr.extend_from_slice(&slice);
+                }
+            }
+
+        }
+
+        let mut new_header: Vec<u8> = vec![];
+        let sequence_id = row_packet.sequence_id();
+        new_header.write_u32::<LittleEndian>(wtr.len() as u32).unwrap();
+        new_header.pop();
+        new_header.push(sequence_id);
+
+        //                            println!("Modified Header: {:?}", &new_header);
+        //                            println!("Modified Payload: {:?}", &wtr);
+
+        write_buf.extend_from_slice(&new_header);
+        write_buf.extend_from_slice(&wtr);
+
+        Ok(())
+
     }
 
     pub fn write(&mut self, event_loop: &mut mio::EventLoop<Proxy>) {
