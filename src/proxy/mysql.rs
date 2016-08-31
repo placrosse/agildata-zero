@@ -337,20 +337,26 @@ impl<'a> MySQLConnectionHandler <'a> {
         let dialect = MySQLDialect::new(&ansi);
 
         // TODO error handling
-        let result = query.tokenize(&dialect).unwrap().parse();
-
-        let parsed: Option<ASTNode> = match result {
-            Ok(p) => {
-                match p {
-                    ASTNode::MySQLUse(box ASTNode::SQLIdentifier{id: ref schema, ..}) => {
-                        self.schema = Some(schema.clone())
+        let parsed = match query.tokenize(&dialect) {
+            Ok(tokens) => {
+                match tokens.parse() {
+                    Ok(parsed) => {
+                        match parsed {
+                            ASTNode::MySQLUse(box ASTNode::SQLIdentifier{id: ref schema, ..}) => {
+                                self.schema = Some(schema.clone())
+                            },
+                            _ => {}
+                        };
+                        Some(parsed)
                     },
-                    _ => {}
-                };
-                Some(p)
+                    Err(e) => {
+                        println!("Failed to parse with: {}", e);
+                        None
+                    }
+                }
             },
             Err(e) => {
-                println!("Failed to parse due to {:?}", e);
+                println!("Failed to tokenize with: {}", e);
                 None
             }
         };
