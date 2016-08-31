@@ -219,7 +219,8 @@ pub enum ASTNode {
     MySQLKeyDef(MySQLKeyDef),
     MySQLColumnQualifier(MySQLColumnQualifier),
     MySQLDataType(MySQLDataType),
-    MySQLTableOption(MySQLTableOption)
+    MySQLTableOption(MySQLTableOption),
+	MySQLUse(Box<ASTNode>)
 }
 
 #[derive(Debug, PartialEq)]
@@ -383,4 +384,10 @@ impl<'a> Writer for SQLWriter<'a> {
 		}
 		Err(String::from(format!("No provided ExprWriter writes expr {:?}", node)))
     }
+}
+
+pub trait ASTVisitor {
+	fn visit_ast(&mut self, &ASTNode);
+	fn visit_ast_lit(&mut self, &LiteralExpr);
+	fn visit_ast_operator(&mut self, &Operator);
 }

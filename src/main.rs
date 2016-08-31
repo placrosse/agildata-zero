@@ -23,7 +23,6 @@ mod encrypt;
 mod config;
 mod protocol;
 mod proxy;
-mod parser;
 
 mod query;
 fn main() {

@@ -7,7 +7,7 @@ use std::str::FromStr;
 use std::fmt::Write;
 
 static KEYWORDS: &'static [&'static str] = &["SHOW", "CREATE", "TABLE", "PRECISION",
-	"PRIMARY", "KEY", "UNIQUE", "FULLTEXT", "FOREIGN", "REFERENCES", "CONSTRAINT"];
+	"PRIMARY", "KEY", "UNIQUE", "FULLTEXT", "FOREIGN", "REFERENCES", "CONSTRAINT", "USE"];
 
 pub struct MySQLDialect<'d>{
 	ansi: &'d AnsiSQLDialect
@@ -51,6 +51,7 @@ impl <'d> Dialect for MySQLDialect<'d> {
         match tokens.peek() {
 			Some(&Token::Keyword(ref v)) => match &v as &str {
 				"CREATE" => Ok(Some(self.parse_create(tokens)?)),
+				"USE" => Ok(Some(self.parse_use(tokens)?)),
 				_ => self.ansi.parse_prefix(tokens)
 			},
 			_ => self.ansi.parse_prefix(tokens)
@@ -69,6 +70,12 @@ impl <'d> Dialect for MySQLDialect<'d> {
 
 impl<'d> MySQLDialect<'d> {
 	pub fn new(ansi: &'d AnsiSQLDialect) -> Self {MySQLDialect{ansi: ansi}}
+
+	fn parse_use<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode, String> {
+
+		assert!(tokens.consume_keyword("USE"));
+		Ok(ASTNode::MySQLUse(Box::new(self.ansi.parse_identifier(tokens)?)))
+	}
 
 	fn parse_create<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode, String>
 		 {

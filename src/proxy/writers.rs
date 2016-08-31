@@ -1,5 +1,6 @@
-use super::super::parser::sql_writer::*;
-use super::super::parser::sql_parser::{SQLExpr, LiteralExpr, DataType};
+// use super::super::parser::sql_writer::*;
+// use super::super::parser::sql_parser::{SQLExpr, LiteralExpr, DataType};
+use query::{Writer, ExprWriter, ASTNode, LiteralExpr, MySQLDataType};
 use std::collections::HashMap;
 use std::fmt::Write;
 use config::*;
@@ -17,9 +18,9 @@ pub struct LiteralReplacingWriter<'a> {
 }
 
 impl<'a> ExprWriter for LiteralReplacingWriter<'a> {
-	fn write(&self, _: &Writer, builder: &mut String, node: &SQLExpr) -> Result<bool, String> {
+	fn write(&self, _: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, String> {
 		match node {
-			&SQLExpr::SQLLiteral(ref e) => match e {
+			&ASTNode::SQLLiteral(ref e) => match e {
 				&LiteralExpr::LiteralLong(ref i, _) => self.optionally_write_literal(i, builder),
     			&LiteralExpr::LiteralBool(ref i, _) => self.optionally_write_literal(i, builder),
     			&LiteralExpr::LiteralDouble(ref i, _) => self.optionally_write_literal(i, builder),
@@ -51,11 +52,11 @@ pub struct CreateTranslatingWriter<'a> {
 }
 
 impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
-	fn write(&self, writer: &Writer, builder: &mut String, node: &SQLExpr) -> Result<bool, String> {
+	fn write(&self, writer: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, String> {
 		match node {
-			&SQLExpr::SQLCreateTable{box ref table, ref column_list, ref keys, ref table_options} => {
+			&ASTNode::MySQLCreateTable{box ref table, ref column_list, ref keys, ref table_options} => {
 				let table_name = match table {
-					&SQLExpr::SQLIdentifier{id: ref t, ..} => t,
+					&ASTNode::SQLIdentifier{id: ref t, ..} => t,
 					_ => return Err(String::from(format!("Expected identifier, received {:?}", table)))
 				};
 
@@ -68,8 +69,8 @@ impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
 					builder.push_str(sep);
 
 					let column_name = match c {
-						&SQLExpr::SQLColumnDef{box ref column, ..} => match column {
-							&SQLExpr::SQLIdentifier{id: ref t, ..} => t,
+						&ASTNode::MySQLColumnDef{box ref column, ..} => match column {
+							&ASTNode::SQLIdentifier{id: ref t, ..} => t,
 							_ => return Err(String::from(format!("Expected identifier, received {:?}", table)))
 						},
 						_ => return Err(String::from(format!("Expected column definition, received {:?}", table)))
@@ -79,7 +80,7 @@ impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
 					match col {
 						Some(config) => {
 							match c {
-								&SQLExpr::SQLColumnDef{box ref column, box ref data_type, ref qualifiers} => {
+								&ASTNode::MySQLColumnDef{box ref column, box ref data_type, ref qualifiers} => {
 									writer._write(builder, column)?;
 
 									let encryption_type = &config.encryption;
@@ -129,17 +130,17 @@ impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
 
 // TODO needs to do some real length/display math for different encryption types
 impl<'a> CreateTranslatingWriter<'a> {
-	fn translate_type(&self, data_type: &SQLExpr, encryption: &EncryptionType) -> Result<SQLExpr, String> {
+	fn translate_type(&self, data_type: &ASTNode, encryption: &EncryptionType) -> Result<ASTNode, String> {
 		match (data_type, encryption) {
-			(&SQLExpr::SQLDataType(ref dt), &EncryptionType::AES) => match dt {
-				&DataType::Int{..} => {
+			(&ASTNode::MySQLDataType(ref dt), &EncryptionType::AES) => match dt {
+				&MySQLDataType::Int{..} => {
 					// TODO currently all are stored as 8 bytes, delegate to encrypt
-					Ok(SQLExpr::SQLDataType(DataType::VarBinary{length: Some(8 + 28)}))
+					Ok(ASTNode::MySQLDataType(MySQLDataType::VarBinary{length: Some(8 + 28)}))
 				},
-				&DataType::Varchar{ref length} | &DataType::Char{ref length} |
-				&DataType::Blob{ref length} | &DataType::Text{ref length} |
-				&DataType::Binary{ref length} | &DataType::VarBinary{ref length} => {
-					Ok(SQLExpr::SQLDataType(DataType::VarBinary{length: Some(self.get_encrypted_string_length(length))}))
+				&MySQLDataType::Varchar{ref length} | &MySQLDataType::Char{ref length} |
+				&MySQLDataType::Blob{ref length} | &MySQLDataType::Text{ref length} |
+				&MySQLDataType::Binary{ref length} | &MySQLDataType::VarBinary{ref length} => {
+					Ok(ASTNode::MySQLDataType(MySQLDataType::VarBinary{length: Some(self.get_encrypted_string_length(length))}))
 				},
 				_ => Err(String::from(format!("Unsupported data type for AES translation {:?}", dt)))
 			},
@@ -161,34 +162,39 @@ impl<'a> CreateTranslatingWriter<'a> {
 mod tests {
 
 	use super::{CreateTranslatingWriter};
-	use parser::sql_parser::AnsiSQLParser;
-	use parser::sql_writer::*;
+	use query::{Writer, ExprWriter, ASTNode, LiteralExpr, MySQLDataType, SQLWriter, Tokenizer, Parser};
+    use query::dialects::mysqlsql::*;
+    use query::dialects::ansisql::*;
     use config;
 	use byteorder::{WriteBytesExt,ReadBytesExt,BigEndian};
 
 	#[test]
 	fn simple_users() {
-		let parser = AnsiSQLParser {};
+        let ansi = AnsiSQLDialect::new();
+        let dialect = MySQLDialect::new(&ansi);
+
 		let config = config::parse_config("example-zero-config.xml");
 		let schema = String::from("zero");
 
-		let sql = "CREATE TABLE users (
+		let sql = String::from("CREATE TABLE users (
 			id INTEGER PRIMARY KEY,
 			first_name VARCHAR(50),
 			last_name VARCHAR(50),
 			ssn VARCHAR(50),
 			age INTEGER,
 			sex VARCHAR(50)
-		)";
+		)");
 
-		let parsed = parser.parse(sql).unwrap();
+		let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
 
 		let translator = CreateTranslatingWriter {
 			config: &config,
 			schema: &schema
 		};
+        let mysql = MySQLWriter{};
+        let ansi = AnsiSQLWriter{};
 
-		let writer = SQLWriter::new(vec![&translator]);
+		let writer = SQLWriter::new(vec![&translator, &mysql, &ansi]);
 
 		let expected = "CREATE TABLE users (
 			id INTEGER PRIMARY KEY,

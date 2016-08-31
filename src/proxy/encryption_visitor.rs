@@ -1,8 +1,7 @@
 use config::{Config, TConfig};
 use encrypt::Encrypt;
 
-use parser::visitor::*;
-use parser::sql_parser::{SQLExpr, LiteralExpr, SQLOperator};
+use query::{ASTVisitor, ASTNode, LiteralExpr, Operator};
 
 use std::collections::HashMap;
 
@@ -13,16 +12,16 @@ pub struct EncryptionVisitor<'a> {
 }
 
 impl<'a> EncryptionVisitor<'a> {
-	fn is_identifier(&self, expr: &SQLExpr) -> bool {
+	fn is_identifier(&self, expr: &ASTNode) -> bool {
 		match expr {
-			&SQLExpr::SQLIdentifier{..} => true,
+			&ASTNode::SQLIdentifier{..} => true,
 			_ => false
 		}
 	}
 
-	fn is_literal(&self, expr: &SQLExpr) -> bool {
+	fn is_literal(&self, expr: &ASTNode) -> bool {
 		match expr {
-			&SQLExpr::SQLLiteral(_) => true,
+			&ASTNode::SQLLiteral(_) => true,
 			_ => false
 		}
 	}
@@ -32,49 +31,49 @@ impl<'a> EncryptionVisitor<'a> {
 	}
 }
 
-impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
-	fn visit_sql_expr(&mut self, expr: &SQLExpr) {
+impl<'a> ASTVisitor for EncryptionVisitor<'a> {
+	fn visit_ast(&mut self, expr: &ASTNode) {
 		match expr {
-			&SQLExpr::SQLSelect{box ref expr_list, ref relation, ref selection, ref order} => {
-				self.visit_sql_expr(expr_list);
+			&ASTNode::SQLSelect{box ref expr_list, ref relation, ref selection, ref order} => {
+				self.visit_ast(expr_list);
 				match relation {
-					&Some(box ref expr) => self.visit_sql_expr(expr),
+					&Some(box ref expr) => self.visit_ast(expr),
 					&None => {}
 				}
 				match selection {
-					&Some(box ref expr) => self.visit_sql_expr(expr),
+					&Some(box ref expr) => self.visit_ast(expr),
 					&None => {}
 				}
 				match order {
-					&Some(box ref expr) => self.visit_sql_expr(expr),
+					&Some(box ref expr) => self.visit_ast(expr),
 					&None => {}
 				}
 			},
-			&SQLExpr::SQLUpdate{box ref table, box ref assignments, ref selection} => {
-				self.visit_sql_expr(table);
-				self.visit_sql_expr(assignments);
+			&ASTNode::SQLUpdate{box ref table, box ref assignments, ref selection} => {
+				self.visit_ast(table);
+				self.visit_ast(assignments);
 
 				match selection {
-					&Some(box ref expr) => self.visit_sql_expr(expr),
+					&Some(box ref expr) => self.visit_ast(expr),
 					&None => {}
 				}
 			},
-			&SQLExpr::SQLInsert{box ref table, box ref column_list, box ref values_list} => {
+			&ASTNode::SQLInsert{box ref table, box ref column_list, box ref values_list} => {
 				let table = match table {
-					&SQLExpr::SQLIdentifier{id: ref v, ..} => v,
+					&ASTNode::SQLIdentifier{id: ref v, ..} => v,
 					_ => panic!("Illegal")
 				};
 				match column_list {
-					&SQLExpr::SQLExprList(ref columns) => {
+					&ASTNode::SQLExprList(ref columns) => {
 						match values_list {
-							&SQLExpr::SQLExprList(ref values) => {
+							&ASTNode::SQLExprList(ref values) => {
 								for (i, e) in columns.iter().enumerate() {
 									match e {
-										&SQLExpr::SQLIdentifier{id: ref name, ..} => {
+										&ASTNode::SQLIdentifier{id: ref name, ..} => {
 											let col = self.config.get_column_config(&String::from("zero"), table, name);
 											if col.is_some() {
 												match values[i] {
-													SQLExpr::SQLLiteral(ref l) => match l {
+													ASTNode::SQLLiteral(ref l) => match l {
 														&LiteralExpr::LiteralLong(ref i, ref val) => {
 															self.valuemap.insert(i.clone(), val.encrypt(&col.unwrap().encryption));
 														},
@@ -98,27 +97,27 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 					_ => panic!("Illegal")
 				}
 			},
-			&SQLExpr::SQLExprList(ref vector) => {
+			&ASTNode::SQLExprList(ref vector) => {
 				for e in vector {
-					self.visit_sql_expr(&e);
+					self.visit_ast(&e);
 				}
 			},
-			&SQLExpr::SQLBinary{box ref left, ref op, box ref right} => {
+			&ASTNode::SQLBinary{box ref left, ref op, box ref right} => {
 				//println!("HERE");
 				// ident = lit
 				match op {
 					// TODO Messy...clean up
 					// TODO should check left and right
-					&SQLOperator::EQ => {
+					&Operator::EQ => {
 						if self.is_identifier(left) && self.is_literal(right) {
 							let ident = match left {
-								&SQLExpr::SQLIdentifier{id: ref v, ..} => v,
+								&ASTNode::SQLIdentifier{id: ref v, ..} => v,
 								_ => panic!("Unreachable")
 							};
 							let col = self.config.get_column_config(&String::from("zero"), &String::from("users"), ident);
 							if col.is_some() {
 								match right {
-									&SQLExpr::SQLLiteral(ref l) => match l {
+									&ASTNode::SQLLiteral(ref l) => match l {
 										&LiteralExpr::LiteralLong(ref i, ref val) => {
 											self.valuemap.insert(i.clone(), val.encrypt(&col.unwrap().encryption));
 										},
@@ -137,78 +136,81 @@ impl<'a> SQLExprVisitor for EncryptionVisitor<'a> {
 					_ => {}
 				}
 
-				self.visit_sql_expr(left);
-				self.visit_sql_expr(right);
+				self.visit_ast(left);
+				self.visit_ast(right);
 			},
-			&SQLExpr::SQLLiteral(ref lit) => {
-				self.visit_sql_lit_expr(lit);
+			&ASTNode::SQLLiteral(ref lit) => {
+				self.visit_ast_lit(lit);
 			},
-			&SQLExpr::SQLAlias{box ref expr, box ref alias} => {
-				self.visit_sql_expr(&expr);
-				self.visit_sql_expr(&alias);
+			&ASTNode::SQLAlias{box ref expr, box ref alias} => {
+				self.visit_ast(&expr);
+				self.visit_ast(&alias);
 			},
-			&SQLExpr::SQLIdentifier{..} => {
+			&ASTNode::SQLIdentifier{..} => {
 				// TODO end of visit arm
 			},
-			&SQLExpr::SQLNested(ref expr) => {
-				self.visit_sql_expr(expr);
+			&ASTNode::SQLNested(ref expr) => {
+				self.visit_ast(expr);
 			},
-			&SQLExpr::SQLUnary{ref operator, box ref expr} => {
-				self.visit_sql_operator(operator);
-				self.visit_sql_expr(expr);
+			&ASTNode::SQLUnary{ref operator, box ref expr} => {
+				self.visit_ast_operator(operator);
+				self.visit_ast(expr);
 			},
-			&SQLExpr::SQLOrderBy{box ref expr, ..} => {
-				self.visit_sql_expr(expr);
+			&ASTNode::SQLOrderBy{box ref expr, ..} => {
+				self.visit_ast(expr);
 				// TODO bool
 			},
-			&SQLExpr::SQLJoin{box ref left, box ref right, ref on_expr, ..} => {
-				self.visit_sql_expr(left);
+			&ASTNode::SQLJoin{box ref left, box ref right, ref on_expr, ..} => {
+				self.visit_ast(left);
 				// TODO visit join type
-				self.visit_sql_expr(right);
+				self.visit_ast(right);
 				match on_expr {
-					&Some(box ref expr) => self.visit_sql_expr(expr),
+					&Some(box ref expr) => self.visit_ast(expr),
 					&None => {}
 				}
 			},
-			&SQLExpr::SQLUnion{box ref left, box ref right, ..} => {
-				self.visit_sql_expr(left);
+			&ASTNode::SQLUnion{box ref left, box ref right, ..} => {
+				self.visit_ast(left);
 				// TODO union type
-				self.visit_sql_expr(right);
+				self.visit_ast(right);
 			},
-			&SQLExpr::SQLCreateTable{..} => {
+			&ASTNode::MySQLCreateTable{..} => {
 				println!("WARN: create table visitation not implemented")
 			},
 			_ => panic!("Unsupported expr {:?}", expr)
 		}
 	}
 
-	fn visit_sql_lit_expr(&mut self, _lit: &LiteralExpr) {
+	fn visit_ast_lit(&mut self, _lit: &LiteralExpr) {
 		//do nothing
 	}
 
-	fn visit_sql_operator(&mut self, _op: &SQLOperator) {
+	fn visit_ast_operator(&mut self, _op: &Operator) {
 		// do nothing
 	}
 }
 
-pub fn walk(visitor: &mut SQLExprVisitor, e: &SQLExpr) {
-	visitor.visit_sql_expr(e);
+pub fn walk(visitor: &mut ASTVisitor, e: &ASTNode) {
+	visitor.visit_ast(e);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashMap;
-	use parser::sql_parser::AnsiSQLParser;
-	use parser::sql_writer::*;
+	use query::{ASTVisitor, ASTNode, LiteralExpr, Operator, SQLWriter, Tokenizer, Parser, Writer};
+	use query::dialects::mysqlsql::*;
+	use query::dialects::ansisql::*;
 	use super::super::writers::*;
     use config;
 
 	#[test]
 	fn test_visitor() {
-		let parser = AnsiSQLParser {};
-		let sql = "SELECT age, first_name, last_name FROM users WHERE age = 1";
-		let parsed = parser.parse(sql).unwrap();
+		let ansi = AnsiSQLDialect::new();
+		let dialect = MySQLDialect::new(&ansi);
+
+		let sql = String::from("SELECT age, first_name, last_name FROM users WHERE age = 1");
+		let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
 
 		let config = config::parse_config("example-zero-config.xml");
 		let value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
@@ -223,9 +225,12 @@ mod tests {
 
 	#[test]
 	fn test_vis_insert() {
-		let parser = AnsiSQLParser {};
-		let sql = "INSERT INTO users (id, first_name, last_name, ssn, age, sex) VALUES(1, 'Janis', 'Joplin', '123456789', 27, 'F')";
-		let parsed = parser.parse(sql).unwrap();
+
+		let ansi = AnsiSQLDialect::new();
+		let dialect = MySQLDialect::new(&ansi);
+
+		let sql = String::from("INSERT INTO users (id, first_name, last_name, ssn, age, sex) VALUES(1, 'Janis', 'Joplin', '123456789', 27, 'F')");
+		let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
 
 		let config = config::parse_config("example-zero-config.xml");
 		let value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
@@ -240,9 +245,11 @@ mod tests {
 
 	#[test]
 	fn test_vis_update() {
-		let parser = AnsiSQLParser {};
-		let sql = "UPDATE users SET age = 31, ssn = '987654321' WHERE first_name = 'Janis' AND last_name = 'Joplin'";
-		let parsed = parser.parse(sql).unwrap();
+		let ansi = AnsiSQLDialect::new();
+		let dialect = MySQLDialect::new(&ansi);
+
+		let sql = String::from("UPDATE users SET age = 31, ssn = '987654321' WHERE first_name = 'Janis' AND last_name = 'Joplin'");
+		let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
 
 		let config = config::parse_config("example-zero-config.xml");
 		let value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
@@ -255,8 +262,9 @@ mod tests {
 		println!("HERE {:#?}", encrypt_vis);
 
 		let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
+		let ansi_writer = AnsiSQLWriter{};
 
-		let writer = SQLWriter::new(vec![&lit_writer]);
+		let writer = SQLWriter::new(vec![&lit_writer, &ansi_writer]);
 
 		let rewritten = writer.write(&parsed).unwrap();
 
