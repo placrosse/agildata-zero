@@ -4,8 +4,11 @@ use std::collections::HashMap;
 
 use byteorder::*;
 
-use parser::sql_parser::{AnsiSQLParser, SQLExpr};
-use parser::sql_writer::*;
+// use parser::sql_parser::{AnsiSQLParser, SQLExpr};
+// use parser::sql_writer::*;
+use query::{Dialect, Tokenizer, Parser, Writer, SQLWriter, ASTNode};
+use query::dialects::mysqlsql::*;
+use query::dialects::ansisql::*;
 use super::writers::*;
 
 use mio::{self, TryRead, TryWrite};
@@ -330,13 +333,16 @@ impl<'a> MySQLConnectionHandler <'a> {
         println!("COM_QUERY : {}", query);
 
         // parse query
-        let parser = AnsiSQLParser {};
-        let result = parser.parse(&query);
+        let ansi = AnsiSQLDialect::new();
+        let dialect = MySQLDialect::new(&ansi);
 
-        let parsed: Option<SQLExpr> = match result {
+        // TODO error handling
+        let result = query.tokenize(&dialect).unwrap().parse();
+
+        let parsed: Option<ASTNode> = match result {
             Ok(p) => {
                 match p {
-                    SQLExpr::SQLUse(box SQLExpr::SQLIdentifier(ref schema)) => {
+                    ASTNode::MySQLUse(box ASTNode::SQLIdentifier{id: ref schema, ..}) => {
                         self.schema = Some(schema.clone())
                     },
                     _ => {}

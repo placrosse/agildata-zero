@@ -23,8 +23,8 @@ mod encrypt;
 mod config;
 mod protocol;
 mod proxy;
-mod parser;
 
+mod query;
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
     drop(env_logger::init());
