@@ -384,10 +384,14 @@ impl<'a> MySQLConnectionHandler <'a> {
                 config: &self.config,
                 schema: &String::from("zero") // TODO proxy should know its connection schema...
             };
+            let mysql_writer = MySQLWriter{};
+            let ansi_writer = AnsiSQLWriter{};
 
             let writer = SQLWriter::new(vec![
                                         &lit_writer,
-                                        &translator
+                                        &translator,
+                                        &mysql_writer,
+                                        &ansi_writer
                                     ]);
 
             let rewritten = writer.write(&parsed.unwrap()).unwrap();
