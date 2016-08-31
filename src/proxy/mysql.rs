@@ -337,20 +337,26 @@ impl<'a> MySQLConnectionHandler <'a> {
         let dialect = MySQLDialect::new(&ansi);
 
         // TODO error handling
-        let result = query.tokenize(&dialect).unwrap().parse();
-
-        let parsed: Option<ASTNode> = match result {
-            Ok(p) => {
-                match p {
-                    ASTNode::MySQLUse(box ASTNode::SQLIdentifier{id: ref schema, ..}) => {
-                        self.schema = Some(schema.clone())
+        let parsed = match query.tokenize(&dialect) {
+            Ok(tokens) => {
+                match tokens.parse() {
+                    Ok(parsed) => {
+                        match parsed {
+                            ASTNode::MySQLUse(box ASTNode::SQLIdentifier{id: ref schema, ..}) => {
+                                self.schema = Some(schema.clone())
+                            },
+                            _ => {}
+                        };
+                        Some(parsed)
                     },
-                    _ => {}
-                };
-                Some(p)
+                    Err(e) => {
+                        println!("Failed to parse with: {}", e);
+                        None
+                    }
+                }
             },
             Err(e) => {
-                println!("Failed to parse due to {:?}", e);
+                println!("Failed to tokenize with: {}", e);
                 None
             }
         };
@@ -378,10 +384,14 @@ impl<'a> MySQLConnectionHandler <'a> {
                 config: &self.config,
                 schema: &String::from("zero") // TODO proxy should know its connection schema...
             };
+            let mysql_writer = MySQLWriter{};
+            let ansi_writer = AnsiSQLWriter{};
 
             let writer = SQLWriter::new(vec![
                                         &lit_writer,
-                                        &translator
+                                        &translator,
+                                        &mysql_writer,
+                                        &ansi_writer
                                     ]);
 
             let rewritten = writer.write(&parsed.unwrap()).unwrap();
