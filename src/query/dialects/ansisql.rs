@@ -6,6 +6,7 @@ use std::str::Chars;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::ascii::AsciiExt;
 use std::str::FromStr;
+use std::fmt::Write;
 
 // TODO need some way of unifying keywords between dialects
 static KEYWORDS: &'static [&'static str] = &["SELECT", "FROM", "WHERE", "AND", "OR", "UNION", "FROM", "AS",
@@ -557,4 +558,174 @@ impl AnsiSQLDialect {
 
 	// TODO more helper methods like consume_keyword_sequence, required_keyword_sequence, etc
 
+}
+
+pub struct AnsiSQLWriter{}
+
+impl ExprWriter for AnsiSQLWriter {
+	fn write(&self, writer: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, String> {
+		match node {
+			&ASTNode::SQLSelect{box ref expr_list, ref relation, ref selection, ref order} => {
+				builder.push_str("SELECT");
+				writer._write(builder, expr_list)?;
+				match relation {
+					&Some(box ref e) => {
+						builder.push_str(" FROM");
+						writer._write(builder, e)?
+					},
+					&None => {}
+				}
+				match selection {
+					&Some(box ref e) => {
+						builder.push_str(" WHERE");
+						writer._write(builder, e)?
+					},
+					&None => {}
+				}
+				match order {
+					&Some(box ref e) => {
+						builder.push_str(" ORDER BY");
+						writer._write(builder, e)?
+					},
+					&None => {}
+				}
+
+			},
+			&ASTNode::SQLInsert{box ref table, box ref column_list, box ref values_list} => {
+				builder.push_str("INSERT INTO");
+				writer._write(builder, table)?;
+				builder.push_str(" (");
+				writer._write(builder, column_list)?;
+				builder.push_str(") VALUES(");
+				writer._write(builder, values_list)?;
+				builder.push_str(")");
+			},
+			&ASTNode::SQLUpdate{box ref table, box ref assignments, ref selection} => {
+				builder.push_str("UPDATE");
+				writer._write(builder, table)?;
+				builder.push_str(" SET");
+				writer._write(builder, assignments)?;
+				match selection {
+					&Some(box ref e) => {
+						builder.push_str(" WHERE");
+						writer._write(builder, e)?
+					},
+					&None => {}
+				}
+			},
+			&ASTNode::SQLExprList(ref vector) => {
+				let mut sep = "";
+				for e in vector.iter() {
+					builder.push_str(sep);
+					writer._write(builder, e)?;
+					sep = ",";
+				}
+			},
+			&ASTNode::SQLBinary{box ref left, ref op, box ref right} => {
+				writer._write(builder, left)?;
+				self._write_operator(builder, op);
+				writer._write(builder, right)?;
+
+			},
+			&ASTNode::SQLLiteral(ref lit) => match lit {
+				&LiteralExpr::LiteralLong(_, ref l) => {
+					write!(builder, " {}", l).unwrap()
+				},
+				&LiteralExpr::LiteralBool(_, ref b) => {
+					write!(builder, "{}", b).unwrap();
+				},
+				&LiteralExpr::LiteralDouble(_, ref d) => {
+					write!(builder, "{}", d).unwrap();
+				},
+				&LiteralExpr::LiteralString(_, ref s) => {
+					write!(builder, " '{}'", s).unwrap()
+				}
+				//_ => panic!("Unsupported literal for writing {:?}", lit)
+			},
+			&ASTNode::SQLAlias{box ref expr, box ref alias} => {
+				writer._write(builder, expr)?;
+				builder.push_str(" AS");
+				writer._write(builder, alias)?;
+			},
+			&ASTNode::SQLIdentifier{ref id, ..} => {
+				write!(builder, " {}", id).unwrap();
+			},
+			&ASTNode::SQLNested(box ref expr) => {
+				builder.push_str("(");
+				writer._write(builder, expr)?;
+				builder.push_str(")");
+			},
+			&ASTNode::SQLUnary{ref operator, box ref expr} => {
+				self._write_operator(builder, operator);
+				writer._write(builder, expr)?;
+			},
+			&ASTNode::SQLOrderBy{box ref expr, ref is_asc} => {
+				writer._write(builder, expr)?;
+				if !is_asc {
+					builder.push_str(" DESC");
+				}
+			},
+			&ASTNode::SQLJoin{box ref left, ref join_type, box ref right, ref on_expr} => {
+				writer._write(builder, left)?;
+				self._write_join_type(builder, join_type);
+				writer._write(builder, right)?;
+				match on_expr {
+					&Some(box ref e) => {
+						builder.push_str(" ON");
+						writer._write(builder, e)?;
+					},
+					&None => {}
+				}
+			},
+			&ASTNode::SQLUnion{box ref left, ref union_type, box ref right} => {
+				writer._write(builder, left)?;
+				self._write_union_type(builder, union_type);
+				writer._write(builder, right)?;
+			}
+			_ => return Ok(false)
+		}
+
+		Ok(true)
+	}
+}
+
+impl AnsiSQLWriter {
+	fn _write_operator(&self, builder: &mut String, op: &Operator) {
+        let op_text = match op {
+            &Operator::ADD => "+",
+            &Operator::SUB => "-",
+            &Operator::MULT => "*",
+            &Operator::DIV => "/",
+            &Operator::MOD => "%",
+            &Operator::GT => ">",
+            &Operator::LT => "<",
+            // Operator::GTEQ => ">=",
+            // Operator::LTEQ => "<=",
+            &Operator::EQ => "=",
+            // Operator::NEQ => "!=",
+            &Operator::OR => "OR",
+            &Operator::AND  => "AND"
+        };
+        write!(builder, " {}", op_text).unwrap();
+    }
+
+    fn _write_join_type(&self, builder: &mut String, join_type: &JoinType) {
+        let text = match join_type {
+            &JoinType::INNER => "INNER JOIN",
+            &JoinType::LEFT => "LEFT JOIN",
+            &JoinType::RIGHT => "RIGHT JOIN",
+            &JoinType::FULL => "FULL OUTER JOIN",
+            &JoinType::CROSS => "CROSS JOIN"
+        };
+        write!(builder, " {}", text).unwrap();
+    }
+
+    fn _write_union_type(&self, builder: &mut String, union_type: &UnionType) {
+        let text = match union_type {
+            &UnionType::UNION => "UNION",
+            &UnionType::ALL => "UNION ALL",
+            &UnionType::DISTINCT => "UNION DISTINCT"
+        };
+        write!(builder, " {} ", text).unwrap();
+    }
 }

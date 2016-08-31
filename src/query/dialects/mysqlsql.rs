@@ -4,6 +4,7 @@ use super::ansisql::*;
 use std::iter::Peekable;
 use std::str::Chars;
 use std::str::FromStr;
+use std::fmt::Write;
 
 static KEYWORDS: &'static [&'static str] = &["SHOW", "CREATE", "TABLE", "PRECISION",
 	"PRIMARY", "KEY", "UNIQUE", "FULLTEXT", "FOREIGN", "REFERENCES", "CONSTRAINT"];
@@ -507,4 +508,380 @@ impl<'d> MySQLDialect<'d> {
 			_ => Err(String::from(format!("Expected LiteralLong token, received {:?}", tokens.peek())))
 		}
 	}
+}
+
+
+pub struct MySQLWriter{}
+
+impl ExprWriter for MySQLWriter {
+	fn write(&self, writer: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, String> {
+		match node {
+			&ASTNode::MySQLCreateTable{box ref table, ref column_list, ref keys, ref table_options} => {
+				builder.push_str("CREATE TABLE");
+				writer._write(builder, table)?;
+
+				builder.push_str(&" (");
+				let mut sep = "";
+				for c in column_list {
+					builder.push_str(sep);
+					writer._write(builder, c)?;
+					sep = ", ";
+				}
+
+				for k in keys {
+					builder.push_str(sep);
+                    writer._write(builder, k)?;
+					sep = ", ";
+				}
+
+				builder.push_str(&")");
+
+				sep = " ";
+				for o in table_options {
+					builder.push_str(sep);
+                    writer._write(builder, o)?;
+				}
+			},
+			&ASTNode::MySQLColumnDef{box ref column, box ref data_type, ref qualifiers} => {
+				writer._write(builder, column)?;
+                writer._write(builder, data_type)?;
+				match qualifiers {
+					&Some(ref e) => {
+						for q in e.iter() {
+                            writer._write(builder, q)?;
+						}
+					},
+					&None => {}
+				}
+
+			},
+            &ASTNode::MySQLDataType(ref data_type) => {
+                self._write_data_type(writer, builder, data_type)?;
+            },
+            &ASTNode::MySQLKeyDef(ref k) => {
+                self._write_key_definition(writer, builder, k)?;
+            },
+            &ASTNode::MySQLTableOption(ref o) => {
+                self._write_table_option(writer, builder, o)?;
+            },
+            &ASTNode::MySQLColumnQualifier(ref q) => {
+                self._write_column_qualifier(writer, builder, q)?;
+            },
+			_ => return Ok(false)
+		}
+
+		Ok(true)
+	}
+}
+
+impl MySQLWriter {
+
+    fn _write_data_type(&self, writer: &Writer, builder: &mut String, data_type: &MySQLDataType) -> Result<(), String> {
+        match data_type {
+            &MySQLDataType::Bit{ref display} => {
+                builder.push_str(" BIT");
+                self._write_optional_display(builder, display);
+            },
+            &MySQLDataType::TinyInt{ref display} => {
+                builder.push_str(" TINYINT");
+                self._write_optional_display(builder, display);
+            },
+            &MySQLDataType::SmallInt{ref display} => {
+                builder.push_str(" SMALLINT");
+                self._write_optional_display(builder, display);
+            },
+            &MySQLDataType::MediumInt{ref display} => {
+                builder.push_str(" MEDIUMINT");
+                self._write_optional_display(builder, display);
+            },
+            &MySQLDataType::Int{ref display} => {
+                builder.push_str(" INTEGER");
+                self._write_optional_display(builder, display);
+            },
+            &MySQLDataType::BigInt{ref display} => {
+                builder.push_str(" BIGINT");
+                self._write_optional_display(builder, display);
+            },
+            &MySQLDataType::Decimal{ref precision, ref scale} => {
+                builder.push_str(" DECIMAL");
+                self._write_optional_precision_and_scale(builder, precision, scale);
+            },
+            &MySQLDataType::Float{ref precision, ref scale} => {
+                builder.push_str(" FLOAT");
+                self._write_optional_precision_and_scale(builder, precision, scale);
+            },
+            &MySQLDataType::Double{ref precision, ref scale} => {
+                builder.push_str(" DOUBLE");
+                self._write_optional_precision_and_scale(builder, precision, scale);
+            },
+            &MySQLDataType::Bool => {
+                builder.push_str(" BOOLEAN");
+            },
+            &MySQLDataType::Date => {
+                builder.push_str(" DATE");
+            },
+            &MySQLDataType::DateTime{ref fsp} => {
+                builder.push_str(" DATETIME");
+                self._write_optional_display(builder, fsp);
+            },
+            &MySQLDataType::Timestamp{ref fsp} => {
+                builder.push_str(" TIMESTAMP");
+                self._write_optional_display(builder, fsp);
+            },
+            &MySQLDataType::Time{ref fsp} => {
+                builder.push_str(" TIME");
+                self._write_optional_display(builder, fsp);
+            },
+            &MySQLDataType::Year{ref display} => {
+                builder.push_str(" YEAR");
+                self._write_optional_display(builder, display);
+            },
+            &MySQLDataType::Char{ref length} => {
+                builder.push_str(" CHAR");
+                self._write_optional_display(builder, length);
+            },
+            &MySQLDataType::NChar{ref length} => {
+                builder.push_str(" NCHAR");
+                self._write_optional_display(builder, length);
+            },
+            &MySQLDataType::CharByte{ref length} => {
+                builder.push_str(" CHAR");
+                self._write_optional_display(builder, length);
+                builder.push_str(" BYTE");
+            },
+            &MySQLDataType::Varchar{ref length} => {
+                builder.push_str(" VARCHAR");
+                self._write_optional_display(builder, length);
+            },
+            &MySQLDataType::NVarchar{ref length} => {
+                builder.push_str(" NVARCHAR");
+                self._write_optional_display(builder, length);
+            },
+            &MySQLDataType::Binary{ref length} => {
+                builder.push_str(" BINARY");
+                self._write_optional_display(builder, length);
+            },
+            &MySQLDataType::VarBinary{ref length} => {
+                builder.push_str(" VARBINARY");
+                self._write_optional_display(builder, length);
+            },
+            &MySQLDataType::Blob{ref length} => {
+                builder.push_str(" BLOB");
+                self._write_optional_display(builder, length);
+            },
+            &MySQLDataType::Text{ref length} => {
+                builder.push_str(" TEXT");
+                self._write_optional_display(builder, length);
+            },
+            &MySQLDataType::TinyBlob => {
+                builder.push_str(" TINYBLOB");
+            },
+            &MySQLDataType::TinyText => {
+                builder.push_str(" TINYTEXT");
+            },
+            &MySQLDataType::MediumBlob => {
+                builder.push_str(" MEDIUMBLOB");
+            },
+            &MySQLDataType::MediumText => {
+                builder.push_str(" MEDIUMTEXT");
+            },
+            &MySQLDataType::LongBlob => {
+                builder.push_str(" LONGBLOB");
+            },
+            &MySQLDataType::LongText => {
+                builder.push_str(" LONGTEXT");
+            },
+            &MySQLDataType::Enum{box ref values} => {
+                builder.push_str(" ENUM(");
+                writer._write(builder, values)?;
+                builder.push_str(")");
+            },
+            &MySQLDataType::Set{box ref values} => {
+                builder.push_str(" SET(");
+                writer._write(builder, values)?;
+                builder.push_str(")");
+            },
+            // _ => panic!("Unsupported data type {:?}", data_type)
+
+        }
+
+		Ok(())
+    }
+
+    fn _write_key_definition(&self, writer: &Writer, builder:  &mut String, key: &MySQLKeyDef) -> Result<(), String> {
+        match key {
+            &MySQLKeyDef::Primary{ref symbol, ref name, ref columns} => {
+
+				match symbol {
+					&Some(box ref e) => {
+						builder.push_str(&" CONSTRAINT");
+						writer._write(builder, e)?;
+					},
+					&None => {}
+				}
+
+                builder.push_str(&" PRIMARY KEY");
+				match name {
+					&Some(box ref e) => {
+						writer._write(builder, e)?;
+					},
+					&None => {}
+				}
+                self._write_key_column_list(writer, builder, columns)?;
+            },
+            &MySQLKeyDef::Unique{ref symbol, ref name, ref columns} => {
+				match symbol {
+					&Some(box ref e) => {
+						builder.push_str(&" CONSTRAINT");
+						writer._write(builder, e)?;
+					},
+					&None => {}
+				}
+
+                builder.push_str(&" UNIQUE KEY");
+				match name {
+					&Some(box ref e) => {
+						writer._write(builder, e)?;
+					},
+					&None => {}
+				}
+                self._write_key_column_list(writer, builder, columns)?;
+            },
+            &MySQLKeyDef::FullText{ref name, ref columns} => {
+                builder.push_str(&" FULLTEXT KEY");
+				match name {
+					&Some(box ref e) => {
+						writer._write(builder, e)?;
+					},
+					&None => {}
+				}
+                self._write_key_column_list(writer, builder, columns)?;
+            },
+            &MySQLKeyDef::Index{ref name, ref columns} => {
+                builder.push_str(&" KEY");
+				match name {
+					&Some(box ref e) => {
+						writer._write(builder, e)?;
+					},
+					&None => {}
+				}
+                self._write_key_column_list(writer, builder, columns)?;
+            },
+            &MySQLKeyDef::Foreign{ref symbol, ref name, ref columns, box ref reference_table, ref reference_columns} => {
+				match symbol {
+					&Some(box ref e) => {
+						builder.push_str(&" CONSTRAINT");
+						writer._write(builder, e)?;
+					},
+					&None => {}
+				}
+
+                builder.push_str(&" FOREIGN KEY");
+				match name {
+					&Some(box ref e) => {
+						writer._write(builder, e)?;
+					},
+					&None => {}
+				}
+                self._write_key_column_list(writer, builder, columns)?;
+
+                builder.push_str(&" REFERENCES");
+                writer._write(builder, &*reference_table)?;
+                self._write_key_column_list(writer, builder, reference_columns)?;
+            }
+        }
+
+		Ok(())
+    }
+
+    fn _write_table_option(&self, writer: &Writer, builder:  &mut String, option: &MySQLTableOption) -> Result<(), String> {
+        match option {
+            &MySQLTableOption::Comment(box ref e) => {
+                builder.push_str(" COMMENT");
+                writer._write(builder, e)?;
+            },
+            &MySQLTableOption::Charset(box ref e) => {
+                builder.push_str(" DEFAULT CHARSET");
+                writer._write(builder, e)?;
+            },
+            &MySQLTableOption::Engine(box ref e) => {
+                builder.push_str(" ENGINE");
+                writer._write(builder, e)?;
+            },
+            &MySQLTableOption::AutoIncrement(box ref e) => {
+                builder.push_str(" AUTO_INCREMENT");
+                writer._write(builder, e)?;
+            }
+        }
+
+		Ok(())
+    }
+
+    fn _write_key_column_list(&self, writer: &Writer, builder: &mut String, list: &Vec<ASTNode>) -> Result<(), String> {
+        builder.push_str(&" (");
+        let mut sep = "";
+        for c in list {
+            builder.push_str(sep);
+            writer._write(builder, c)?;
+            sep = ", ";
+        }
+        builder.push_str(&")");
+
+		Ok(())
+    }
+
+    fn _write_column_qualifier(&self, writer: &Writer, builder:  &mut String, q: &MySQLColumnQualifier) -> Result<(), String> {
+        match q {
+            &MySQLColumnQualifier::CharacterSet(box ref e) => {
+                builder.push_str(&" CHARACTER SET");
+                writer._write(builder, e)?;
+            },
+            &MySQLColumnQualifier::Collate(box ref e) => {
+                builder.push_str(&" COLLATE");
+                writer._write(builder, e)?;
+            },
+            &MySQLColumnQualifier::Default(box ref e) => {
+                builder.push_str(&" DEFAULT");
+                writer._write(builder, e)?;
+            },
+            &MySQLColumnQualifier::Signed => builder.push_str(&" SIGNED"),
+            &MySQLColumnQualifier::Unsigned => builder.push_str(&" UNSIGNED"),
+            &MySQLColumnQualifier::Null => builder.push_str(&" NULL"),
+            &MySQLColumnQualifier::NotNull => builder.push_str(&" NOT NULL"),
+            &MySQLColumnQualifier::AutoIncrement => builder.push_str(&" AUTO_INCREMENT"),
+            &MySQLColumnQualifier::PrimaryKey => builder.push_str(&" PRIMARY KEY"),
+            &MySQLColumnQualifier::UniqueKey => builder.push_str(&" UNIQUE"),
+            &MySQLColumnQualifier::OnUpdate(box ref e) => {
+                builder.push_str(&" ON UPDATE");
+                writer._write(builder, e)?;
+            },
+            &MySQLColumnQualifier::Comment(box ref e) => {
+                builder.push_str(&" COMMENT");
+                writer._write(builder, e)?;
+            }
+        }
+
+		Ok(())
+    }
+
+    fn _write_optional_display(&self, builder: &mut String, display: &Option<u32>) {
+        match display {
+            &Some(ref d) => {write!(builder, "({})", d).unwrap();},
+            &None => {}
+        }
+    }
+
+    fn _write_optional_precision_and_scale(&self, builder: &mut String, precision: &Option<u32>, scale: &Option<u32>) {
+        match precision {
+            &Some(ref p) => {
+                write!(builder, "({}", p).unwrap();
+                if scale.is_some() {
+                    write!(builder, ",{}", scale.unwrap()).unwrap();
+                }
+                builder.push_str(")");
+            },
+            &None => {}
+        }
+        ()
+    }
 }

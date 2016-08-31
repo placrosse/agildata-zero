@@ -7,9 +7,10 @@ use super::super::UnionType::*;
 use super::super::MySQLKeyDef::*;
 use super::super::MySQLDataType::*;
 use super::super::MySQLColumnQualifier::*;
-use super::super::{Tokenizer, Parser, Dialect};
+use super::super::{Tokenizer, Parser, Dialect, SQLWriter, Writer};
 use super::super::dialects::ansisql::*;
 use super::super::dialects::mysqlsql::*;
+use super::test_helper::*;
 
 #[test]
 fn create_numeric() {
@@ -207,11 +208,13 @@ fn create_numeric() {
 
 	println!("{:#?}", parsed);
 
-	// let writer = SQLWriter::default();
-	// let rewritten = writer.write(&parsed).unwrap();
-	// assert_eq!(format_sql(&rewritten), format_sql(&sql));
-	//
-	// println!("Rewritten: {}", rewritten);
+	let ansi_writer = AnsiSQLWriter{};
+	let mysql_writer = MySQLWriter{};
+	let writer = SQLWriter::new(vec![&mysql_writer, &ansi_writer]);
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {:?}", rewritten);
 
 }
 
@@ -293,11 +296,13 @@ fn create_temporal() {
 
 	println!("{:#?}", parsed);
 
-	// let writer = SQLWriter::default();
-	// let rewritten = writer.write(&parsed).unwrap();
-	// assert_eq!(format_sql(&rewritten), format_sql(&sql));
-	//
-	// println!("Rewritten: {}", rewritten);
+	let ansi_writer = AnsiSQLWriter{};
+	let mysql_writer = MySQLWriter{};
+	let writer = SQLWriter::new(vec![&mysql_writer, &ansi_writer]);
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {:?}", rewritten);
 }
 
 #[test]
@@ -512,11 +517,13 @@ fn create_character() {
 
 	println!("{:#?}", parsed);
 
-	// let writer = SQLWriter::default();
-	// let rewritten = writer.write(&parsed).unwrap();
-	// assert_eq!(format_sql(&rewritten), format_sql(&sql));
-	//
-	// println!("Rewritten: {}", rewritten);
+	let ansi_writer = AnsiSQLWriter{};
+	let mysql_writer = MySQLWriter{};
+	let writer = SQLWriter::new(vec![&mysql_writer, &ansi_writer]);
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {:?}", rewritten);
 }
 
 #[test]
@@ -600,11 +607,13 @@ fn create_column_qualifiers() {
 
 	println!("{:#?}", parsed);
 
-	// let writer = SQLWriter::default();
-	// let rewritten = writer.write(&parsed).unwrap();
-	// assert_eq!(format_sql(&rewritten), format_sql(&sql));
-	//
-	// println!("Rewritten: {}", rewritten);
+	let ansi_writer = AnsiSQLWriter{};
+	let mysql_writer = MySQLWriter{};
+	let writer = SQLWriter::new(vec![&mysql_writer, &ansi_writer]);
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {:?}", rewritten);
 }
 
 #[test]
@@ -684,11 +693,13 @@ fn create_tail_keys() {
 
 	println!("{:#?}", parsed);
 
-	// let writer = SQLWriter::default();
-	// let rewritten = writer.write(&parsed).unwrap();
-	// assert_eq!(format_sql(&rewritten), format_sql(&sql));
-	//
-	// println!("Rewritten: {}", rewritten);
+	let ansi_writer = AnsiSQLWriter{};
+	let mysql_writer = MySQLWriter{};
+	let writer = SQLWriter::new(vec![&mysql_writer, &ansi_writer]);
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {:?}", rewritten);
 }
 
 #[test]
@@ -757,11 +768,13 @@ fn create_tail_constraints() {
 		parsed
 	);
 
-	// let writer = SQLWriter::default();
-	// let rewritten = writer.write(&parsed).unwrap();
-	// assert_eq!(format_sql(&rewritten), format_sql(&sql));
-	//
-	// println!("Rewritten: {}", rewritten);
+	let ansi_writer = AnsiSQLWriter{};
+	let mysql_writer = MySQLWriter{};
+	let writer = SQLWriter::new(vec![&mysql_writer, &ansi_writer]);
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {:?}", rewritten);
 }
 
 #[test]
@@ -806,9 +819,11 @@ fn create_table_options() {
 		parsed
 	);
 
-	// let writer = SQLWriter::default();
-	// let rewritten = writer.write(&parsed).unwrap();
-	// assert_eq!(format_sql(&rewritten), format_sql(&sql));
-	//
-	// println!("Rewritten: {}", rewritten);
+	let ansi_writer = AnsiSQLWriter{};
+	let mysql_writer = MySQLWriter{};
+	let writer = SQLWriter::new(vec![&mysql_writer, &ansi_writer]);
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {:?}", rewritten);
 }

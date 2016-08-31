@@ -344,3 +344,46 @@ pub trait Planner<D: Dialect> {
 pub enum RelNode {
 	Rel
 }
+
+
+// Writer apis
+pub trait Writer {
+    fn write(&self, node: &ASTNode) -> Result<String, String>;
+	fn _write(&self, builder: &mut String, node: &ASTNode) -> Result<(), String>;
+}
+
+// returning true/false denotes whether this variant wrote the expression
+pub trait ExprWriter {
+    fn write(&self, writer: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, String>;
+}
+
+pub struct SQLWriter<'a> {
+    variants: Vec<&'a ExprWriter>
+}
+
+impl<'a> Default for SQLWriter<'a> {
+	fn default() -> Self {SQLWriter::new(vec![])}
+}
+
+impl<'a> SQLWriter<'a> {
+	pub fn new(variants: Vec<&'a ExprWriter>) -> Self {
+		SQLWriter{variants: variants}
+	}
+}
+
+impl<'a> Writer for SQLWriter<'a> {
+    fn write(&self, node: &ASTNode) -> Result<String, String> {
+        let mut builder = String::new();
+        self._write(&mut builder, node)?;
+        Ok(builder)
+    }
+
+    fn _write(&self, builder: &mut String, node: &ASTNode) -> Result<(), String> {
+		for v in self.variants.iter() {
+			if v.write(self, builder, node)? {
+				return Ok(())
+			}
+		}
+		Err(String::from(format!("No provided ExprWriter writes expr {:?}", node)))
+    }
+}

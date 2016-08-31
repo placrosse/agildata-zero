@@ -3,8 +3,9 @@ use super::super::Operator::*;
 use super::super::LiteralExpr::*;
 use super::super::JoinType::*;
 use super::super::UnionType::*;
-use super::super::{Tokenizer, Parser};
+use super::super::{Tokenizer, Parser, SQLWriter, Writer};
 use super::super::dialects::ansisql::*;
+use super::test_helper::*;
 
 #[test]
 fn select_wildcard() {
@@ -25,11 +26,12 @@ fn select_wildcard() {
 
 	println!("{:#?}", parsed);
 
-	// let writer = SQLWriter::default();
-	// let rewritten = writer.write(&parsed).unwrap();
-	// assert_eq!(format_sql(&rewritten), format_sql(&sql));
-	//
-	// println!("Rewritten: {:?}", rewritten);
+	let ansi_writer = AnsiSQLWriter{};
+	let writer = SQLWriter::new(vec![&ansi_writer]);
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {:?}", rewritten);
 
 }
 
@@ -165,12 +167,12 @@ fn sqlparser() {
 	);
 
 	println!("{:#?}", parsed);
-	//
-	// let writer = SQLWriter::default();
-	// let rewritten = writer.write(&parsed).unwrap();
-	// assert_eq!(format_sql(&rewritten), format_sql(&sql));
-	//
-	// println!("Rewritten: {:?}", rewritten);
+	let ansi_writer = AnsiSQLWriter{};
+	let writer = SQLWriter::new(vec![&ansi_writer]);
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {:?}", rewritten);
 
 }
 
@@ -252,11 +254,12 @@ fn sql_join() {
 
 	println!("{:#?}", parsed);
 
-	// let writer = SQLWriter::default();
-	// let rewritten = writer.write(&parsed).unwrap();
-	// assert_eq!(format_sql(&rewritten), format_sql(&sql));
-	//
-	// println!("Rewritten: {:?}", rewritten);
+	let ansi_writer = AnsiSQLWriter{};
+	let writer = SQLWriter::new(vec![&ansi_writer]);
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {:?}", rewritten);
 }
 
 #[test]
@@ -342,11 +345,12 @@ fn nasty() {
 
 	println!("{:#?}", parsed);
 
-	// let writer = SQLWriter::default();
-	// let rewritten = writer.write(&parsed).unwrap();
-	// assert_eq!(format_sql(&rewritten), format_sql(&sql));
-	//
-	// println!("Rewritten: {:?}", rewritten);
+	let ansi_writer = AnsiSQLWriter{};
+	let writer = SQLWriter::new(vec![&ansi_writer]);
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {:?}", rewritten);
 }
 
 #[test]
@@ -380,12 +384,12 @@ fn insert() {
 
 	println!("{:#?}", parsed);
 
-	// let writer = SQLWriter::default();
-	// let rewritten = writer.write(&parsed).unwrap();
-	// assert_eq!(format_sql(&rewritten), format_sql(&sql));
-	//
-	// println!("Rewritten: {:?}", rewritten);
+	let ansi_writer = AnsiSQLWriter{};
+	let writer = SQLWriter::new(vec![&ansi_writer]);
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
+	println!("Rewritten: {:?}", rewritten);
 }
 
 #[test]
@@ -424,10 +428,11 @@ fn update() {
 
 	println!("{:#?}", parsed);
 
-	// let writer = SQLWriter::default();
-	// let rewritten = writer.write(&parsed).unwrap();
-	// assert_eq!(format_sql(&rewritten), format_sql(&sql));
-	//
-	// println!("Rewritten: {}", rewritten);
+	let ansi_writer = AnsiSQLWriter{};
+	let writer = SQLWriter::new(vec![&ansi_writer]);
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {:?}", rewritten);
 
 }
