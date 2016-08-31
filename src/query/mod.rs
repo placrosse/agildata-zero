@@ -2,6 +2,7 @@ use std::iter::Peekable;
 use std::str::Chars;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::ascii::AsciiExt;
 
 pub mod dialects;
 
@@ -86,6 +87,52 @@ impl<'a, D: 'a + Dialect> Tokens<'a, D> {
 			Some(&self.tokens[i as usize])
 		} else {
 			panic!("Index out of bounds")
+		}
+	}
+
+	fn consume_keyword(&self, text: &str) -> bool
+		 {
+
+		match self.peek() {
+			Some(&Token::Keyword(ref v)) | Some(&Token::Identifier(ref v)) => {
+				if text.eq_ignore_ascii_case(&v) {
+					self.next();
+					true
+				} else {
+					false
+				}
+			},
+			_ => false
+		}
+	}
+
+	fn consume_punctuator(&self, text: &str) -> bool {
+
+		match self.peek() {
+			Some(&Token::Punctuator(ref v)) => {
+				if text.eq_ignore_ascii_case(&v) {
+					self.next();
+					true
+				} else {
+					false
+				}
+			},
+			_ => false
+		}
+	}
+
+	fn consume_operator(&self, text: &str) -> bool {
+
+		match self.peek() {
+			Some(&Token::Operator(ref v)) => {
+				if text.eq_ignore_ascii_case(&v) {
+					self.next();
+					true
+				} else {
+					false
+				}
+			},
+			_ => false
 		}
 	}
 }

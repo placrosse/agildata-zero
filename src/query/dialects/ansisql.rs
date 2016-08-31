@@ -251,23 +251,23 @@ impl AnsiSQLDialect {
 		println!("parse_insert()");
 
 		// TODO validation
-		self.consume_keyword("INSERT", tokens);
-		self.consume_keyword("INTO", tokens);
+		tokens.consume_keyword("INSERT");
+		tokens.consume_keyword("INTO");
 
 		let table = try!(self.parse_identifier(tokens));
 
-		let columns = if self.consume_punctuator("(", tokens) {
+		let columns = if tokens.consume_punctuator("(") {
 			let ret = try!(self.parse_expr_list(tokens));
-			self.consume_punctuator(")", tokens);
+			tokens.consume_punctuator(")");
 			ret
 		} else {
 			return Err(format!("Expected column list paren, received {:?}", &tokens.peek()));
 		};
 
-		self.consume_keyword("VALUES", tokens);
-		self.consume_punctuator("(", tokens);
+		tokens.consume_keyword("VALUES");
+		tokens.consume_punctuator("(");
 		let values = try!(self.parse_expr_list(tokens));
-		self.consume_keyword(")", tokens);
+		tokens.consume_keyword(")");
 
 		Ok(ASTNode::SQLInsert {
 			table: Box::new(table),
@@ -307,8 +307,8 @@ impl AnsiSQLDialect {
 		};
 
 		let ob = {
-			if self.consume_keyword(&"ORDER", tokens) {
-				if self.consume_keyword(&"BY", tokens) {
+			if tokens.consume_keyword(&"ORDER") {
+				if tokens.consume_keyword(&"BY") {
 					Some(Box::new(try!(self.parse_order_by_list(tokens))))
 				} else {
 					return Err(format!("Expected ORDER BY, found ORDER {:?}", tokens.peek()));
@@ -324,15 +324,15 @@ impl AnsiSQLDialect {
 	fn parse_update<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode, String>
 		 {
 
-		self.consume_keyword("UPDATE", tokens);
+		tokens.consume_keyword("UPDATE");
 
 		let table = try!(self.parse_identifier(tokens));
 
-		self.consume_keyword("SET", tokens);
+		tokens.consume_keyword("SET");
 
 		let assignments = try!(self.parse_expr_list(tokens));
 
-		let selection = if self.consume_keyword("WHERE", tokens) {
+		let selection = if tokens.consume_keyword("WHERE") {
 			Some(Box::new(tokens.parse_expr(0)?))
 		} else {
 			None
@@ -350,7 +350,7 @@ impl AnsiSQLDialect {
         tokens.parse_expr(4)
 	}
 
-	fn parse_expr_list<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String>
+	pub fn parse_expr_list<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String>
 		 {
 
 		println!("parse_expr_list()");
@@ -395,10 +395,10 @@ impl AnsiSQLDialect {
 	fn is_asc<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> bool
 		 {
 
-		if self.consume_keyword(&"DESC", tokens) {
+		if tokens.consume_keyword(&"DESC") {
 			false
 		} else {
-			self.consume_keyword(&"ASC", tokens);
+			tokens.consume_keyword(&"ASC");
 			true
 		}
 	}
@@ -429,7 +429,7 @@ impl AnsiSQLDialect {
 		Ok(ASTNode::SQLBinary {left: Box::new(left), op: operator, right: Box::new(tokens.parse_expr(precedence)?)})
 	}
 
-	fn parse_identifier<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String>
+	pub fn parse_identifier<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String>
 		 {
 
 		println!("parse_identifier()");
@@ -507,23 +507,23 @@ impl AnsiSQLDialect {
 
 		// TODO better protection on expected keyword sequences
 		let join_type = {
-			if self.consume_keyword("JOIN", tokens) || self.consume_keyword("INNER", tokens) {
-				self.consume_keyword("JOIN", tokens);
+			if tokens.consume_keyword("JOIN") || tokens.consume_keyword("INNER") {
+				tokens.consume_keyword("JOIN");
 				JoinType::INNER
-			} else if self.consume_keyword("LEFT", tokens) {
-				self.consume_keyword("OUTER", tokens);
-				self.consume_keyword("JOIN", tokens);
+			} else if tokens.consume_keyword("LEFT") {
+				tokens.consume_keyword("OUTER");
+				tokens.consume_keyword("JOIN");
 				JoinType::LEFT
-			} else if self.consume_keyword("RIGHT", tokens) {
-				self.consume_keyword("OUTER", tokens);
-				self.consume_keyword("JOIN", tokens);
+			} else if tokens.consume_keyword("RIGHT") {
+				tokens.consume_keyword("OUTER");
+				tokens.consume_keyword("JOIN");
 				JoinType::RIGHT
-			} else if self.consume_keyword("FULL", tokens) {
-				self.consume_keyword("OUTER", tokens);
-				self.consume_keyword("JOIN", tokens);
+			} else if tokens.consume_keyword("FULL") {
+				tokens.consume_keyword("OUTER");
+				tokens.consume_keyword("JOIN");
 				JoinType::FULL
-			} else if self.consume_keyword("CROSS", tokens) {
-				self.consume_keyword("JOIN", tokens);
+			} else if tokens.consume_keyword("CROSS") {
+				tokens.consume_keyword("JOIN");
 				JoinType::LEFT
 			} else {
 				return Err(format!("Unsupported join keyword {:?}", tokens.peek()))
@@ -533,7 +533,7 @@ impl AnsiSQLDialect {
 		let right = Box::new(tokens.parse_expr(0)?);
 
 		let on = {
-			if self.consume_keyword("ON", tokens) {
+			if tokens.consume_keyword("ON") {
 				Some(Box::new(tokens.parse_expr(0)?))
 			} else if join_type != JoinType::CROSS {
 				return Err(format!("Expected ON, received token {:?}", tokens.peek()))
@@ -548,7 +548,7 @@ impl AnsiSQLDialect {
 	fn parse_alias<'a, D: Dialect>(&self, left: ASTNode, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String>
 		 {
 
-		if self.consume_keyword(&"AS", tokens) {
+		if tokens.consume_keyword(&"AS") {
 			Ok(ASTNode::SQLAlias{expr: Box::new(left), alias: Box::new(try!(self.parse_identifier(tokens)))})
 		} else {
 			Err(format!("Illegal state, expected AS, received token {:?}", tokens.peek()))
@@ -556,51 +556,5 @@ impl AnsiSQLDialect {
 	}
 
 	// TODO more helper methods like consume_keyword_sequence, required_keyword_sequence, etc
-	fn consume_keyword<'a, D: Dialect>(&self, text: &str, tokens: &Tokens<'a, D>) -> bool
-		 {
 
-		match tokens.peek() {
-			Some(&Token::Keyword(ref v)) | Some(&Token::Identifier(ref v)) => {
-				if text.eq_ignore_ascii_case(&v) {
-					tokens.next();
-					true
-				} else {
-					false
-				}
-			},
-			_ => false
-		}
-	}
-
-	fn consume_punctuator<'a, D: Dialect>(&self, text: &str, tokens: &Tokens<'a, D>) -> bool
-		 {
-
-		match tokens.peek() {
-			Some(&Token::Punctuator(ref v)) => {
-				if text.eq_ignore_ascii_case(&v) {
-					tokens.next();
-					true
-				} else {
-					false
-				}
-			},
-			_ => false
-		}
-	}
-
-	fn consume_operator<'a, D: Dialect>(&self, text: &str, tokens: &Tokens<'a, D>) -> bool
-		 {
-
-		match tokens.peek() {
-			Some(&Token::Operator(ref v)) => {
-				if text.eq_ignore_ascii_case(&v) {
-					tokens.next();
-					true
-				} else {
-					false
-				}
-			},
-			_ => false
-		}
-	}
 }
