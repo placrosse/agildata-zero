@@ -203,12 +203,15 @@ impl<'a> MySQLConnectionHandler <'a> {
         // let saddr = std::net::SocketAddr::new(std::net::IpAddr::V4(ip), 3306);
         // let mut tcps = TcpStream::connect(&saddr).unwrap();
 
-        let client_props = config.get_client_config().props;
-        let client_host = client_props.get("host");
-        let client_port = client_props.get("port");
+        let conn = config.get_connection_config();
+        let conn_host = conn.props.get("host").unwrap();
+        let default_port = &String::from("3306");
+        let conn_port = conn.props.get("port").unwrap_or(default_port);
+
+        let conn_addr = format!("{}:{}",conn_host,conn_port);
 
         // connect to real MySQL
-        let mut mysql = net::TcpStream::connect("127.0.0.1:3306").unwrap();
+        let mut mysql = net::TcpStream::connect(conn_addr.as_str()).unwrap();
 
         // read header
         let auth_packet = mysql.read_packet().unwrap();
