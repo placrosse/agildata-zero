@@ -24,8 +24,10 @@ impl AnsiSQLDialect {
 
 impl Dialect for AnsiSQLDialect {
 
-    fn get_keywords(&self) -> &'static [&'static str] {
-        KEYWORDS
+    fn get_keywords(&self) -> Vec<&'static str> {
+        let mut k = Vec::new();
+        k.extend_from_slice(KEYWORDS);
+        k
     }
 
 	fn get_token(&self, chars: &mut Peekable<Chars>, keywords: &Vec<&'static str>) -> Result<Option<Token>, String> {

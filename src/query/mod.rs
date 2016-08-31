@@ -1,6 +1,5 @@
 use std::iter::Peekable;
 use std::str::Chars;
-use std::marker::PhantomData;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::ascii::AsciiExt;
 
@@ -12,7 +11,7 @@ mod tests;
 // Dialect api
 pub trait Dialect {
 
-	fn get_keywords(&self) -> &'static [&'static str];
+	fn get_keywords(&self) -> Vec<&'static str>;
 
 	fn get_token(&self, chars: &mut Peekable<Chars>, keywords: &Vec<&'static str>) -> Result<Option<Token>, String>;
 
@@ -33,9 +32,7 @@ pub trait Tokenizer<D: Dialect> {
 impl<D: Dialect> Tokenizer<D> for String {
 	fn tokenize<'a>(&self, dialect: &'a D) -> Result<Tokens<'a, D>, String> {
 
-		let mut keywords: Vec<&'static str> = Vec::new();
-		// TODO
-		keywords.extend_from_slice(dialect.get_keywords());
+		let keywords = dialect.get_keywords();
 
 		let mut chars = self.chars().peekable();
 		let mut tokens: Vec<Token> = Vec::new();
@@ -73,7 +70,7 @@ impl<'a, D: 'a + Dialect> Tokens<'a, D> {
 
 	pub fn peek(&self) -> Option<&Token> {
 		let i = self.index.load(Ordering::SeqCst) as usize;
-		if (i < (self.tokens.len())) {
+		if i < self.tokens.len() {
 			Some(&self.tokens[i as usize])
 		} else {
 			None
@@ -82,7 +79,7 @@ impl<'a, D: 'a + Dialect> Tokens<'a, D> {
 
 	pub fn next(&self) -> Option<&Token> {
 		let i = self.index.load(Ordering::SeqCst) as usize;
-		if (i < (self.tokens.len())) {
+		if i < self.tokens.len() {
 			self.index.fetch_add(1, Ordering::SeqCst);
 			Some(&self.tokens[i as usize])
 		} else {
