@@ -465,38 +465,7 @@ impl<'a> MySQLConnectionHandler <'a> {
 
                 println!("Result set has {} columns", field_count);
 
-                let mut column_meta: Vec<ColumnMetaData> = vec![];
-
-                for i in 0 .. field_count {
-
-                    let field_packet = self.remote.read_packet().unwrap();
-                    write_buf.extend_from_slice(&field_packet.bytes);
-
-                    let mut r = MySQLPacketParser::new(&field_packet);
-
-                    //TODO: assumes these values can never be NULL
-                    let catalog = r.read_lenenc_string().unwrap();
-                    let schema = r.read_lenenc_string().unwrap();
-                    let table = r.read_lenenc_string().unwrap();
-                    let org_table = r.read_lenenc_string().unwrap();
-                    let name = r.read_lenenc_string().unwrap();
-                    let org_name = r.read_lenenc_string().unwrap();
-
-                    println!("ALL catalog {}, schema {}, table {}, org_table {}, name {}, org_name {}",
-                             catalog, schema, table, org_table, name, org_name);
-
-                    let md = ColumnMetaData {
-                        schema: schema,
-                        table_name: table,
-                        column_name: name
-                    };
-
-                    println!("column {} = {:?}", i, md);
-
-
-                    column_meta.push(md);
-
-                }
+                let column_meta = self.read_result_set_meta(field_count, &mut write_buf).unwrap();
 
                 //TODO: expect EOF packet in some versions of MySQL
                 // let eof_packet = self.remote.read_packet().unwrap();
@@ -619,6 +588,42 @@ impl<'a> MySQLConnectionHandler <'a> {
 
         // state is transitioned from `Reading` to `Writing`.
         //self.state.try_transition_to_writing();
+    }
+
+    fn read_result_set_meta(&mut self, field_count: u32, write_buf: &mut Vec<u8>) -> Result<Vec<ColumnMetaData>, String> {
+
+        let mut column_meta: Vec<ColumnMetaData> = vec![];
+
+        for i in 0 .. field_count {
+
+            let field_packet = self.remote.read_packet().unwrap();
+            write_buf.extend_from_slice(&field_packet.bytes);
+
+            let mut r = MySQLPacketParser::new(&field_packet);
+
+            //TODO: assumes these values can never be NULL
+            let catalog = r.read_lenenc_string().unwrap();
+            let schema = r.read_lenenc_string().unwrap();
+            let table = r.read_lenenc_string().unwrap();
+            let org_table = r.read_lenenc_string().unwrap();
+            let name = r.read_lenenc_string().unwrap();
+            let org_name = r.read_lenenc_string().unwrap();
+
+            println!("ALL catalog {}, schema {}, table {}, org_table {}, name {}, org_name {}",
+             catalog, schema, table, org_table, name, org_name);
+
+            let md = ColumnMetaData {
+                schema: schema,
+                table_name: table,
+                column_name: name
+            };
+
+            println!("column {} = {:?}", i, md);
+
+            column_meta.push(md);
+        }
+
+        Ok(column_meta)
     }
 
     pub fn write(&mut self, event_loop: &mut mio::EventLoop<Proxy>) {
