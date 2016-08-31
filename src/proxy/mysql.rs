@@ -335,9 +335,9 @@ impl<'a> MySQLConnectionHandler <'a> {
         // parse query
         let ansi = AnsiSQLDialect::new();
         let dialect = MySQLDialect::new(&ansi);
+
         // TODO error handling
         let result = query.tokenize(&dialect).unwrap().parse();
-        // let result = parser.parse(&query);
 
         let parsed: Option<ASTNode> = match result {
             Ok(p) => {
