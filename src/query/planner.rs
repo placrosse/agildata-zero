@@ -4,14 +4,30 @@ enum Rex {
     Identifier,
     Literal,
     BinaryExpr,
-    RelationalExpr(Rel)
+    RelationalExpr(Rel),
+    RexExprList(Vec<Rex>)
 }
 
 enum Rel {
-    Projection { input: Box<Rel> },
+    Projection { project: Box<Rex>, input: Box<Rel> },
     Selection,
     TableScan,
     Dual
+}
+
+fn sql_to_rex(sql: &ASTNode) -> Result<Rex, String> {
+    match sql {
+        &ASTNode::SQLExprList(ref v) => {
+
+            let a = v.iter()
+                .map(|x| sql_to_rex(&x).unwrap() );
+
+            let b = a.collect();
+
+            Ok(Rex::RexExprList(b))
+        },
+        _ => Err(String::from("oops"))
+    }
 }
 
 fn sql_to_rel(sql: &ASTNode) -> Result<Rel, String> {
@@ -33,8 +49,13 @@ fn sql_to_rel(sql: &ASTNode) -> Result<Rel, String> {
                 &None => Rel::Dual
             };
 
-            Ok(Rel::Projection { input: Box::new(input) })
+            Ok(Rel::Projection {
+                project: Box::new(sql_to_rex(expr_list)?),
+                input: Box::new(input) })
         },
+//        &ASTNode::SQLIdentifier { ref id, ref parts } => {
+//
+//        }
         //ASTNode::SQLInsert => {},
         _ => Err(String::from("oops)"))
     }
