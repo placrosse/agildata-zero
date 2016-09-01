@@ -163,18 +163,17 @@ impl<'a> CreateTranslatingWriter<'a> {
 mod tests {
 
 	use super::{CreateTranslatingWriter};
-	use query::{Writer, ExprWriter, ASTNode, LiteralExpr, MySQLDataType, SQLWriter, Tokenizer, Parser};
+	use query::{Writer, SQLWriter, Tokenizer, Parser};
     use query::dialects::mysqlsql::*;
     use query::dialects::ansisql::*;
     use config;
-	use byteorder::{WriteBytesExt,ReadBytesExt,BigEndian};
 
 	#[test]
 	fn simple_users() {
         let ansi = AnsiSQLDialect::new();
         let dialect = MySQLDialect::new(&ansi);
 
-		let config = config::parse_config("example-zero-config.xml");
+		let config = config::parse_config("zero-config.xml");
 		let schema = String::from("zero");
 
 		let sql = String::from("CREATE TABLE users (

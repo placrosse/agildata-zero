@@ -1,13 +1,10 @@
 use super::super::ASTNode;
 use super::super::ASTNode::*;
-use super::super::Operator::*;
 use super::super::LiteralExpr::*;
-use super::super::JoinType::*;
-use super::super::UnionType::*;
 use super::super::MySQLKeyDef::*;
 use super::super::MySQLDataType::*;
 use super::super::MySQLColumnQualifier::*;
-use super::super::{Tokenizer, Parser, Dialect, SQLWriter, Writer};
+use super::super::{Tokenizer, Parser, SQLWriter, Writer};
 use super::super::dialects::ansisql::*;
 use super::super::dialects::mysqlsql::*;
 use super::test_helper::*;

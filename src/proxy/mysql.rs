@@ -6,7 +6,7 @@ use byteorder::*;
 
 // use parser::sql_parser::{AnsiSQLParser, SQLExpr};
 // use parser::sql_writer::*;
-use query::{Dialect, Tokenizer, Parser, Writer, SQLWriter, ASTNode};
+use query::{Tokenizer, Parser, Writer, SQLWriter, ASTNode};
 use query::dialects::mysqlsql::*;
 use query::dialects::ansisql::*;
 use super::writers::*;
@@ -14,7 +14,7 @@ use super::writers::*;
 use mio::{self, TryRead, TryWrite};
 use mio::tcp::*;
 
-use bytes::{Take};
+use bytes::Take;
 
 use config::{Config, TConfig, ColumnConfig};
 
@@ -122,6 +122,7 @@ impl<'a> MySQLPacketParser<'a> {
 
 }
 
+#[allow(dead_code)]
 fn print_packet_chars(buf: &[u8]) {
     print!("[");
     for i in 0..buf.len() {
@@ -130,6 +131,7 @@ fn print_packet_chars(buf: &[u8]) {
     println!("]");
 }
 
+#[allow(dead_code)]
 fn print_packet_bytes(buf: &[u8]) {
     print!("[");
     for i in 0..buf.len() {
@@ -246,16 +248,14 @@ impl<'a> MySQLConnectionHandler <'a> {
 
     /// process a single mysql packet from the client
     pub fn read(&mut self, event_loop: &mut mio::EventLoop<Proxy>) {
-
         println!("Reading from client");
 
         let mut buf = Vec::with_capacity(1024);
         match self.socket.try_read_buf(&mut buf) {
             Ok(Some(0)) => {
                 self.state = State::Closed;
-            }
+            },
             Ok(Some(_)) => {
-
                 // do we have enough bytes to read the packet len?
                 if buf.len() > 3 {
                     // do we have the full packet?
@@ -271,9 +271,9 @@ impl<'a> MySQLConnectionHandler <'a> {
                                 match packet_type {
                                     0x02 => self.process_init_db(&buf, packet_len),
                                     0x03 => self.process_query(&buf, packet_len),
-                                    _ => self.mysql_send(&buf[0..packet_len + 4])
+                                    _ => self.mysql_send(&buf[0..packet_len + 4]),
                                 }
-                            }
+                            },
                         }
                     } else {
                         println!("do not have full packet!");
@@ -287,13 +287,13 @@ impl<'a> MySQLConnectionHandler <'a> {
                 // state is used to determine whether we are currently reading
                 // or writing.
                 self.reregister(event_loop);
-            }
+            },
             Ok(None) => {
                 self.reregister(event_loop);
-            }
+            },
             Err(e) => {
                 panic!("got an error trying to read; err={:?}", e);
-            }
+            },
         }
     }
 
@@ -367,7 +367,6 @@ impl<'a> MySQLConnectionHandler <'a> {
 
         // visit and conditionally encrypt query
 
-
         // reqwrite query
         if parsed.is_some() {
 
@@ -416,7 +415,7 @@ impl<'a> MySQLConnectionHandler <'a> {
         }
     }
 
-    fn mysql_send(&mut self, request: &[u8]) {
+    fn mysql_send<'b>(&'b mut self, request: &'b [u8]) {
         println!("Sending packet to mysql");
         self.remote.write(request).unwrap();
         self.remote.flush().unwrap();
