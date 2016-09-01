@@ -13,6 +13,8 @@ If you're in the _financial_, _insurance_, _health care_, _online retail_, or an
 ## How do I use AgilData Zero?
 
 ### How to launch?
+*NOTE*:  This distribution is only meant for running under Linux XYZ
+
 * extract the distribution tar file
 
     ` tar -xvf agildata-zero.tar.gz`
