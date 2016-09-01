@@ -2,14 +2,14 @@
 export app=agildata-zero
 export exe=target/release/$app
 
-cargo test
+cargo test --color always
 rc=$?; if [[ $rc != 0 ]]; then
     exit
 fi
 echo $app tests completed
 cargo clean
 echo $app clean build starting
-cargo build --release
+cargo build --release --color always
 rc=$?; if [[ $rc != 0 ]]; then
     exit
 fi
