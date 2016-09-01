@@ -8,7 +8,7 @@ use std::iter::repeat;
 use byteorder::{WriteBytesExt,ReadBytesExt,BigEndian};
 use std::io::Cursor;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum EncryptionType {
 	AES,
 	OPE,
