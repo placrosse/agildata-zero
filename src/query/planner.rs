@@ -17,15 +17,9 @@ enum Rel {
 
 fn sql_to_rex(sql: &ASTNode) -> Result<Rex, String> {
     match sql {
-        &ASTNode::SQLExprList(ref v) => {
-
-            let a = v.iter()
-                .map(|x| sql_to_rex(&x).unwrap() );
-
-            let b = a.collect();
-
-            Ok(Rex::RexExprList(b))
-        },
+        &ASTNode::SQLExprList(ref v) => Ok(Rex::RexExprList(v.iter()
+            .map(|x| sql_to_rex(&x) )
+            .collect::<Result<Vec<Rex>, String>>()?)),
         _ => Err(String::from("oops"))
     }
 }
