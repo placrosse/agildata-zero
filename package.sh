@@ -2,6 +2,7 @@
 export app=agildata-zero
 export exe=target/release/$app
 
+cargo test
 cargo clean
 cargo build --release
 rc=$?; if [[ $rc == 0 ]]; then
