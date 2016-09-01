@@ -4,14 +4,14 @@ export exe=target/release/$app
 
 cargo test --color always
 rc=$?; if [[ $rc != 0 ]]; then
-    exit -1
+    exit 1
 fi
 echo $app tests completed
 cargo clean
 echo $app clean build starting
 cargo build --release --color always
 rc=$?; if [[ $rc != 0 ]]; then
-    exit -2
+    exit 1
 fi
 echo $app release build completed
 rm -Rf dist
