@@ -198,7 +198,7 @@ pub fn walk(visitor: &mut ASTVisitor, e: &ASTNode) {
 mod tests {
     use super::*;
     use std::collections::HashMap;
-	use query::{ASTVisitor, ASTNode, LiteralExpr, Operator, SQLWriter, Tokenizer, Parser, Writer};
+	use query::{SQLWriter, Tokenizer, Parser, Writer};
 	use query::dialects::mysqlsql::*;
 	use query::dialects::ansisql::*;
 	use super::super::writers::*;

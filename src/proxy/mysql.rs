@@ -6,7 +6,7 @@ use byteorder::*;
 
 // use parser::sql_parser::{AnsiSQLParser, SQLExpr};
 // use parser::sql_writer::*;
-use query::{Dialect, Tokenizer, Parser, Writer, SQLWriter, ASTNode};
+use query::{Tokenizer, Parser, Writer, SQLWriter, ASTNode};
 use query::dialects::mysqlsql::*;
 use query::dialects::ansisql::*;
 use super::writers::*;
@@ -14,7 +14,7 @@ use super::writers::*;
 use mio::{self, TryRead, TryWrite};
 use mio::tcp::*;
 
-use bytes::{Take};
+use bytes::Take;
 
 use config::{Config, TConfig, ColumnConfig};
 
@@ -122,6 +122,7 @@ impl<'a> MySQLPacketParser<'a> {
 
 }
 
+#[allow(dead_code)]
 fn print_packet_chars(buf: &[u8]) {
     print!("[");
     for i in 0..buf.len() {
@@ -130,6 +131,7 @@ fn print_packet_chars(buf: &[u8]) {
     println!("]");
 }
 
+#[allow(dead_code)]
 fn print_packet_bytes(buf: &[u8]) {
     print!("[");
     for i in 0..buf.len() {
@@ -199,12 +201,16 @@ impl<'a> MySQLConnectionHandler <'a> {
 
     pub fn new(socket: TcpStream, token: mio::Token, config: &Config) -> MySQLConnectionHandler {
         println!("Creating remote connection...");
-        // let ip  = std::net::Ipv4Addr::new(127,0,0,1);
-        // let saddr = std::net::SocketAddr::new(std::net::IpAddr::V4(ip), 3306);
-        // let mut tcps = TcpStream::connect(&saddr).unwrap();
+
+        let conn = config.get_connection_config();
+        let conn_host = conn.props.get("host").unwrap();
+        let default_port = &String::from("3306");
+        let conn_port = conn.props.get("port").unwrap_or(default_port);
+
+        let conn_addr = format!("{}:{}",conn_host,conn_port);
 
         // connect to real MySQL
-        let mut mysql = net::TcpStream::connect("127.0.0.1:3306").unwrap();
+        let mut mysql = net::TcpStream::connect(conn_addr.as_str()).unwrap();
 
         // read header
         let auth_packet = mysql.read_packet().unwrap();
@@ -242,16 +248,14 @@ impl<'a> MySQLConnectionHandler <'a> {
 
     /// process a single mysql packet from the client
     pub fn read(&mut self, event_loop: &mut mio::EventLoop<Proxy>) {
-
         println!("Reading from client");
 
         let mut buf = Vec::with_capacity(1024);
         match self.socket.try_read_buf(&mut buf) {
             Ok(Some(0)) => {
                 self.state = State::Closed;
-            }
+            },
             Ok(Some(_)) => {
-
                 // do we have enough bytes to read the packet len?
                 if buf.len() > 3 {
                     // do we have the full packet?
@@ -267,9 +271,9 @@ impl<'a> MySQLConnectionHandler <'a> {
                                 match packet_type {
                                     0x02 => self.process_init_db(&buf, packet_len),
                                     0x03 => self.process_query(&buf, packet_len),
-                                    _ => self.mysql_send(&buf[0..packet_len + 4])
+                                    _ => self.mysql_send(&buf[0..packet_len + 4]),
                                 }
-                            }
+                            },
                         }
                     } else {
                         println!("do not have full packet!");
@@ -283,13 +287,13 @@ impl<'a> MySQLConnectionHandler <'a> {
                 // state is used to determine whether we are currently reading
                 // or writing.
                 self.reregister(event_loop);
-            }
+            },
             Ok(None) => {
                 self.reregister(event_loop);
-            }
+            },
             Err(e) => {
                 panic!("got an error trying to read; err={:?}", e);
-            }
+            },
         }
     }
 
@@ -363,7 +367,6 @@ impl<'a> MySQLConnectionHandler <'a> {
 
         // visit and conditionally encrypt query
 
-
         // reqwrite query
         if parsed.is_some() {
 
@@ -384,10 +387,14 @@ impl<'a> MySQLConnectionHandler <'a> {
                 config: &self.config,
                 schema: &String::from("zero") // TODO proxy should know its connection schema...
             };
+            let mysql_writer = MySQLWriter{};
+            let ansi_writer = AnsiSQLWriter{};
 
             let writer = SQLWriter::new(vec![
                                         &lit_writer,
-                                        &translator
+                                        &translator,
+                                        &mysql_writer,
+                                        &ansi_writer
                                     ]);
 
             let rewritten = writer.write(&parsed.unwrap()).unwrap();
@@ -395,31 +402,20 @@ impl<'a> MySQLConnectionHandler <'a> {
             println!("REWRITTEN {}", rewritten);
 
             // write packed with new query
-            //let n_buf: Vec<u8> = Vec::new();
             let slice: &[u8] = rewritten.as_bytes();
-
             let mut wtr: Vec<u8> = vec![];
             wtr.write_u32::<LittleEndian>((slice.len() + 1) as u32).unwrap();
             assert!(0x00 == wtr[3]);
             wtr.push(0x03); // packet type for COM_Query
             wtr.extend_from_slice(slice);
-
-            println!("SENDING {:?}", wtr);
             self.mysql_send(&wtr);
 
         } else {
-            let send = &buf[0 .. packet_len+4];
-            println!("SENDING:");
-            for i in 0..send.len() {
-                if i%8==0 { println!(""); }
-                print!("{:#04x} ",send[i]);
-            }
-            //println!("SENDING {:?}", send);
             self.mysql_send(&buf[0 .. packet_len+4]);
         }
     }
 
-    fn mysql_send(&mut self, request: &[u8]) {
+    fn mysql_send<'b>(&'b mut self, request: &'b [u8]) {
         println!("Sending packet to mysql");
         self.remote.write(request).unwrap();
         self.remote.flush().unwrap();
@@ -442,20 +438,13 @@ impl<'a> MySQLConnectionHandler <'a> {
             0x03 => {
                 println!("Got COM_QUERY packet");
                 write_buf.extend_from_slice(&packet.bytes);
-
                 loop {
                     let row_packet = self.remote.read_packet().unwrap();
+                    write_buf.extend_from_slice(&row_packet.bytes);
+                    // break on receiving Err_Packet, or EOF_Packet
                     match row_packet.packet_type() {
-                        // break on receiving Err_Packet, or EOF_Packet
-                        0xfe | 0xff => {
-
-                            println!("End of result rows");
-                            write_buf.extend_from_slice(&row_packet.bytes);
-                            break
-                        },
-                        _ => {
-                            write_buf.extend_from_slice(&row_packet.bytes);
-                        }
+                        0xfe | 0xff => break,
+                        _ => {}
                     }
                 }
             },
@@ -473,15 +462,6 @@ impl<'a> MySQLConnectionHandler <'a> {
 
                 let column_meta = self.read_result_set_meta(field_count, &mut write_buf).unwrap();
 
-                //TODO: expect EOF packet in some versions of MySQL
-                // let eof_packet = self.remote.read_packet().unwrap();
-                // println!("eof_packet type = {}", eof_packet.packet_type());
-                //
-                // //assert!(0xfe == eof_packet.packet_type());
-                //
-                // write_buf.extend_from_slice(&eof_packet.header);
-                // write_buf.extend_from_slice(&eof_packet.payload);
-
                 // process row packets until ERR or EOF
                 loop {
                     let row_packet = self.remote.read_packet().unwrap();
@@ -493,7 +473,7 @@ impl<'a> MySQLConnectionHandler <'a> {
                             break
                         },
                         _ => {
-                            self.process_result_row(&row_packet, &column_meta, &mut write_buf);
+                            self.process_result_row(&row_packet, &column_meta, &mut write_buf).unwrap();
                         }
                     }
                 }
@@ -501,21 +481,9 @@ impl<'a> MySQLConnectionHandler <'a> {
         }
 
         println!("Setting state to writing..");
-        // let s = self.remote.read_to_end(&mut rBuf).unwrap();
-
         let buf_len = write_buf.len();
         let curs = Cursor::new(write_buf);
-
-        // Transition the state to `Writing`, limiting the buffer to the
-        // new line (inclusive).
         self.state = State::Writing(Take::new(curs, buf_len));
-
-        println!("Set state to Writing");
-        //TODO: remove bytes from buffer
-        //TODO: do blocking read of mysql response packets
-
-        // state is transitioned from `Reading` to `Writing`.
-        //self.state.try_transition_to_writing();
     }
 
     fn read_result_set_meta(&mut self, field_count: u32, write_buf: &mut Vec<u8>) -> Result<Vec<ColumnMetaData>, String> {
@@ -628,15 +596,10 @@ impl<'a> MySQLConnectionHandler <'a> {
         new_header.write_u32::<LittleEndian>(wtr.len() as u32).unwrap();
         new_header.pop();
         new_header.push(sequence_id);
-
-        //                            println!("Modified Header: {:?}", &new_header);
-        //                            println!("Modified Payload: {:?}", &wtr);
-
         write_buf.extend_from_slice(&new_header);
         write_buf.extend_from_slice(&wtr);
 
         Ok(())
-
     }
 
     pub fn write(&mut self, event_loop: &mut mio::EventLoop<Proxy>) {

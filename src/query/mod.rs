@@ -340,6 +340,7 @@ pub trait Planner<D: Dialect> {
 	fn plan(&self, dialects: D, ast: ASTNode) -> Result<Option<RelNode>, String>;
 }
 
+#[allow(dead_code)]
 pub enum RelNode {
 	Rel
 }

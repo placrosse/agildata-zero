@@ -1,5 +1,4 @@
 [package]
-authors = ["Paul LaCrosse <paul.lacrosse@gmail.com>"]
 publish = false
 name = "agildata-zero"
 version = "0.0.5"
@@ -11,6 +10,4 @@ RustyXML = "0.1.1"
 bytes = "0.2.10"
 mio = "0.4.4"
 log = "0.3"
-futures = { git = "https://github.com/alexcrichton/futures-rs" }
-futures-cpupool = { git = "https://github.com/alexcrichton/futures-rs" }
 env_logger = "0.3"
