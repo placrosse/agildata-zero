@@ -1,5 +1,8 @@
 *~
 *.swp
 target
+dist
+*.tar
+*.tar.gz
 .idea
 *.iml
