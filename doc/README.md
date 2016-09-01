@@ -13,7 +13,7 @@ If you're in the _financial_, _insurance_, _health care_, _online retail_, or an
 ## How do I use AgilData Zero?
 
 ### How to launch?
-*NOTE*:  This distribution is only meant for running under Linux XYZ
+*NOTE*:  This distribution is only meant for running under Linux Ubuntu 16.04.1 LTS
 
 * extract the distribution tar file
 
