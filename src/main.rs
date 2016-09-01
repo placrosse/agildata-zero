@@ -1,4 +1,5 @@
-#![deny(warnings)]#![feature(inclusive_range_syntax, question_mark, box_syntax, box_patterns, integer_atomics)]
+#![deny(warnings)]
+#![feature(inclusive_range_syntax, question_mark, box_syntax, box_patterns, integer_atomics)]
 
 pub const APP_NAME: &'static str = "AgilData Zero Gateway";
 pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");

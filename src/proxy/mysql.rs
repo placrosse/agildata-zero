@@ -122,7 +122,7 @@ impl<'a> MySQLPacketParser<'a> {
 
 }
 
-// #[allow(dead_code)]
+#[allow(dead_code)]
 fn print_packet_chars(buf: &[u8]) {
     print!("[");
     for i in 0..buf.len() {
