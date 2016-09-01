@@ -1,7 +1,7 @@
 use std::net;
 use std::io::{Read, Write, Cursor};
 use std::collections::HashMap;
-
+use std::error::Error;
 use byteorder::*;
 
 // use parser::sql_parser::{AnsiSQLParser, SQLExpr};
@@ -371,7 +371,7 @@ impl<'a> MySQLConnectionHandler <'a> {
         // reqwrite query
         if parsed.is_some() {
 
-            let value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
+            let value_map: HashMap<u32, Result<Vec<u8>, Box<Error>>> = HashMap::new();
             let mut encrypt_vis = EncryptionVisitor {
                 config: self.config,
                 valuemap: value_map
@@ -626,6 +626,26 @@ impl<'a> MySQLConnectionHandler <'a> {
                 panic!("got an error trying to write; err={:?}", e);
             }
         }
+    }
+    pub fn send_error(&mut self) -> Vec<u8>{
+        let mut err_header: Vec<u8> = vec![];
+        let mut err_wtr: Vec<u8> = vec![];
+
+        err_wtr.push(0xff);  //Header, shows its an error
+        err_wtr.write_u16::<LittleEndian>(1064 as u16).unwrap(); //ERROR CODE
+
+        err_wtr.extend_from_slice("#".as_bytes()); //sql_state_marker
+        err_wtr.extend_from_slice("42000".as_bytes()); //SQL STATE
+        err_wtr.extend_from_slice("You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'asdf' at line 1".as_bytes());
+
+        err_header.write_u32::<LittleEndian>(err_wtr.len() as u32).unwrap();
+        err_header.pop();
+        err_header.push(1);
+
+        let mut write_buf: Vec<u8> = Vec::new();
+        write_buf.extend_from_slice(&err_header);
+        write_buf.extend_from_slice(&err_wtr);
+        write_buf
     }
 
     pub fn reregister(&self, event_loop: &mut mio::EventLoop<Proxy>) {
