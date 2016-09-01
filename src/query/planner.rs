@@ -19,7 +19,7 @@ impl TupleType {
 #[derive(Debug)]
 pub struct Element {
     name: String,
-    encryption: Option<EncryptionType>,
+    encryption: EncryptionType,
 //    relation: String,
 //    data_type: RelType,
 //    p_name: Option<String>,
@@ -84,16 +84,17 @@ impl Planner {
             &ASTNode::SQLIdentifier { id: ref table_name, parts: ref table_name_parts } => {
 
                 if let Some(table_config) = self.config.get_table_config(&self.schema, table_name) {
-                    let foo : Vec<(String, EncryptionType)> = table_config.column_map
+                    let tt = TupleType::new(table_config.column_map
                         .iter()
-                        .map(|(k,v)| (v.name.clone(), v.encryption.clone()))
-                        .collect();
+                        .map(|(k,v)| Element {
+                            name: v.name.clone(), encryption: v.encryption.clone()
+                        })
+                        .collect());
+                    Ok(Rel::TableScan { table: table_name.clone(), tt: tt })
+                } else {
+                    Err(format!("No agildata-zero config found for table {}", table_name ))
                 }
 
-
-
-                Err(String::from("temp"))
-                //Ok(Rel::TableScan { table: table_name, tt: })
             }
             //ASTNode::SQLInsert => {},
             _ => Err(String::from("oops)"))
