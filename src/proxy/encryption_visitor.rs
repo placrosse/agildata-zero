@@ -215,7 +215,6 @@ mod tests {
 
         let config = config::parse_config("zero-config.xml");
 		let value_map: HashMap<u32, Result<Vec<u8>, Box<Error>>> = HashMap::new();
-		let value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
 		let mut encrypt_vis = EncryptionVisitor {
 			config: &config,
 			valuemap: value_map

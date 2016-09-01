@@ -626,6 +626,8 @@ impl<'a> MySQLConnectionHandler <'a> {
             }
         }
     }
+
+    #[allow(dead_code)]
     pub fn send_error(&mut self) -> Vec<u8>{
         let mut err_header: Vec<u8> = vec![];
         let mut err_wtr: Vec<u8> = vec![];
