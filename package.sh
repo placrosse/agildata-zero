@@ -17,7 +17,7 @@ echo $app release build completed
 rm -Rf dist
 mkdir dist
 cp ./doc/README.md dist/
-cp example-zero-config.xml dist/
+cp zero-config.xml dist/
 cp $exe dist/
 tar -vczf $app.tar.gz -C dist .
 echo $app.tar.gz packaging completed

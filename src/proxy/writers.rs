@@ -172,7 +172,7 @@ mod tests {
         let ansi = AnsiSQLDialect::new();
         let dialect = MySQLDialect::new(&ansi);
 
-		let config = config::parse_config("example-zero-config.xml");
+		let config = config::parse_config("zero-config.xml");
 		let schema = String::from("zero");
 
 		let sql = String::from("CREATE TABLE users (

@@ -12,13 +12,13 @@ If you're in the _financial_, _insurance_, _health care_, _online retail_, or an
 
 ## How do I use AgilData Zero?
 
-*NOTE*:  This distribution is only meant for running under Linux Ubuntu 16.04.1 LTS
+*NOTE*:  This distribution is only meant for running under Ubuntu 16.04.1 LTS Linux
 
 * extract the distribution tar file
 
     ` tar -xvf agildata-zero.tar.gz`
-* set up your configuration file (an example is provided)
+* set up your configuration file by editing the example items within it (zero-config.xml)
 
-* start the executable
+* start the executable from within the directory you extracted to
 
     `./agildata-zero`

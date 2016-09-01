@@ -212,7 +212,7 @@ mod tests {
 		let sql = String::from("SELECT age, first_name, last_name FROM users WHERE age = 1");
 		let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
 
-		let config = config::parse_config("example-zero-config.xml");
+		let config = config::parse_config("zero-config.xml");
 		let value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
 		let mut encrypt_vis = EncryptionVisitor {
 			config: &config,
@@ -232,7 +232,7 @@ mod tests {
 		let sql = String::from("INSERT INTO users (id, first_name, last_name, ssn, age, sex) VALUES(1, 'Janis', 'Joplin', '123456789', 27, 'F')");
 		let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
 
-		let config = config::parse_config("example-zero-config.xml");
+		let config = config::parse_config("zero-config.xml");
 		let value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
 		let mut encrypt_vis = EncryptionVisitor {
 			config: &config,
@@ -251,7 +251,7 @@ mod tests {
 		let sql = String::from("UPDATE users SET age = 31, ssn = '987654321' WHERE first_name = 'Janis' AND last_name = 'Joplin'");
 		let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
 
-		let config = config::parse_config("example-zero-config.xml");
+		let config = config::parse_config("zero-config.xml");
 		let value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
 		let mut encrypt_vis = EncryptionVisitor {
 			config: &config,

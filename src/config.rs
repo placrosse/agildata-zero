@@ -351,7 +351,7 @@ mod tests {
 
 	#[test]
 	fn config_test() {
-		let config = super::parse_config("example-zero-config.xml");
+		let config = super::parse_config("zero-config.xml");
 		println!("CONFIG {:#?}", config);
 		println!("HERE {:#?}", config.get_column_config(&String::from("zero"), &String::from("users"), &String::from("age")))
 	}
