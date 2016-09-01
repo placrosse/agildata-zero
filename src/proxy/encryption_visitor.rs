@@ -1,14 +1,14 @@
 use config::{Config, TConfig};
-use encrypt::Encrypt;
+use encrypt::{Encrypt, EncryptionType};
 
 use query::{ASTVisitor, ASTNode, LiteralExpr, Operator};
-
+use std::error::Error;
 use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct EncryptionVisitor<'a> {
 	pub config: &'a Config,
-	pub valuemap: HashMap<u32, Option<Vec<u8>>>
+	pub valuemap: HashMap<u32, Result<Vec<u8>, Box<Error>>>
 }
 
 impl<'a> EncryptionVisitor<'a> {
@@ -26,7 +26,7 @@ impl<'a> EncryptionVisitor<'a> {
 		}
 	}
 
-	pub fn get_value_map(&self) -> &HashMap<u32, Option<Vec<u8>>> {
+	pub fn get_value_map(&self) -> &HashMap<u32, Result<Vec<u8>, Box<Error>>> {
 		&self.valuemap
 	}
 }
@@ -71,7 +71,7 @@ impl<'a> ASTVisitor for EncryptionVisitor<'a> {
 									match e {
 										&ASTNode::SQLIdentifier{id: ref name, ..} => {
 											let col = self.config.get_column_config(&String::from("zero"), table, name);
-											if col.is_some() {
+                                            if col.is_some() && col.unwrap().encryption != EncryptionType::NA{
 												match values[i] {
 													ASTNode::SQLLiteral(ref l) => match l {
 														&LiteralExpr::LiteralLong(ref i, ref val) => {
@@ -115,8 +115,8 @@ impl<'a> ASTVisitor for EncryptionVisitor<'a> {
 								_ => panic!("Unreachable")
 							};
 							let col = self.config.get_column_config(&String::from("zero"), &String::from("users"), ident);
-							if col.is_some() {
-								match right {
+							if col.is_some() && col.unwrap().encryption != EncryptionType::NA{
+                                match right {
 									&ASTNode::SQLLiteral(ref l) => match l {
 										&LiteralExpr::LiteralLong(ref i, ref val) => {
 											self.valuemap.insert(i.clone(), val.encrypt(&col.unwrap().encryption));
@@ -129,6 +129,7 @@ impl<'a> ASTVisitor for EncryptionVisitor<'a> {
 									_ => panic!("Unreachable")
 								}
 							}
+                           // }
 						} else if self.is_identifier(&right) && self.is_literal(&left) {
 							panic!("Syntax literal = identifier not currently supported")
 						}
@@ -203,7 +204,7 @@ mod tests {
 	use query::dialects::ansisql::*;
 	use super::super::writers::*;
     use config;
-
+    use std::error::Error;
 	#[test]
 	fn test_visitor() {
 		let ansi = AnsiSQLDialect::new();
@@ -212,7 +213,8 @@ mod tests {
 		let sql = String::from("SELECT age, first_name, last_name FROM users WHERE age = 1");
 		let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
 
-		let config = config::parse_config("zero-config.xml");
+        let config = config::parse_config("zero-config.xml");
+		let value_map: HashMap<u32, Result<Vec<u8>, Box<Error>>> = HashMap::new();
 		let value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
 		let mut encrypt_vis = EncryptionVisitor {
 			config: &config,
@@ -232,8 +234,8 @@ mod tests {
 		let sql = String::from("INSERT INTO users (id, first_name, last_name, ssn, age, sex) VALUES(1, 'Janis', 'Joplin', '123456789', 27, 'F')");
 		let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
 
-		let config = config::parse_config("zero-config.xml");
-		let value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
+        let config = config::parse_config("zero-config.xml");
+		let value_map: HashMap<u32, Result<Vec<u8>, Box<Error>>> = HashMap::new();
 		let mut encrypt_vis = EncryptionVisitor {
 			config: &config,
 			valuemap: value_map
@@ -251,8 +253,8 @@ mod tests {
 		let sql = String::from("UPDATE users SET age = 31, ssn = '987654321' WHERE first_name = 'Janis' AND last_name = 'Joplin'");
 		let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
 
+		let value_map: HashMap<u32, Result<Vec<u8>, Box<Error>>> = HashMap::new();
 		let config = config::parse_config("zero-config.xml");
-		let value_map: HashMap<u32, Option<Vec<u8>>> = HashMap::new();
 		let mut encrypt_vis = EncryptionVisitor {
 			config: &config,
 			valuemap: value_map
