@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::ascii::AsciiExt;
 
 pub mod dialects;
+pub mod planner;
 
 #[cfg(test)]
 mod tests;
