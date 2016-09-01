@@ -8,15 +8,33 @@ enum Rex {
 }
 
 enum Rel {
-    Projection,
+    Projection { input: Box<Rel> },
     Selection,
-    TableScan
+    TableScan,
+    Dual
 }
 
 fn sql_to_rel(sql: &ASTNode) -> Result<Rel, String> {
 
     match sql {
-        &ASTNode::SQLSelect { .. } => Ok(Rel::Projection),
+        &ASTNode::SQLSelect { box ref expr_list, ref relation, ref selection, ref order} => {
+            /*
+                SQLSelect{
+                    expr_list: Box<ASTNode>,
+                    relation: Option<Box<ASTNode>>,
+                    selection: Option<Box<ASTNode>>,
+                    order: Option<Box<ASTNode>>
+                },
+            */
+            //expr_list.
+
+            let mut input = match relation {
+                &Some(box ref r) => sql_to_rel(r)?,
+                &None => Rel::Dual
+            };
+
+            Ok(Rel::Projection { input: Box::new(input) })
+        },
         //ASTNode::SQLInsert => {},
         _ => Err(String::from("oops)"))
     }
