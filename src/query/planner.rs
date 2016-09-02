@@ -5,18 +5,10 @@ use super::ASTNode;
 use encrypt::EncryptionType;
 use config::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TupleType {
     pub elements: Vec<Element>
 }
-
-// impl TupleType {
-//     fn extend<'a>(&'a mut self, element: Element) -> &'a Element  {
-//         self.elements.push(element);
-//         // &self.elements[self.elements.len() - 1]
-//         self.elements.last().unwrap()
-//     }
-// }
 
 impl TupleType {
     fn new(elements: Vec<Element>) -> Self {
@@ -34,6 +26,7 @@ pub struct Element {
 //    p_relation: Option<String>
 }
 
+#[derive(Debug, Clone)]
 enum Rex {
     //Alias { name: String, expr: Box<Rex> },
     Identifier { id: Vec<String>, el: Element },
@@ -52,6 +45,7 @@ impl Rex {
     }
 }
 
+#[derive(Debug, Clone)]
 enum Rel {
     Projection { project: Box<Rex>, input: Box<Rel> , tt: TupleType},
     Selection { input: Box<Rel> },
@@ -87,7 +81,7 @@ impl<'a> Planner<'a> {
                 .map(|x| self.sql_to_rex(&x, tt))
                 .collect()?)),
             &ASTNode::SQLIdentifier { ref id, ref parts } => {
-                let element = tt.elements.iter().filter(|e| e.name == *id).map(|e| e).collect().first();
+                let element = tt.elements.iter().filter(|e| e.name == *id).next();
                 match element {
                     Some(e) => Ok(Rex::Identifier{id: parts.clone(), el: e.clone()}),
                     None => Err(format!("Invalid identifier {}", id)) // TODO better..
@@ -162,5 +156,34 @@ fn get_element(expr: &Rex) -> Element {
     match expr {
         &Rex::Identifier{ref el, ..} => el.clone(),
         _ => panic!("Unsupported")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use query::{Tokenizer, Parser};
+    use config;
+    use query::dialects::ansisql::*;
+    use query::dialects::mysqlsql::*;
+
+    use super::Planner;
+
+    #[test]
+    fn plan_simple() {
+        let config = config::parse_config("zero-config.xml");
+
+        let ansi = AnsiSQLDialect::new();
+        let dialect = MySQLDialect::new(&ansi);
+
+        let sql = String::from("SELECT id, first_name, last_name, ssn, age, sex FROM users");
+        let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
+
+        let default_schema = String::from("zero");
+        let planner = Planner{default_schema: &default_schema, config: &config};
+
+        let plan = planner.sql_to_rel(&parsed).unwrap();
+
+        println!("Plan {:#?}", plan);
     }
 }
