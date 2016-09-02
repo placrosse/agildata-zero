@@ -477,7 +477,16 @@ impl<'a> MySQLConnectionHandler <'a> {
             0x03 => {
                 println!("Got COM_QUERY packet");
                 write_buf.extend_from_slice(&packet.bytes);
-                self.process_result_set(&mut write_buf, tt);
+                loop {
+                    let row_packet = self.remote.read_packet().unwrap();
+                    println!("COM_QUERY handled packet type {}", row_packet.bytes[4]);
+                    write_buf.extend_from_slice(&row_packet.bytes);
+                    // break on receiving Err_Packet, or EOF_Packet
+                    match row_packet.packet_type() {
+                        0xfe | 0xff => break,
+                        _ => {}
+                    }
+                }
             },
             _ => {
 
