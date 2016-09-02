@@ -9,7 +9,7 @@ use byteorder::*;
 use query::{Tokenizer, Parser, Writer, SQLWriter, ASTNode};
 use query::dialects::mysqlsql::*;
 use query::dialects::ansisql::*;
-use query::planner::{Planner, TupleType, Element, HasTupleType};
+use query::planner::{Planner, TupleType, Element, HasTupleType, Rel};
 use super::writers::*;
 
 use mio::{self, TryRead, TryWrite};
@@ -365,26 +365,16 @@ impl<'a> MySQLConnectionHandler <'a> {
                 None
             }
         };
-        
-        let plan = match parsed {
-            None => None,
-            Some(ref sql) => {
-                let foo = match self.schema {
-                    Some(ref s) => Some(s),
-                    None => None
-                };
-                let planner = Planner::new(foo, &self.config);
-                match planner.sql_to_rel(sql) {
-                    Ok(None) => None,
-                    Ok(Some(p)) => Some(p),
-                    Err(e) => {
-                        self.send_error(); //TODO: send a specfic error
-                        return
-                    }
-                }
+
+        let plan = match self.plan(&parsed) {
+            Ok(None) => None,
+            Ok(Some(p)) => Some(p),
+            Err(e) => {
+                self.send_error(&String::from("42000"), &e);
+                return;
             }
         };
-        
+
         // visit and conditionally encrypt query
 
         // reqwrite query
@@ -441,6 +431,20 @@ impl<'a> MySQLConnectionHandler <'a> {
 
         } else {
             self.mysql_process_query(&buf[0 .. packet_len+4], None);
+        }
+    }
+
+    fn plan(&self, parsed: &Option<ASTNode>) -> Result<Option<Rel>, String> {
+        match parsed {
+            &None => Ok(None),
+            &Some(ref sql) => {
+                let mut foo = match self.schema {
+                    Some(ref s) => Some(s),
+                    None => None
+                };
+                let planner = Planner::new(foo, &self.config);
+                planner.sql_to_rel(sql)
+            }
         }
     }
 
@@ -633,8 +637,7 @@ impl<'a> MySQLConnectionHandler <'a> {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn send_error(&self) -> Vec<u8>{
+    pub fn send_error(&mut self, state: &str, msg: &String) {
         let mut err_header: Vec<u8> = vec![];
         let mut err_wtr: Vec<u8> = vec![];
 
@@ -642,8 +645,8 @@ impl<'a> MySQLConnectionHandler <'a> {
         err_wtr.write_u16::<LittleEndian>(1064 as u16).unwrap(); //ERROR CODE
 
         err_wtr.extend_from_slice("#".as_bytes()); //sql_state_marker
-        err_wtr.extend_from_slice("42000".as_bytes()); //SQL STATE
-        err_wtr.extend_from_slice("You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'asdf' at line 1".as_bytes());
+        err_wtr.extend_from_slice(state.as_bytes()); //SQL STATE
+        err_wtr.extend_from_slice(msg.as_bytes());
 
         err_header.write_u32::<LittleEndian>(err_wtr.len() as u32).unwrap();
         err_header.pop();
@@ -652,7 +655,10 @@ impl<'a> MySQLConnectionHandler <'a> {
         let mut write_buf: Vec<u8> = Vec::new();
         write_buf.extend_from_slice(&err_header);
         write_buf.extend_from_slice(&err_wtr);
-        write_buf
+
+        let buf_len = write_buf.len();
+        let curs = Cursor::new(write_buf);
+        self.state = State::Writing(Take::new(curs, buf_len));
     }
 
     pub fn reregister(&self, event_loop: &mut mio::EventLoop<Proxy>) {
