@@ -476,6 +476,7 @@ impl<'a> MySQLConnectionHandler <'a> {
             0xfb => panic!("not implemented"),
             0x03 => {
                 println!("Got COM_QUERY packet");
+                write_buf.extend_from_slice(&packet.bytes);
                 self.process_result_set(&mut write_buf, tt);
             },
             _ => {
