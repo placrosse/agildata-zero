@@ -480,6 +480,7 @@ impl<'a> MySQLConnectionHandler <'a> {
                 loop {
                     let row_packet = self.remote.read_packet().unwrap();
                     println!("COM_QUERY handled packet type {}", row_packet.bytes[4]);
+
                     write_buf.extend_from_slice(&row_packet.bytes);
                     // break on receiving Err_Packet, or EOF_Packet
                     match row_packet.packet_type() {
@@ -503,6 +504,7 @@ impl<'a> MySQLConnectionHandler <'a> {
                 // read one result set meta data packet per column and append to write buffer
                 for i in 0 .. field_count {
                     let field_packet = self.remote.read_packet().unwrap();
+                    println!("column meta data packet type {}", field_packet.bytes[4]);
                     write_buf.extend_from_slice(&field_packet.bytes);
                 }
 
