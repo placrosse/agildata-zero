@@ -41,12 +41,12 @@ enum Rel {
     Dual
 }
 
-struct Planner {
-    default_schema: String,
-    config: Config
+struct Planner<'a> {
+    default_schema: &'a String,
+    config: &'a Config
 }
 
-impl Planner {
+impl<'a> Planner<'a> {
 
     fn sql_to_rex(&self, sql: &ASTNode) -> Result<Rex, String> {
         match sql {
@@ -84,7 +84,7 @@ impl Planner {
                 let (table_schema, table_name) = if parts.len() == 2 {
                     (&parts[0], parts[1].clone())
                 } else {
-                    (&self.default_schema, id.clone())
+                    (self.default_schema, id.clone())
                 };
 
                 if let Some(table_config) = self.config.get_table_config(table_schema, &table_name) {
