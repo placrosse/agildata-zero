@@ -28,6 +28,8 @@ If you're in the _financial_, _insurance_, _health care_, _online retail_, or an
 
 Keep in mind that the encrypted values may be different, even though the unencrypted values in different rows, columns, or tables are identical.  This means that attempts to write SQL which joins encrypted items to each other will not yield the results you may expect.  SQL may directly specify WHERE clause equality, and inequality, comparisons with literal values, however.  Ranges, as specified using BETWEEN, less than, less than or equal to, greater than, or greater than or equal, as comparisons with encrypted columns, are not supported.
 
+---------------
+
 THE SOFTWARE MAY NOT BE USED IN THE OPERATION OF AIRCRAFT, SHIP, NUCLEAR FACILITIES, LIFE SUPPORT MACHINES, COMMUNICATION SYSTEMS, OR ANY OTHER EQUIPMENT IN WHICH THE FAILURE OF THE SOFTWARE COULD LEAD TO PERSONAL INJURY, DEATH, OR ENVIRONMENTAL DAMAGE.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
