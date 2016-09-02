@@ -41,6 +41,8 @@ echo "Creating database: $AGILDATA_TEST_DB"
 mysql --host=127.0.0.1 --port=3307 -u$MYSQL_USER -p$MYSQL_PASS -e "CREATE DATABASE $AGILDATA_TEST_DB"
 
 # Copy test database info into MySQL
+mysql --host=127.0.0.1 --port=3307 -u$MYSQL_USER -p$MYSQL_PASS < scripts/test/test1.sql
+
 # Query MySQL and run diffs against the values
 # If any diffs occur, indicate a build error, and report back the differences
 
