@@ -29,7 +29,7 @@ pub struct Element {
 }
 
 #[derive(Debug, Clone)]
-enum Rex {
+pub enum Rex {
     //Alias { name: String, expr: Box<Rex> },
     Identifier { id: Vec<String>, el: Element },
     Literal(LiteralExpr),
@@ -48,7 +48,7 @@ impl Rex {
 }
 
 #[derive(Debug, Clone)]
-enum Rel {
+pub enum Rel {
     Projection { project: Box<Rex>, input: Box<Rel> , tt: TupleType},
     Selection { expr: Box<Rex>, input: Box<Rel> },
     TableScan { table: String, tt: TupleType },
@@ -223,4 +223,9 @@ mod tests {
 
         println!("Plan {:#?}", plan);
     }
+}
+
+pub trait RelVisitor {
+    fn visit_rel(rel: &Rel);
+    fn visit_rex(rex: &Rex);
 }
