@@ -19,9 +19,9 @@ impl TupleType {
 
 #[derive(Debug, Clone)]
 pub struct Element {
-    name: String,
-    encryption: EncryptionType,
-    data_type: NativeType
+    pub name: String,
+    pub encryption: EncryptionType,
+    pub data_type: NativeType
 //    relation: String,
 //    data_type: RelType,
 //    p_name: Option<String>,
@@ -226,6 +226,6 @@ mod tests {
 }
 
 pub trait RelVisitor {
-    fn visit_rel(&mut self, rel: &Rel);
-    fn visit_rex(&mut self, rex: &Rex, tt: &TupleType);
+    fn visit_rel(&mut self, rel: &Rel) -> Result<(), String>;
+    fn visit_rex(&mut self, rex: &Rex, tt: &TupleType) -> Result<(), String>;
 }
