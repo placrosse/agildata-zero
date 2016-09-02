@@ -6,7 +6,7 @@
 # each step of the way as the build runs.
 
 RUST_BUILD="nightly-2016-08-03"
-AGILDATA_TEST_DB="itest-`date +%s%N`"
+AGILDATA_TEST_DB="itest-$BUILD_NUMBER"
 
 # Set the version of Rust to use
 echo "Switching to Rust build: $RUST_BUILD"
