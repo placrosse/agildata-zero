@@ -1,6 +1,6 @@
 use super::super::encrypt;
 use super::super::config;
-use super::ASTNode;
+use super::{ASTNode, Operator, LiteralExpr};
 
 use encrypt::EncryptionType;
 use config::*;
@@ -32,10 +32,10 @@ pub struct Element {
 enum Rex {
     //Alias { name: String, expr: Box<Rex> },
     Identifier { id: Vec<String>, el: Element },
-    Literal,
-    BinaryExpr,
+    Literal(LiteralExpr),
+    BinaryExpr{left: Box<Rex>, op: Operator, right: Box<Rex>},
     RelationalExpr(Rel),
-    RexExprList(Vec<Rex>)
+    RexExprList(Vec<Rex>),
 }
 
 impl Rex {
@@ -50,7 +50,7 @@ impl Rex {
 #[derive(Debug, Clone)]
 enum Rel {
     Projection { project: Box<Rex>, input: Box<Rel> , tt: TupleType},
-    Selection { input: Box<Rel> },
+    Selection { expr: Box<Rex>, input: Box<Rel> },
     TableScan { table: String, tt: TupleType },
     Dual { tt: TupleType }
 }
@@ -89,7 +89,15 @@ impl<'a> Planner<'a> {
                     None => Err(format!("Invalid identifier {}", id)) // TODO better..
                 }
             },
-            _ => Err(String::from("oops"))
+            &ASTNode::SQLBinary{box ref left, ref op, box ref right} => {
+                Ok(Rex::BinaryExpr {
+                    left: Box::new(self.sql_to_rex(left, tt)?),
+                    op: op.clone(),
+                    right: Box::new(self.sql_to_rex(right, tt)?)
+                })
+            },
+            &ASTNode::SQLLiteral(ref literal) => Ok(Rex::Literal(literal.clone())),
+            _ => Err(format!("Unsupported expr {:?}", sql))
         }
     }
 
@@ -97,25 +105,34 @@ impl<'a> Planner<'a> {
         match sql {
             &ASTNode::SQLSelect { box ref expr_list, ref relation, ref selection, ref order } => {
 
-                let mut input = match relation {
+                let relation = match relation {
                     &Some(box ref r) => self.sql_to_rel(r)?,
                     &None => Some(Rel::Dual { tt: TupleType { elements: vec![] } })
                 };
 
-                //TODO: selection
+                let mut input = if let Some(r) = relation {
+                    r
+                } else {
+                    return Ok(None)
+                };
 
-                match input {
-                    None => Ok(None),
-                    Some(i) => {
-                        let project_list = self.sql_to_rex(expr_list, &i.tt() )?;
-                        let project_tt = reconcile_tt(&project_list);
-                        Ok(Some(Rel::Projection {
-                            project: Box::new(project_list),
-                            input: Box::new(i),
-                            tt: project_tt
-                        }))
-                    }
+
+                match selection {
+                    &Some(box ref expr) => {
+                        let filter = self.sql_to_rex(expr, input.tt())?;
+                        input = Rel::Selection { expr: Box::new(filter), input: Box::new(input)}
+                    },
+                    &None => {}
                 }
+
+                let project_list = self.sql_to_rex(expr_list, &input.tt() )?;
+                let project_tt = reconcile_tt(&project_list);
+                Ok(Some(Rel::Projection {
+                    project: Box::new(project_list),
+                    input: Box::new(input),
+                    tt: project_tt
+                }))
+
             },
             &ASTNode::SQLIdentifier { ref id, ref parts } => {
 
@@ -179,6 +196,24 @@ mod tests {
         let dialect = MySQLDialect::new(&ansi);
 
         let sql = String::from("SELECT id, first_name, last_name, ssn, age, sex FROM users");
+        let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
+
+        let default_schema = String::from("zero");
+        let planner = Planner{default_schema: &default_schema, config: &config};
+
+        let plan = planner.sql_to_rel(&parsed).unwrap();
+
+        println!("Plan {:#?}", plan);
+    }
+
+    #[test]
+    fn plan_simple_selection() {
+        let config = config::parse_config("zero-config.xml");
+
+        let ansi = AnsiSQLDialect::new();
+        let dialect = MySQLDialect::new(&ansi);
+
+        let sql = String::from("SELECT id, first_name, last_name, ssn, age, sex FROM users WHERE first_name = 'Frodo'");
         let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
 
         let default_schema = String::from("zero");
