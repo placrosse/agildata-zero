@@ -36,27 +36,15 @@ impl<'a> ASTVisitor for EncryptionVisitor<'a> {
 		match expr {
 			&ASTNode::SQLSelect{box ref expr_list, ref relation, ref selection, ref order} => {
 				self.visit_ast(expr_list);
-				match relation {
-					&Some(box ref expr) => self.visit_ast(expr),
-					&None => {}
-				}
-				match selection {
-					&Some(box ref expr) => self.visit_ast(expr),
-					&None => {}
-				}
-				match order {
-					&Some(box ref expr) => self.visit_ast(expr),
-					&None => {}
-				}
+                if let &Some(box ref expr) = relation { self.visit_ast(expr) }
+                if let &Some(box ref expr) = selection { self.visit_ast(expr) }
+                if let &Some(box ref expr) = order { self.visit_ast(expr) }
 			},
 			&ASTNode::SQLUpdate{box ref table, box ref assignments, ref selection} => {
 				self.visit_ast(table);
 				self.visit_ast(assignments);
 
-				match selection {
-					&Some(box ref expr) => self.visit_ast(expr),
-					&None => {}
-				}
+                if let &Some(box ref expr) = selection { self.visit_ast(expr) }
 			},
 			&ASTNode::SQLInsert{box ref table, box ref column_list, box ref values_list} => {
 				let table = match table {
@@ -165,10 +153,7 @@ impl<'a> ASTVisitor for EncryptionVisitor<'a> {
 				self.visit_ast(left);
 				// TODO visit join type
 				self.visit_ast(right);
-				match on_expr {
-					&Some(box ref expr) => self.visit_ast(expr),
-					&None => {}
-				}
+                if let &Some(box ref expr) = on_expr { self.visit_ast(expr) }
 			},
 			&ASTNode::SQLUnion{box ref left, box ref right, ..} => {
 				self.visit_ast(left);
