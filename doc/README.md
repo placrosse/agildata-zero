@@ -8,7 +8,7 @@
 
 ## Why would I want AgilData Zero?
 
-If you're in the _financial_, _insurance_, _health care_, _online retail_, or any other business with regulatory requirements, you definitely will want to see what **_AgilData Zero_** has to offer.  Even if your use doesn't fall within one of these, you may still find your information in the Cloud *worth protecting*.
+If you're in the _financial_, _insurance_, _health care_, _online retail_, or any other business with _regulatory requirements_, you definitely will want to see what **_AgilData Zero_** has to offer.  Even if your use doesn't fall within one of these, you may still find your information in the Cloud *worth protecting*.
 
 ## How do I use AgilData Zero?
 
