@@ -4,6 +4,7 @@ export exe=target/release/$app
 
 rustup override set nightly-2016-08-31
 
+cargo clean
 cargo test --color always
 rc=$?; if [[ $rc != 0 ]]; then
     exit 1

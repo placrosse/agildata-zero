@@ -215,7 +215,7 @@ mod tests {
 		let ansi = AnsiSQLDialect::new();
 		let dialect = MySQLDialect::new(&ansi);
 
-		let sql = String::from("INSERT INTO users (id, first_name, last_name, ssn, age, sex) VALUES(1, 'Janis', 'Joplin', '123456789', 27, 'F')");
+        let sql = String::from("INSERT INTO users (id, first_name, last_name, ssn, age, sex) VALUES(1, 'Janis', 'Joplin', '123456789', 27, 'F')");
 		let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
 
         let config = config::parse_config("zero-config.xml");
