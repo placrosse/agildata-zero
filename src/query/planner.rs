@@ -58,28 +58,26 @@ impl Planner {
         }
     }
 
-    fn sql_to_rel(&self, sql: &ASTNode) -> Result<Rel, String> {
+    fn sql_to_rel(&self, sql: &ASTNode) -> Result<Option<Rel>, String> {
         match sql {
             &ASTNode::SQLSelect { box ref expr_list, ref relation, ref selection, ref order } => {
-                /*
-                    SQLSelect{
-                        expr_list: Box<ASTNode>,
-                        relation: Option<Box<ASTNode>>,
-                        selection: Option<Box<ASTNode>>,
-                        order: Option<Box<ASTNode>>
-                    },
-                */
-                //expr_list.
 
                 let mut input = match relation {
                     &Some(box ref r) => self.sql_to_rel(r)?,
-                    &None => Rel::Dual
+                    &None => Some(Rel::Dual)
                 };
 
-                Ok(Rel::Projection {
-                    project: Box::new(self.sql_to_rex(expr_list)?),
-                    input: Box::new(input)
-                })
+                //TODO: selection
+
+                match input {
+                    None => Ok(None),
+                    Some(i) => {
+                        Ok(Some(Rel::Projection {
+                            project: Box::new(self.sql_to_rex(expr_list)?),
+                            input: Box::new(i)
+                        }))
+                    }
+                }
             },
             &ASTNode::SQLIdentifier { id: ref table_name, parts: ref table_name_parts } => {
 
@@ -90,9 +88,9 @@ impl Planner {
                             name: v.name.clone(), encryption: v.encryption.clone()
                         })
                         .collect());
-                    Ok(Rel::TableScan { table: table_name.clone(), tt: tt })
+                    Ok(Some(Rel::TableScan { table: table_name.clone(), tt: tt }))
                 } else {
-                    Err(format!("No agildata-zero config found for table {}", table_name ))
+                    Ok(None) // this isn't an encrypted table, so not our problem!
                 }
 
             }
