@@ -183,7 +183,7 @@ impl<'a> Planner<'a> {
                 }
 
             },
-            //&ASTNode::MySQLCreateTable{..} => Ok(None) // Dont need to plan this yet...
+            &ASTNode::MySQLCreateTable{..} => Ok(None), // Dont need to plan this yet...
             //ASTNode::SQLInsert => {},
             _ => Err(format!("Unsupported expr for planning {:?}", sql))
         }

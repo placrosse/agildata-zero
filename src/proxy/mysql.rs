@@ -474,19 +474,19 @@ impl<'a> MySQLConnectionHandler <'a> {
                 write_buf.extend_from_slice(&packet.bytes);
             },
             0xfb => panic!("not implemented"),
-            0x03 => {
-                println!("Got COM_QUERY packet");
-                write_buf.extend_from_slice(&packet.bytes);
-                loop {
-                    let row_packet = self.remote.read_packet().unwrap();
-                    write_buf.extend_from_slice(&row_packet.bytes);
-                    // break on receiving Err_Packet, or EOF_Packet
-                    match row_packet.packet_type() {
-                        0xfe | 0xff => break,
-                        _ => {}
-                    }
-                }
-            },
+            // 0x03 => {
+            //     println!("Got COM_QUERY packet");
+            //     write_buf.extend_from_slice(&packet.bytes);
+            //     loop {
+            //         let row_packet = self.remote.read_packet().unwrap();
+            //         write_buf.extend_from_slice(&row_packet.bytes);
+            //         // break on receiving Err_Packet, or EOF_Packet
+            //         match row_packet.packet_type() {
+            //             0xfe | 0xff => break,
+            //             _ => {}
+            //         }
+            //     }
+            // },
             _ => {
 
                 println!("Got field_count packet");
