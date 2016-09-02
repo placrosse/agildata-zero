@@ -19,9 +19,9 @@ impl TupleType {
 
 #[derive(Debug, Clone)]
 pub struct Element {
-    name: String,
-    encryption: EncryptionType,
-    data_type: NativeType
+    pub name: String,
+    pub encryption: EncryptionType,
+    pub data_type: NativeType
 //    relation: String,
 //    data_type: RelType,
 //    p_name: Option<String>,

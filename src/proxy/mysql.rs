@@ -570,35 +570,18 @@ impl<'a> MySQLConnectionHandler <'a> {
 
         for i in 0 .. column_meta.len() {
 
-            let raw_value = r.read_lenenc_string();
-
             let value = match tt {
                 Some(t) => {
-//                    match t.elements[i].
-
-
-                    /*
-                                            match native_type {
-                            &NativeType::U64 => {
-                                match encryption {
-                                    &EncryptionType::NA => r.read_lenenc_string(),
-                                    _ => Some(format!("{}", u64::decrypt(&r.read_bytes().unwrap(), encryption)))
-                                }
-                            },
-                            &NativeType::Varchar(_) => {
-                                match encryption {
-                                    &EncryptionType::NA => r.read_lenenc_string(),
-                                    _ => Some(String::decrypt(&r.read_bytes().unwrap(), encryption))
-                                }
-                            }
-                            _ => panic!("Native type {:?} not implemented", native_type)
+                    match &t.elements[i].encryption {
+                        &EncryptionType::NA => r.read_lenenc_string(),
+                        encryption @ _ => match &t.elements[i].data_type {
+                            &NativeType::U64 => Some(format!("{}", u64::decrypt(&r.read_bytes().unwrap(), &encryption))),
+                            &NativeType::Varchar(_) => Some(String::decrypt(&r.read_bytes().unwrap(), &encryption)),
+                            native_type @ _ => panic!("Native type {:?} not implemented", native_type)
                         }
-*/
-
-
-                    raw_value
+                    }
                 },
-                None => raw_value
+                None => r.read_lenenc_string()
             };
 
             // encode this field in the new packet
