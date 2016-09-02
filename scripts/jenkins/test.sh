@@ -26,7 +26,7 @@ ls -al target/debug
 
 # Launch AgilData Zero
 echo "Launching AgilData Zero."
-target/debug/agildata-zero &
+target/debug/agildata-zero 2>&1 >/dev/null & 
 AGILDATA_ZERO_PID=$!
 echo "AgilData Zero launched: Process ID=$AGILDATA_ZERO_PID"
 
