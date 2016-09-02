@@ -35,7 +35,7 @@ ps -aux | grep $AGILDATA_ZERO_PID | grep -v grep
 
 # Create Database
 echo "Creating database: $AGILDATA_TEST_DB"
-mysql --host=127.0.0.1 --port=3307 -e "CREATE DATABASE $AGILDATA_TEST_DB CHARACTER SET UTF8"
+mysql --host=127.0.0.1 --port=3307 -u agiluser -p password123 -e "CREATE DATABASE $AGILDATA_TEST_DB CHARACTER SET UTF8"
 
 # Copy test database info into MySQL
 # Query MySQL and run diffs against the values
@@ -43,7 +43,7 @@ mysql --host=127.0.0.1 --port=3307 -e "CREATE DATABASE $AGILDATA_TEST_DB CHARACT
 
 # Drop Database
 echo "Dropping database: $AGILDATA_TEST_DB"
-mysql --host=127.0.0.1 --port=3307 -e "DROP DATABASE $AGILDATA_TEST_DB"
+mysql --host=127.0.0.1 --port=3307 -u agiluser -p password123 -e "DROP DATABASE $AGILDATA_TEST_DB"
 
 # Stop AgilData Zero
 echo "Stopping AgilData Zero: $AGILDATA_ZERO_PID"
