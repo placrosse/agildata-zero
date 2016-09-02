@@ -237,6 +237,6 @@ mod tests {
 }
 
 pub trait RelVisitor {
-    fn visit_rel(&mut self, rel: &Rel);
-    fn visit_rex(&mut self, rex: &Rex, tt: &TupleType);
+    fn visit_rel(&mut self, rel: &Rel) -> Result<(), String>;
+    fn visit_rex(&mut self, rex: &Rex, tt: &TupleType) -> Result<(), String>;
 }
