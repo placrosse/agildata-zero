@@ -1,6 +1,6 @@
-// disabling this so we can continue hacking on the MVP .. we should enable this in the future though
-//#![deny(warnings)]
-
+#![cfg_attr(feature="clippy", feature(plugin))]
+#![cfg_attr(feature="clippy", plugin(clippy))]
+#![cfg_attr(feature="clippy", deny(warnings))]
 #![feature(inclusive_range_syntax, question_mark, box_syntax, box_patterns, integer_atomics)]
 
 pub const APP_NAME: &'static str = "AgilData Zero Gateway";

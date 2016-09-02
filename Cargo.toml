@@ -4,6 +4,7 @@ name = "agildata-zero"
 version = "0.1.0-SNAPSHOT"
 
 [dependencies]
+clippy = {version = "*", optional = true}
 rust-crypto = "0.2.36"
 byteorder = "0.5.3"
 RustyXML = "0.1.1"
@@ -11,3 +12,6 @@ bytes = "0.2.10"
 mio = "0.4.4"
 log = "0.3"
 env_logger = "0.3"
+
+[features]
+default = []
