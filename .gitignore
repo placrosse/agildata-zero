@@ -4,5 +4,6 @@ target
 dist
 *.tar
 *.tar.gz
+*.tgz
 .idea
 *.iml
