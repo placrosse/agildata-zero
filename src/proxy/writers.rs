@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::fmt::Write;
 use config::*;
 use encrypt::*;
+use std::error::Error;
 
 pub fn to_hex_string(bytes: &Vec<u8>) -> String {
   let strs: Vec<String> = bytes.iter()
@@ -14,7 +15,7 @@ pub fn to_hex_string(bytes: &Vec<u8>) -> String {
 }
 
 pub struct LiteralReplacingWriter<'a> {
-    pub literals: &'a HashMap<u32, Option<Vec<u8>>>
+    pub literals: &'a HashMap<u32, Result<Vec<u8>, Box<Error>>>
 }
 
 impl<'a> ExprWriter for LiteralReplacingWriter<'a> {
@@ -35,11 +36,11 @@ impl<'a> LiteralReplacingWriter<'a> {
 	fn optionally_write_literal(&self, index: &u32, builder: &mut String) -> Result<bool, String> {
 		match self.literals.get(index) {
 			Some(value) => match value {
-				&Some(ref e) => {
+				&Ok(ref e) => {
 					write!(builder, "X'{}'", to_hex_string(e)).unwrap();
 					Ok(true)
 				},
-				&None => Ok(false),
+                &Err(_) => {panic!("Shouldnt be here");}
 			},
 			None => Ok(false),
 		}
@@ -172,7 +173,7 @@ mod tests {
         let ansi = AnsiSQLDialect::new();
         let dialect = MySQLDialect::new(&ansi);
 
-		let config = config::parse_config("example-zero-config.xml");
+		let config = config::parse_config("zero-config.xml");
 		let schema = String::from("zero");
 
 		let sql = String::from("CREATE TABLE users (

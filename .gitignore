@@ -4,5 +4,9 @@ target
 dist
 *.tar
 *.tar.gz
+<<<<<<< HEAD
+=======
+*.tgz
+>>>>>>> master
 .idea
 *.iml

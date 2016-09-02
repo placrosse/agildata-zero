@@ -2,13 +2,13 @@ extern crate crypto;
 use self::crypto::aes::KeySize;
 use self::crypto::aes_gcm::AesGcm;
 use self::crypto::aead::{AeadEncryptor, AeadDecryptor};
-
+use std::error::Error;
 use std::iter::repeat;
 
 use byteorder::{WriteBytesExt,ReadBytesExt,BigEndian};
 use std::io::Cursor;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum EncryptionType {
 	AES,
 	OPE,
@@ -23,7 +23,7 @@ pub enum NativeType {
 }
 
 pub trait Encrypt {
-	fn encrypt(self, scheme: &EncryptionType) -> Option<Vec<u8>>;
+	fn encrypt(self, scheme: &EncryptionType) -> Result<Vec<u8>, Box<Error>>;
 }
 
 pub trait Decrypt {
@@ -44,8 +44,9 @@ impl Decrypt for u64 {
 }
 
 impl Decrypt for String {
+
 	fn decrypt(value: &[u8], scheme: &EncryptionType) -> String {
-		match scheme {
+        match scheme {
 			&EncryptionType::AES => {
 				let decrypted = decrypt(&get_key(), value);
 				String::from_utf8(decrypted.unwrap()).expect("Invalid UTF-8")
@@ -57,14 +58,16 @@ impl Decrypt for String {
 }
 
 impl Encrypt for u64 {
-	fn encrypt(self, scheme: &EncryptionType) -> Option<Vec<u8>> {
+	fn encrypt(self, scheme: &EncryptionType) -> Result<Vec<u8>, Box<Error>> {
+
 		match scheme {
 			&EncryptionType::AES => {
 				let mut buf: Vec<u8> = Vec::new();
 				buf.write_u64::<BigEndian>(self).unwrap();
+
 				encrypt(&get_key(), &buf)
 			},
-			&EncryptionType::NA => None,
+			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
 			_ => panic!("Not implemented")
 		}
 
@@ -72,16 +75,16 @@ impl Encrypt for u64 {
 }
 
 impl Encrypt for String {
-	fn encrypt(self, scheme: &EncryptionType) -> Option<Vec<u8>> {
+	fn encrypt(self, scheme: &EncryptionType) -> Result<Vec<u8>, Box<Error>> {
 		match scheme {
 			&EncryptionType::AES => {
 				let buf = self.as_bytes();
 				println!("Buf length = {}", buf.len());
 				let e = encrypt(&get_key(), &buf).unwrap();
 				println!("Encrypted length = {}", e.len());
-				Some(e)
+				Ok(e)
 			},
-			&EncryptionType::NA => None,
+			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
 			_ => panic!("Not implemented")
 		}
 	}
@@ -111,14 +114,13 @@ fn get_key() -> [u8; 32] {
 	k
 }
 
-pub fn encrypt(key: &[u8], buf: &[u8]) -> Option<Vec<u8>> {
+pub fn encrypt(key: &[u8], buf: &[u8]) -> Result<Vec<u8>, Box<Error>> {
     // let key: [u8; 32] = KEYS[n0 as usize].lock().deref().clone();
     // debug!("encrypt: found key={:?} for n0={:?}", key, n0);
     // if key == [0u8; 32] { return None; }
 
 
-    let nonce = [0_u8;12];//mk_nonce(n0, n1);
-    assert!(nonce.len() == 12);
+    let nonce = [0_u8;12];
     let mut cipher = AesGcm::new(KeySize::KeySize256, key, &nonce, &[]);
 
     let mut tag = [0u8; 16];
@@ -130,23 +132,19 @@ pub fn encrypt(key: &[u8], buf: &[u8]) -> Option<Vec<u8>> {
     for b in nonce.iter() { bs.push(*b); }
     bs.append(&mut out);
     for b in tag.iter() { bs.push(*b); }
-    Some(bs)
+    Ok(bs)
 }
 
-pub fn decrypt(key: &[u8], buf: &[u8]) -> Option<Vec<u8>> {
-    //if buf.len() < 36 { return None; }  // min size w/nonce & k & tag
-
-    let n0 = buf[6];
-    //let key: [u8; 32] = KEYS[n0 as usize].lock().deref().clone();
-    println!("decrypt: found key={:?} for n0={:?}", key, n0);
-    if key == [0u8; 32] { return None; }
-
+pub fn decrypt(key: &[u8], buf: &[u8]) -> Result<Vec<u8>, Box<Error>> {
     let iv: &[u8] = &buf[0..12];
     let mut decipher = AesGcm::new(KeySize::KeySize256, &key, &iv, &[]);
     let inp = &buf[12..buf.len() - 16];
     let tag = &buf[buf.len() - 16..];
     let mut out: Vec<u8> = repeat(0).take(buf.len() - 28).collect();
-    decipher.decrypt(&inp, &mut out, &tag);
-    println!("decrypt: inp={:?} out={:?}", inp, out);
-    Some(out)
+    if decipher.decrypt(&inp, &mut out, &tag){
+        println!("decrypt: inp={:?} out={:?}", inp, out);
+        Ok(out)
+    } else{
+        Err("Failed to Decrypt".into())
+    }
 }
