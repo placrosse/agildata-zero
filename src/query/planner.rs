@@ -4,6 +4,7 @@ use super::ASTNode;
 
 use encrypt::EncryptionType;
 use config::*;
+use encrypt::NativeType;
 
 #[derive(Debug, Clone)]
 pub struct TupleType {
@@ -20,6 +21,7 @@ impl TupleType {
 pub struct Element {
     name: String,
     encryption: EncryptionType,
+    data_type: NativeType
 //    relation: String,
 //    data_type: RelType,
 //    p_name: Option<String>,
@@ -127,7 +129,7 @@ impl<'a> Planner<'a> {
                     let tt = TupleType::new(table_config.column_map
                         .iter()
                         .map(|(k,v)| Element {
-                            name: v.name.clone(), encryption: v.encryption.clone()
+                            name: v.name.clone(), encryption: v.encryption.clone(), data_type: v.native_type.clone()
                         })
                         .collect());
                     Ok(Some(Rel::TableScan { table: table_name.clone(), tt: tt }))
