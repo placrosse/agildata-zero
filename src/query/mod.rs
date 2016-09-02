@@ -224,7 +224,7 @@ pub enum ASTNode {
 	MySQLUse(Box<ASTNode>)
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum LiteralExpr {
 	LiteralLong(u32, u64),
 	LiteralBool(u32, bool),
@@ -232,7 +232,7 @@ pub enum LiteralExpr {
 	LiteralString(u32, String)
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Operator {
 	ADD,
 	SUB,

@@ -4,11 +4,11 @@ use std::collections::HashMap;
 use std::error::Error;
 use byteorder::*;
 
-// use parser::sql_parser::{AnsiSQLParser, SQLExpr};
-// use parser::sql_writer::*;
 use query::{Tokenizer, Parser, Writer, SQLWriter, ASTNode};
 use query::dialects::mysqlsql::*;
 use query::dialects::ansisql::*;
+
+use query::planner::{Planner, TupleType, Element, HasTupleType, RelVisitor, Rel};
 use super::writers::*;
 
 use mio::{self, TryRead, TryWrite};
@@ -20,7 +20,7 @@ use config::{Config, TConfig, ColumnConfig};
 
 use encrypt::{Decrypt, NativeType, EncryptionType};
 
-use super::encryption_visitor::EncryptionVisitor;
+use super::encrypt_visitor::EncryptVisitor;
 use super::server::Proxy;
 use super::server::State;
 
@@ -271,7 +271,7 @@ impl<'a> MySQLConnectionHandler <'a> {
                                 match packet_type {
                                     0x02 => self.process_init_db(&buf, packet_len),
                                     0x03 => self.process_query(&buf, packet_len),
-                                    _ => self.mysql_send(&buf[0..packet_len + 4]),
+                                    _ => self.mysql_process_query(&buf[0..packet_len + 4], None),
                                 }
                             },
                         }
@@ -320,14 +320,14 @@ impl<'a> MySQLConnectionHandler <'a> {
         }
 
         // pass along to MySQL
-        self.mysql_send(&buf[0..packet_len + 4])
+        self.mysql_process_query(&buf[0..packet_len + 4], None)
     }
 
     fn process_init_db(&mut self, buf: &Vec<u8>, packet_len: usize) {
         let schema = parse_string(&buf[5 as usize .. (packet_len+4) as usize]);
         println!("COM_INIT_DB: {}", schema);
         self.schema = Some(schema);
-        self.mysql_send(&buf[0 .. packet_len+4]);
+        self.mysql_process_query(&buf[0 .. packet_len+4], None);
     }
 
     fn process_query(&mut self, buf: &Vec<u8>, packet_len: usize) {
@@ -365,27 +365,43 @@ impl<'a> MySQLConnectionHandler <'a> {
             }
         };
 
-        // visit and conditionally encrypt query
+        let plan = match self.plan(&parsed) {
+            Ok(None) => None,
+            Ok(Some(p)) => Some(p),
+            Err(e) => {
+                self.send_error(&String::from("42000"), &e);
+                return;
+            }
+        };
 
         // reqwrite query
         if parsed.is_some() {
 
             let value_map: HashMap<u32, Result<Vec<u8>, Box<Error>>> = HashMap::new();
-            let mut encrypt_vis = EncryptionVisitor {
-                config: self.config,
-                valuemap: value_map
-            };
-            match parsed {
-                Some(ref expr) => super::encryption_visitor::walk(&mut encrypt_vis, expr),
+            let mut encrypt_vis = EncryptVisitor{valuemap: value_map};
+
+            // Visit and conditionally encrypt (if there was a plan)
+            match plan {
+                Some(ref p) => {
+                    match encrypt_vis.visit_rel(p) {
+                        Ok(r) => {},
+                        Err(ref e) => {
+                            self.send_error("4200", e); //TODO: send a specfic error
+                            return
+                        }
+                    }
+                },
                 None => {}
             }
-            // encryption_visitor::walk(&mut encrypt_vis, &parsed.unwrap());
-
 
             let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
+            let s = match self.schema {
+                Some(ref s) => s.clone(),
+                None => String::from("") // TODO
+            };
             let translator = CreateTranslatingWriter {
                 config: &self.config,
-                schema: &String::from("zero") // TODO proxy should know its connection schema...
+                schema: &s
             };
             let mysql_writer = MySQLWriter{};
             let ansi_writer = AnsiSQLWriter{};
@@ -408,14 +424,37 @@ impl<'a> MySQLConnectionHandler <'a> {
             assert!(0x00 == wtr[3]);
             wtr.push(0x03); // packet type for COM_Query
             wtr.extend_from_slice(slice);
-            self.mysql_send(&wtr);
+
+            match plan {
+                None => {
+                    self.mysql_process_query(&wtr, None);
+                },
+                Some(p) => {
+                    let tt = p.tt();
+                    self.mysql_process_query(&wtr, Some(tt));
+                }
+            }
 
         } else {
-            self.mysql_send(&buf[0 .. packet_len+4]);
+            self.mysql_process_query(&buf[0 .. packet_len+4], None);
         }
     }
 
-    fn mysql_send<'b>(&'b mut self, request: &'b [u8]) {
+    fn plan(&self, parsed: &Option<ASTNode>) -> Result<Option<Rel>, String> {
+        match parsed {
+            &None => Ok(None),
+            &Some(ref sql) => {
+                let mut foo = match self.schema {
+                    Some(ref s) => Some(s),
+                    None => None
+                };
+                let planner = Planner::new(foo, &self.config);
+                planner.sql_to_rel(sql)
+            }
+        }
+    }
+
+    fn mysql_process_query<'b>(&'b mut self, request: &'b [u8], tt: Option<&TupleType>) {
         println!("Sending packet to mysql");
         self.remote.write(request).unwrap();
         self.remote.flush().unwrap();
@@ -438,15 +477,32 @@ impl<'a> MySQLConnectionHandler <'a> {
             0x03 => {
                 println!("Got COM_QUERY packet");
                 write_buf.extend_from_slice(&packet.bytes);
-                loop {
-                    let row_packet = self.remote.read_packet().unwrap();
-                    write_buf.extend_from_slice(&row_packet.bytes);
-                    // break on receiving Err_Packet, or EOF_Packet
-                    match row_packet.packet_type() {
-                        0xfe | 0xff => break,
-                        _ => {}
+
+                match tt {
+                    Some(t) => {
+                        let field_count = t.elements.len() as u32;
+                        for i in 0 .. field_count {
+                            let field_packet = self.remote.read_packet().unwrap();
+                            println!("column meta data packet type {}", field_packet.bytes[4]);
+                            write_buf.extend_from_slice(&field_packet.bytes);
+                        }
+                        self.process_result_set(&mut write_buf, tt);
+                    },
+                    None => {
+                        loop {
+                            let row_packet = self.remote.read_packet().unwrap();
+                            println!("COM_QUERY handled packet type {}", row_packet.bytes[4]);
+
+                            write_buf.extend_from_slice(&row_packet.bytes);
+                            // break on receiving Err_Packet, or EOF_Packet
+                            match row_packet.packet_type() {
+                                0xfe | 0xff => break,
+                                _ => {}
+                            }
+                        }
                     }
                 }
+
             },
             _ => {
 
@@ -460,23 +516,15 @@ impl<'a> MySQLConnectionHandler <'a> {
 
                 println!("Result set has {} columns", field_count);
 
-                let column_meta = self.read_result_set_meta(field_count, &mut write_buf).unwrap();
-
-                // process row packets until ERR or EOF
-                loop {
-                    let row_packet = self.remote.read_packet().unwrap();
-                    match row_packet.packet_type() {
-                        // break on receiving Err_Packet, or EOF_Packet
-                        0xfe | 0xff => {
-                            println!("End of result rows");
-                            write_buf.extend_from_slice(&row_packet.bytes);
-                            break
-                        },
-                        _ => {
-                            self.process_result_row(&row_packet, &column_meta, &mut write_buf).unwrap();
-                        }
-                    }
+                // read one result set meta data packet per column and append to write buffer
+                for i in 0 .. field_count {
+                    let field_packet = self.remote.read_packet().unwrap();
+                    println!("column meta data packet type {}", field_packet.bytes[4]);
+                    write_buf.extend_from_slice(&field_packet.bytes);
                 }
+
+                self.process_result_set(&mut write_buf, tt);
+
             }
         }
 
@@ -486,118 +534,112 @@ impl<'a> MySQLConnectionHandler <'a> {
         self.state = State::Writing(Take::new(curs, buf_len));
     }
 
-    fn read_result_set_meta(&mut self, field_count: u32, write_buf: &mut Vec<u8>) -> Result<Vec<ColumnMetaData>, String> {
-
-        let mut column_meta: Vec<ColumnMetaData> = vec![];
-
-        for i in 0 .. field_count {
-
-            let field_packet = self.remote.read_packet().unwrap();
-            write_buf.extend_from_slice(&field_packet.bytes);
-
-            let mut r = MySQLPacketParser::new(&field_packet);
-
-            //TODO: assumes these values can never be NULL
-            let catalog = r.read_lenenc_string().unwrap();
-            let schema = r.read_lenenc_string().unwrap();
-            let table = r.read_lenenc_string().unwrap();
-            let org_table = r.read_lenenc_string().unwrap();
-            let name = r.read_lenenc_string().unwrap();
-            let org_name = r.read_lenenc_string().unwrap();
-
-            println!("ALL catalog {}, schema {}, table {}, org_table {}, name {}, org_name {}",
-             catalog, schema, table, org_table, name, org_name);
-
-            let md = ColumnMetaData {
-                schema: schema,
-                table_name: table,
-                column_name: name
-            };
-
-            println!("column {} = {:?}", i, md);
-
-            column_meta.push(md);
+    fn process_result_set(&mut self, write_buf: &mut Vec<u8>, tt: Option<&TupleType>) {
+        // process row packets until ERR or EOF
+        loop {
+            let row_packet = self.remote.read_packet().unwrap();
+            match row_packet.packet_type() {
+                // break on receiving Err_Packet, or EOF_Packet
+                0xfe | 0xff => {
+                    println!("End of result rows");
+                    write_buf.extend_from_slice(&row_packet.bytes);
+                    break
+                },
+                _ => {
+                    self.process_result_row(&row_packet, write_buf, tt).unwrap();
+                }
+            }
         }
 
-        Ok(column_meta)
     }
+
+//    fn read_result_set_meta(&mut self, field_count: u32, write_buf: &mut Vec<u8>) -> Result<Vec<ColumnMetaData>, String> {
+//
+//        let mut column_meta: Vec<ColumnMetaData> = vec![];
+//
+//        for i in 0 .. field_count {
+//
+//            let field_packet = self.remote.read_packet().unwrap();
+//            write_buf.extend_from_slice(&field_packet.bytes);
+//
+//            let mut r = MySQLPacketParser::new(&field_packet);
+//
+//            //TODO: assumes these values can never be NULL
+//            let catalog = r.read_lenenc_string().unwrap();
+//            let schema = r.read_lenenc_string().unwrap();
+//            let table = r.read_lenenc_string().unwrap();
+//            let org_table = r.read_lenenc_string().unwrap();
+//            let name = r.read_lenenc_string().unwrap();
+//            let org_name = r.read_lenenc_string().unwrap();
+//
+//            println!("ALL catalog {}, schema {}, table {}, org_table {}, name {}, org_name {}",
+//             catalog, schema, table, org_table, name, org_name);
+//
+//            let md = ColumnMetaData {
+//                schema: schema,
+//                table_name: table,
+//                column_name: name
+//            };
+//
+//            println!("column {} = {:?}", i, md);
+//
+//            column_meta.push(md);
+//        }
+//
+//        Ok(column_meta)
+//    }
 
     fn process_result_row(&self,
                           row_packet: &MySQLPacket,
-                          column_meta: &Vec<ColumnMetaData>,
-                          write_buf: &mut Vec<u8>) -> Result<(), String> {
+                          write_buf: &mut Vec<u8>,
+                          tt: Option<&TupleType>) -> Result<(), String> {
+
         println!("Received row");
 
-        //TODO: if this result set does not contain any encrypted values
-        // then we can just write the packet straight to the client and
-        // skip all of this processing
+        if tt.is_some() {
 
-        //TODO do decryption here if required
-        let mut r = MySQLPacketParser::new(&row_packet);
+            let mut r = MySQLPacketParser::new(&row_packet);
 
-        let mut wtr: Vec<u8> = vec![];
+            let mut wtr: Vec<u8> = vec![];
 
-        for i in 0 .. column_meta.len() {
-            // let is_encrypted = false;
-
-            //println!("Value {} is {:?}", i, orig_value);
-
-            let column_config = self.config.get_column_config(
-                &(column_meta[i as usize].schema),
-                &(column_meta[i as usize].table_name),
-                &(column_meta[i as usize].column_name));
-
-            println!("config is {:?}", column_config);
-
-            let value = match column_config {
-
-                None => r.read_lenenc_string(),
-                Some(cc) => match cc {
-                    &ColumnConfig {ref encryption, ref native_type, ..} => {
-                        match native_type {
-                            &NativeType::U64 => {
-                                match encryption {
-                                    &EncryptionType::NA => r.read_lenenc_string(),
-                                    _ => Some(format!("{}", u64::decrypt(&r.read_bytes().unwrap(), encryption)))
-                                }
-                            },
-                            &NativeType::Varchar(_) => {
-                                match encryption {
-                                    &EncryptionType::NA => r.read_lenenc_string(),
-                                    _ => Some(String::decrypt(&r.read_bytes().unwrap(), encryption))
-                                }
+            for i in 0.. tt.unwrap().elements.len() {
+                let value = match tt {
+                    Some(t) => {
+                        match &t.elements[i].encryption {
+                            &EncryptionType::NA => r.read_lenenc_string(),
+                            encryption @ _ => match &t.elements[i].data_type {
+                                &NativeType::U64 => Some(format!("{}", u64::decrypt(&r.read_bytes().unwrap(), &encryption))),
+                                &NativeType::Varchar(_) => Some(String::decrypt(&r.read_bytes().unwrap(), &encryption)),
+                                native_type @ _ => panic!("Native type {:?} not implemented", native_type)
                             }
-                            _ => panic!("Native type {:?} not implemented", native_type)
                         }
+                    },
+                    None => r.read_lenenc_string()
+                };
+
+                // encode this field in the new packet
+                match value {
+                    None => wtr.push(0xfb),
+                    Some(v) => {
+                        let slice = v.as_bytes();
+                        //TODO: hacked to assume single byte for string length
+                        wtr.write_u8(slice.len() as u8).unwrap();
+                        wtr.extend_from_slice(&slice);
                     }
-                }
-
-                /*match cc.encryption {
-                    EncryptionType::AES => orig_value,
-                    _ => orig_value
-                }*/
-            };
-
-            // encode this field in the new packet
-            match value {
-                None => wtr.push(0xfb),
-                Some(v) => {
-                    let slice = v.as_bytes();
-                    //TODO: hacked to assume single byte for string length
-                    wtr.write_u8(slice.len() as u8).unwrap();
-                    wtr.extend_from_slice(&slice);
                 }
             }
 
+            let mut new_header: Vec<u8> = vec![];
+            let sequence_id = row_packet.sequence_id();
+            new_header.write_u32::<LittleEndian>(wtr.len() as u32).unwrap();
+            new_header.pop();
+            new_header.push(sequence_id);
+            write_buf.extend_from_slice(&new_header);
+            write_buf.extend_from_slice(&wtr);
+        } else {
+            // no need to decrypt, just pass the bytes along
+            write_buf.extend_from_slice(&row_packet.bytes);
         }
-
-        let mut new_header: Vec<u8> = vec![];
-        let sequence_id = row_packet.sequence_id();
-        new_header.write_u32::<LittleEndian>(wtr.len() as u32).unwrap();
-        new_header.pop();
-        new_header.push(sequence_id);
-        write_buf.extend_from_slice(&new_header);
-        write_buf.extend_from_slice(&wtr);
 
         Ok(())
     }
@@ -627,8 +669,7 @@ impl<'a> MySQLConnectionHandler <'a> {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn send_error(&mut self) -> Vec<u8>{
+    pub fn send_error(&mut self, state: &str, msg: &String) {
         let mut err_header: Vec<u8> = vec![];
         let mut err_wtr: Vec<u8> = vec![];
 
@@ -636,8 +677,8 @@ impl<'a> MySQLConnectionHandler <'a> {
         err_wtr.write_u16::<LittleEndian>(1064 as u16).unwrap(); //ERROR CODE
 
         err_wtr.extend_from_slice("#".as_bytes()); //sql_state_marker
-        err_wtr.extend_from_slice("42000".as_bytes()); //SQL STATE
-        err_wtr.extend_from_slice("You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'asdf' at line 1".as_bytes());
+        err_wtr.extend_from_slice(state.as_bytes()); //SQL STATE
+        err_wtr.extend_from_slice(msg.as_bytes());
 
         err_header.write_u32::<LittleEndian>(err_wtr.len() as u32).unwrap();
         err_header.pop();
@@ -646,7 +687,10 @@ impl<'a> MySQLConnectionHandler <'a> {
         let mut write_buf: Vec<u8> = Vec::new();
         write_buf.extend_from_slice(&err_header);
         write_buf.extend_from_slice(&err_wtr);
-        write_buf
+
+        let buf_len = write_buf.len();
+        let curs = Cursor::new(write_buf);
+        self.state = State::Writing(Take::new(curs, buf_len));
     }
 
     pub fn reregister(&self, event_loop: &mut mio::EventLoop<Proxy>) {
