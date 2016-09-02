@@ -49,7 +49,7 @@ mysql --host=127.0.0.1 --port=3307 -u$MYSQL_USER -p$MYSQL_PASS -D $AGILDATA_TEST
 
 # Drop Database
 echo "Dropping database: $AGILDATA_TEST_DB"
-mysql --host=127.0.0.1 --port=3307 -u$MYSQL_USER -p$MYSQL_PASS -e "DROP DATABASE $AGILDATA_TEST_DB"
+mysql --host=127.0.0.1 --port=3306 -u$MYSQL_USER -p$MYSQL_PASS -e "DROP DATABASE $AGILDATA_TEST_DB"
 
 # Stop AgilData Zero
 echo "Stopping AgilData Zero: $AGILDATA_ZERO_PID"
