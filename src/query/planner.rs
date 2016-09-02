@@ -182,7 +182,8 @@ impl<'a> Planner<'a> {
                     Ok(None) // this isn't an encrypted table, so not our problem!
                 }
 
-            }
+            },
+            //&ASTNode::MySQLCreateTable{..} => Ok(None) // Dont need to plan this yet...
             //ASTNode::SQLInsert => {},
             _ => Err(format!("Unsupported expr for planning {:?}", sql))
         }
