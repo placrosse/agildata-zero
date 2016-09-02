@@ -252,7 +252,7 @@ mod tests {
 
         let s = String::from("zero");
         let default_schema = Some(&s);
-        let planner = Planner{default_schema: default_schema, config: &config};
+        let planner = Planner::new(default_schema, &config);
 
         let plan = planner.sql_to_rel(&parsed).unwrap();
 
