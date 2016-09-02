@@ -9,6 +9,7 @@ use byteorder::*;
 use query::{Tokenizer, Parser, Writer, SQLWriter, ASTNode};
 use query::dialects::mysqlsql::*;
 use query::dialects::ansisql::*;
+use query::planner::{Planner, TupleType, Element, HasTupleType};
 use super::writers::*;
 
 use mio::{self, TryRead, TryWrite};
@@ -271,7 +272,7 @@ impl<'a> MySQLConnectionHandler <'a> {
                                 match packet_type {
                                     0x02 => self.process_init_db(&buf, packet_len),
                                     0x03 => self.process_query(&buf, packet_len),
-                                    _ => self.mysql_send(&buf[0..packet_len + 4]),
+                                    _ => self.mysql_process_query(&buf[0..packet_len + 4], None),
                                 }
                             },
                         }
@@ -320,14 +321,14 @@ impl<'a> MySQLConnectionHandler <'a> {
         }
 
         // pass along to MySQL
-        self.mysql_send(&buf[0..packet_len + 4])
+        self.mysql_process_query(&buf[0..packet_len + 4], None)
     }
 
     fn process_init_db(&mut self, buf: &Vec<u8>, packet_len: usize) {
         let schema = parse_string(&buf[5 as usize .. (packet_len+4) as usize]);
         println!("COM_INIT_DB: {}", schema);
         self.schema = Some(schema);
-        self.mysql_send(&buf[0 .. packet_len+4]);
+        self.mysql_process_query(&buf[0 .. packet_len+4], None);
     }
 
     fn process_query(&mut self, buf: &Vec<u8>, packet_len: usize) {
@@ -364,7 +365,26 @@ impl<'a> MySQLConnectionHandler <'a> {
                 None
             }
         };
-
+        
+        let plan = match parsed {
+            None => None,
+            Some(ref sql) => {
+                let foo = match self.schema {
+                    Some(ref s) => Some(s),
+                    None => None
+                };
+                let planner = Planner::new(foo, &self.config);
+                match planner.sql_to_rel(sql) {
+                    Ok(None) => None,
+                    Ok(Some(p)) => Some(p),
+                    Err(e) => {
+                        self.send_error(); //TODO: send a specfic error
+                        return
+                    }
+                }
+            }
+        };
+        
         // visit and conditionally encrypt query
 
         // reqwrite query
@@ -408,14 +428,23 @@ impl<'a> MySQLConnectionHandler <'a> {
             assert!(0x00 == wtr[3]);
             wtr.push(0x03); // packet type for COM_Query
             wtr.extend_from_slice(slice);
-            self.mysql_send(&wtr);
+
+            match plan {
+                None => {
+                    self.mysql_process_query(&wtr, None);
+                },
+                Some(p) => {
+                    let tt = p.tt();
+                    self.mysql_process_query(&wtr, Some(tt));
+                }
+            }
 
         } else {
-            self.mysql_send(&buf[0 .. packet_len+4]);
+            self.mysql_process_query(&buf[0 .. packet_len+4], None);
         }
     }
 
-    fn mysql_send<'b>(&'b mut self, request: &'b [u8]) {
+    fn mysql_process_query<'b>(&'b mut self, request: &'b [u8], tt: Option<&TupleType>) {
         println!("Sending packet to mysql");
         self.remote.write(request).unwrap();
         self.remote.flush().unwrap();
@@ -473,7 +502,7 @@ impl<'a> MySQLConnectionHandler <'a> {
                             break
                         },
                         _ => {
-                            self.process_result_row(&row_packet, &column_meta, &mut write_buf).unwrap();
+                            self.process_result_row(&row_packet, &column_meta, &mut write_buf, tt).unwrap();
                         }
                     }
                 }
@@ -525,7 +554,9 @@ impl<'a> MySQLConnectionHandler <'a> {
     fn process_result_row(&self,
                           row_packet: &MySQLPacket,
                           column_meta: &Vec<ColumnMetaData>,
-                          write_buf: &mut Vec<u8>) -> Result<(), String> {
+                          write_buf: &mut Vec<u8>,
+                          tt: Option<&TupleType>) -> Result<(), String> {
+
         println!("Received row");
 
         //TODO: if this result set does not contain any encrypted values
@@ -538,23 +569,16 @@ impl<'a> MySQLConnectionHandler <'a> {
         let mut wtr: Vec<u8> = vec![];
 
         for i in 0 .. column_meta.len() {
-            // let is_encrypted = false;
 
-            //println!("Value {} is {:?}", i, orig_value);
+            let raw_value = r.read_lenenc_string();
 
-            let column_config = self.config.get_column_config(
-                &(column_meta[i as usize].schema),
-                &(column_meta[i as usize].table_name),
-                &(column_meta[i as usize].column_name));
+            let value = match tt {
+                Some(t) => {
+//                    match t.elements[i].
 
-            println!("config is {:?}", column_config);
 
-            let value = match column_config {
-
-                None => r.read_lenenc_string(),
-                Some(cc) => match cc {
-                    &ColumnConfig {ref encryption, ref native_type, ..} => {
-                        match native_type {
+                    /*
+                                            match native_type {
                             &NativeType::U64 => {
                                 match encryption {
                                     &EncryptionType::NA => r.read_lenenc_string(),
@@ -569,13 +593,12 @@ impl<'a> MySQLConnectionHandler <'a> {
                             }
                             _ => panic!("Native type {:?} not implemented", native_type)
                         }
-                    }
-                }
+*/
 
-                /*match cc.encryption {
-                    EncryptionType::AES => orig_value,
-                    _ => orig_value
-                }*/
+
+                    raw_value
+                },
+                None => raw_value
             };
 
             // encode this field in the new packet
@@ -628,7 +651,7 @@ impl<'a> MySQLConnectionHandler <'a> {
     }
 
     #[allow(dead_code)]
-    pub fn send_error(&mut self) -> Vec<u8>{
+    pub fn send_error(&self) -> Vec<u8>{
         let mut err_header: Vec<u8> = vec![];
         let mut err_wtr: Vec<u8> = vec![];
 

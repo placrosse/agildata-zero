@@ -70,12 +70,18 @@ impl HasTupleType for Rel {
     }
 }
 
-struct Planner<'a> {
-    default_schema: &'a String,
+pub struct Planner<'a> {
+    default_schema: Option<&'a String>,
     config: &'a Config
 }
 
 impl<'a> Planner<'a> {
+
+    pub fn new(s: Option<&'a String>,
+               c: &'a Config) -> Self {
+
+        Planner { default_schema: s, config: c }
+    }
 
     fn sql_to_rex(&self, sql: &ASTNode, tt: &TupleType) -> Result<Rex, String> {
         match sql {
@@ -101,7 +107,7 @@ impl<'a> Planner<'a> {
         }
     }
 
-    fn sql_to_rel(&self, sql: &ASTNode) -> Result<Option<Rel>, String> {
+    pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Option<Rel>, String> {
         match sql {
             &ASTNode::SQLSelect { box ref expr_list, ref relation, ref selection, ref order } => {
 
@@ -137,12 +143,17 @@ impl<'a> Planner<'a> {
             &ASTNode::SQLIdentifier { ref id, ref parts } => {
 
                 let (table_schema, table_name) = if parts.len() == 2 {
-                    (&parts[0], parts[1].clone())
+                    (Some(&parts[0]), parts[1].clone())
                 } else {
                     (self.default_schema, id.clone())
                 };
 
-                if let Some(table_config) = self.config.get_table_config(table_schema, &table_name) {
+                // if no default schema and no qualified identifier, then we're not handling it
+                if table_schema.is_none() {
+                    return Ok(None);
+                }
+
+                if let Some(table_config) = self.config.get_table_config(table_schema.unwrap(), &table_name) {
                     let tt = TupleType::new(table_config.column_map
                         .iter()
                         .map(|(k,v)| Element {
