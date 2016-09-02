@@ -10,13 +10,21 @@ pub struct TupleType {
     pub elements: Vec<Element>
 }
 
+// impl TupleType {
+//     fn extend<'a>(&'a mut self, element: Element) -> &'a Element  {
+//         self.elements.push(element);
+//         // &self.elements[self.elements.len() - 1]
+//         self.elements.last().unwrap()
+//     }
+// }
+
 impl TupleType {
     fn new(elements: Vec<Element>) -> Self {
         TupleType{elements: elements}
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Element {
     name: String,
     encryption: EncryptionType,
@@ -38,14 +46,14 @@ enum Rex {
 impl Rex {
     fn name(&self) -> String {
         match self {
-            &Rex::Identifier { el, .. } => el.name,
+            &Rex::Identifier { ref el, .. } => el.name.clone(),
             _ => panic!("")
         }
     }
 }
 
 enum Rel {
-    Projection { project: Box<Rex>, input: Box<Rel> },
+    Projection { project: Box<Rex>, input: Box<Rel> , tt: TupleType},
     Selection { input: Box<Rel> },
     TableScan { table: String, tt: TupleType },
     Dual { tt: TupleType }
@@ -58,30 +66,7 @@ trait HasTupleType {
 impl HasTupleType for Rel {
     fn tt<'a>(&'a self) -> &'a TupleType {
         match self {
-            &Rel::Projection { box project, ref input, .. } => {
-
-                let foo = match project {
-
-                    Rex::RexExprList(list) => {
-
-                        let a = list.iter().map(|p| {
-                            let x = input.tt().elements.iter().filter(|i| i.name == p.name() ).next();
-                            match x {
-                                Some(y) => y,
-                                None => Element { name: p.name(), encryption: EncryptionType::NA }
-                            }
-                        }).collect();
-
-                        TupleType { elements: a }
-                    }
-                    ,
-                    _ => panic!("")
-                };
-
-
-                //TODO: need to filter input's tuple type based on actual projection
-                input.tt()
-            },
+            &Rel::Projection { ref tt, .. } => tt,
             &Rel::Selection { ref input, .. } => input.tt(),
             &Rel::TableScan { ref tt, .. } => tt,
             &Rel::Dual { ref tt, .. } => tt
@@ -102,10 +87,11 @@ impl<'a> Planner<'a> {
                 .map(|x| self.sql_to_rex(&x, tt))
                 .collect()?)),
             &ASTNode::SQLIdentifier { ref id, ref parts } => {
-                let _ = tt.elements.iter().filter(|e| e.name == *id);
-                //                Ok(Rex::Identifier {
-                //                    id : parts.clone(), el:  })
-                Err(String::from(""))
+                let element = tt.elements.iter().filter(|e| e.name == *id).map(|e| e).collect().first();
+                match element {
+                    Some(e) => Ok(Rex::Identifier{id: parts.clone(), el: e.clone()}),
+                    None => Err(format!("Invalid identifier {}", id)) // TODO better..
+                }
             },
             _ => Err(String::from("oops"))
         }
@@ -125,9 +111,12 @@ impl<'a> Planner<'a> {
                 match input {
                     None => Ok(None),
                     Some(i) => {
+                        let project_list = self.sql_to_rex(expr_list, &i.tt() )?;
+                        let project_tt = reconcile_tt(&project_list);
                         Ok(Some(Rel::Projection {
-                            project: Box::new(self.sql_to_rex(expr_list, &i.tt() )?),
-                            input: Box::new(i)
+                            project: Box::new(project_list),
+                            input: Box::new(i),
+                            tt: project_tt
                         }))
                     }
                 }
@@ -156,5 +145,22 @@ impl<'a> Planner<'a> {
             //ASTNode::SQLInsert => {},
             _ => Err(String::from("oops)"))
         }
+    }
+}
+
+fn reconcile_tt(expr: &Rex) -> TupleType {
+    match expr {
+        &Rex::RexExprList(ref list) => {
+            let elements = list.iter().map(|e| get_element(e)).collect();
+            TupleType{elements: elements}
+        },
+        _ => panic!("Unsupported")
+    }
+}
+
+fn get_element(expr: &Rex) -> Element {
+    match expr {
+        &Rex::Identifier{ref el, ..} => el.clone(),
+        _ => panic!("Unsupported")
     }
 }
