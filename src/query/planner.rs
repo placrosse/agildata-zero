@@ -27,7 +27,8 @@ pub struct Element {
 }
 
 enum Rex {
-    Identifier(Vec<String>),
+    //Alias { name: String, expr: Box<Rex> },
+    Identifier { id: Vec<String>, el: Element },
     Literal,
     BinaryExpr,
     RelationalExpr(Rel),
@@ -36,9 +37,27 @@ enum Rex {
 
 enum Rel {
     Projection { project: Box<Rex>, input: Box<Rel> },
-    Selection,
+    Selection { input: Box<Rel> },
     TableScan { table: String, tt: TupleType },
-    Dual
+    Dual { tt: TupleType }
+}
+
+trait HasTupleType {
+    fn tt<'a>(&'a self) -> &'a TupleType;
+}
+
+impl HasTupleType for Rel {
+    fn tt<'a>(&'a self) -> &'a TupleType {
+        match self {
+            &Rel::Projection { ref input, .. } => {
+                //TODO: need to filter input's tuple type based on actual projection
+                input.tt()
+            },
+            &Rel::Selection { ref input, .. } => input.tt(),
+            &Rel::TableScan { ref tt, .. } => tt,
+            &Rel::Dual { ref tt, .. } => tt
+        }
+    }
 }
 
 struct Planner<'a> {
@@ -48,12 +67,17 @@ struct Planner<'a> {
 
 impl<'a> Planner<'a> {
 
-    fn sql_to_rex(&self, sql: &ASTNode) -> Result<Rex, String> {
+    fn sql_to_rex(&self, sql: &ASTNode, tt: &TupleType) -> Result<Rex, String> {
         match sql {
             &ASTNode::SQLExprList(ref v) => Ok(Rex::RexExprList(v.iter()
-                .map(|x| self.sql_to_rex(&x))
+                .map(|x| self.sql_to_rex(&x, tt))
                 .collect()?)),
-            &ASTNode::SQLIdentifier { ref id, ref parts } => Ok(Rex::Identifier(parts.clone())),
+            &ASTNode::SQLIdentifier { ref id, ref parts } => {
+                let _ = tt.elements.iter().filter(|e| e.name == *id);
+                //                Ok(Rex::Identifier {
+                //                    id : parts.clone(), el:  })
+                Err(String::from(""))
+            },
             _ => Err(String::from("oops"))
         }
     }
@@ -64,7 +88,7 @@ impl<'a> Planner<'a> {
 
                 let mut input = match relation {
                     &Some(box ref r) => self.sql_to_rel(r)?,
-                    &None => Some(Rel::Dual)
+                    &None => Some(Rel::Dual { tt: TupleType { elements: vec![] } })
                 };
 
                 //TODO: selection
@@ -73,7 +97,7 @@ impl<'a> Planner<'a> {
                     None => Ok(None),
                     Some(i) => {
                         Ok(Some(Rel::Projection {
-                            project: Box::new(self.sql_to_rex(expr_list)?),
+                            project: Box::new(self.sql_to_rex(expr_list, &i.tt() )?),
                             input: Box::new(i)
                         }))
                     }
