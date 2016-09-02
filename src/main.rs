@@ -1,4 +1,6 @@
-#![deny(warnings)]
+// disabling this so we can continue hacking on the MVP .. we should enable this in the future though
+//#![deny(warnings)]
+
 #![feature(inclusive_range_syntax, question_mark, box_syntax, box_patterns, integer_atomics)]
 
 pub const APP_NAME: &'static str = "AgilData Zero Gateway";
