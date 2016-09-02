@@ -4,12 +4,10 @@ use std::collections::HashMap;
 use std::error::Error;
 use byteorder::*;
 
-// use parser::sql_parser::{AnsiSQLParser, SQLExpr};
-// use parser::sql_writer::*;
 use query::{Tokenizer, Parser, Writer, SQLWriter, ASTNode};
 use query::dialects::mysqlsql::*;
 use query::dialects::ansisql::*;
-use query::planner::{Planner, TupleType, Element, HasTupleType};
+use query::planner::{Planner, TupleType, Element, HasTupleType, RelVisitor};
 use super::writers::*;
 
 use mio::{self, TryRead, TryWrite};
@@ -21,7 +19,7 @@ use config::{Config, TConfig, ColumnConfig};
 
 use encrypt::{Decrypt, NativeType, EncryptionType};
 
-use super::encryption_visitor::EncryptionVisitor;
+use super::encrypt_visitor::EncryptVisitor;
 use super::server::Proxy;
 use super::server::State;
 
@@ -365,7 +363,7 @@ impl<'a> MySQLConnectionHandler <'a> {
                 None
             }
         };
-        
+
         let plan = match parsed {
             None => None,
             Some(ref sql) => {
@@ -384,28 +382,35 @@ impl<'a> MySQLConnectionHandler <'a> {
                 }
             }
         };
-        
-        // visit and conditionally encrypt query
 
         // reqwrite query
         if parsed.is_some() {
 
             let value_map: HashMap<u32, Result<Vec<u8>, Box<Error>>> = HashMap::new();
-            let mut encrypt_vis = EncryptionVisitor {
-                config: self.config,
-                valuemap: value_map
-            };
-            match parsed {
-                Some(ref expr) => super::encryption_visitor::walk(&mut encrypt_vis, expr),
+            let mut encrypt_vis = EncryptVisitor{valuemap: value_map};
+
+            // Visit and conditionally encrypt (if there was a plan)
+            match plan {
+                Some(ref p) => {
+                    match encrypt_vis.visit_rel(p) {
+                        Ok(r) => {},
+                        Err(e) => {
+                            self.send_error(); //TODO: send a specfic error
+                            return
+                        }
+                    }
+                },
                 None => {}
             }
-            // encryption_visitor::walk(&mut encrypt_vis, &parsed.unwrap());
-
 
             let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
+            let s = match self.schema {
+                Some(ref s) => s.clone(),
+                None => String::from("") // TODO
+            };
             let translator = CreateTranslatingWriter {
                 config: &self.config,
-                schema: &String::from("zero") // TODO proxy should know its connection schema...
+                schema: &s
             };
             let mysql_writer = MySQLWriter{};
             let ansi_writer = AnsiSQLWriter{};
