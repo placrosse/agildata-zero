@@ -4,7 +4,7 @@ export exe=target/release/$app
 export ver=$(grep version Cargo.toml | cut -d'"' -f2)
 export out=$app-$ver.tgz
 
-rustup override set nightly-2016-08-31
+rustup override set nightly-2016-08-03
 
 cargo clean
 cargo test
