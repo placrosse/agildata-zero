@@ -55,7 +55,7 @@ pub enum Rel {
     Dual { tt: TupleType }
 }
 
-trait HasTupleType {
+pub trait HasTupleType {
     fn tt<'a>(&'a self) -> &'a TupleType;
 }
 
@@ -226,6 +226,6 @@ mod tests {
 }
 
 pub trait RelVisitor {
-    fn visit_rel(rel: &Rel);
-    fn visit_rex(rex: &Rex);
+    fn visit_rel(&mut self, rel: &Rel);
+    fn visit_rex(&mut self, rex: &Rex, tt: &TupleType);
 }
