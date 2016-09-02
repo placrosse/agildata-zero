@@ -35,6 +35,7 @@
 		<table name="items">
 			<column name="item_code" type="INTEGER" encryption="aes"/>
 			<column name="item_name" type="VARCHAR(50)" encryption="aes"/>
+            <column name="description" type="VARCHAR(50)" encryption="none"/>
 		</table>
 	</schema>
 </client-config>
