@@ -35,6 +35,15 @@ enum Rex {
     RexExprList(Vec<Rex>)
 }
 
+impl Rex {
+    fn name(&self) -> String {
+        match self {
+            &Rex::Identifier { el, .. } => el.name,
+            _ => panic!("")
+        }
+    }
+}
+
 enum Rel {
     Projection { project: Box<Rex>, input: Box<Rel> },
     Selection { input: Box<Rel> },
@@ -49,7 +58,27 @@ trait HasTupleType {
 impl HasTupleType for Rel {
     fn tt<'a>(&'a self) -> &'a TupleType {
         match self {
-            &Rel::Projection { ref input, .. } => {
+            &Rel::Projection { box project, ref input, .. } => {
+
+                let foo = match project {
+
+                    Rex::RexExprList(list) => {
+
+                        let a = list.iter().map(|p| {
+                            let x = input.tt().elements.iter().filter(|i| i.name == p.name() ).next();
+                            match x {
+                                Some(y) => y,
+                                None => Element { name: p.name(), encryption: EncryptionType::NA }
+                            }
+                        }).collect();
+
+                        TupleType { elements: a }
+                    }
+                    ,
+                    _ => panic!("")
+                };
+
+
                 //TODO: need to filter input's tuple type based on actual projection
                 input.tt()
             },
