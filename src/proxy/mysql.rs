@@ -474,19 +474,10 @@ impl<'a> MySQLConnectionHandler <'a> {
                 write_buf.extend_from_slice(&packet.bytes);
             },
             0xfb => panic!("not implemented"),
-            // 0x03 => {
-            //     println!("Got COM_QUERY packet");
-            //     write_buf.extend_from_slice(&packet.bytes);
-            //     loop {
-            //         let row_packet = self.remote.read_packet().unwrap();
-            //         write_buf.extend_from_slice(&row_packet.bytes);
-            //         // break on receiving Err_Packet, or EOF_Packet
-            //         match row_packet.packet_type() {
-            //             0xfe | 0xff => break,
-            //             _ => {}
-            //         }
-            //     }
-            // },
+            0x03 => {
+                println!("Got COM_QUERY packet");
+                self.process_result_set(&mut write_buf, tt);
+            },
             _ => {
 
                 println!("Got field_count packet");
@@ -499,23 +490,14 @@ impl<'a> MySQLConnectionHandler <'a> {
 
                 println!("Result set has {} columns", field_count);
 
-                let column_meta = self.read_result_set_meta(field_count, &mut write_buf).unwrap();
-
-                // process row packets until ERR or EOF
-                loop {
-                    let row_packet = self.remote.read_packet().unwrap();
-                    match row_packet.packet_type() {
-                        // break on receiving Err_Packet, or EOF_Packet
-                        0xfe | 0xff => {
-                            println!("End of result rows");
-                            write_buf.extend_from_slice(&row_packet.bytes);
-                            break
-                        },
-                        _ => {
-                            self.process_result_row(&row_packet, &column_meta, &mut write_buf, tt).unwrap();
-                        }
-                    }
+                // read one result set meta data packet per column and append to write buffer
+                for i in 0 .. field_count {
+                    let field_packet = self.remote.read_packet().unwrap();
+                    write_buf.extend_from_slice(&field_packet.bytes);
                 }
+
+                self.process_result_set(&mut write_buf, tt);
+
             }
         }
 
@@ -525,95 +507,112 @@ impl<'a> MySQLConnectionHandler <'a> {
         self.state = State::Writing(Take::new(curs, buf_len));
     }
 
-    fn read_result_set_meta(&mut self, field_count: u32, write_buf: &mut Vec<u8>) -> Result<Vec<ColumnMetaData>, String> {
-
-        let mut column_meta: Vec<ColumnMetaData> = vec![];
-
-        for i in 0 .. field_count {
-
-            let field_packet = self.remote.read_packet().unwrap();
-            write_buf.extend_from_slice(&field_packet.bytes);
-
-            let mut r = MySQLPacketParser::new(&field_packet);
-
-            //TODO: assumes these values can never be NULL
-            let catalog = r.read_lenenc_string().unwrap();
-            let schema = r.read_lenenc_string().unwrap();
-            let table = r.read_lenenc_string().unwrap();
-            let org_table = r.read_lenenc_string().unwrap();
-            let name = r.read_lenenc_string().unwrap();
-            let org_name = r.read_lenenc_string().unwrap();
-
-            println!("ALL catalog {}, schema {}, table {}, org_table {}, name {}, org_name {}",
-             catalog, schema, table, org_table, name, org_name);
-
-            let md = ColumnMetaData {
-                schema: schema,
-                table_name: table,
-                column_name: name
-            };
-
-            println!("column {} = {:?}", i, md);
-
-            column_meta.push(md);
+    fn process_result_set(&mut self, write_buf: &mut Vec<u8>, tt: Option<&TupleType>) {
+        // process row packets until ERR or EOF
+        loop {
+            let row_packet = self.remote.read_packet().unwrap();
+            match row_packet.packet_type() {
+                // break on receiving Err_Packet, or EOF_Packet
+                0xfe | 0xff => {
+                    println!("End of result rows");
+                    write_buf.extend_from_slice(&row_packet.bytes);
+                    break
+                },
+                _ => {
+                    self.process_result_row(&row_packet, write_buf, tt).unwrap();
+                }
+            }
         }
 
-        Ok(column_meta)
     }
+
+//    fn read_result_set_meta(&mut self, field_count: u32, write_buf: &mut Vec<u8>) -> Result<Vec<ColumnMetaData>, String> {
+//
+//        let mut column_meta: Vec<ColumnMetaData> = vec![];
+//
+//        for i in 0 .. field_count {
+//
+//            let field_packet = self.remote.read_packet().unwrap();
+//            write_buf.extend_from_slice(&field_packet.bytes);
+//
+//            let mut r = MySQLPacketParser::new(&field_packet);
+//
+//            //TODO: assumes these values can never be NULL
+//            let catalog = r.read_lenenc_string().unwrap();
+//            let schema = r.read_lenenc_string().unwrap();
+//            let table = r.read_lenenc_string().unwrap();
+//            let org_table = r.read_lenenc_string().unwrap();
+//            let name = r.read_lenenc_string().unwrap();
+//            let org_name = r.read_lenenc_string().unwrap();
+//
+//            println!("ALL catalog {}, schema {}, table {}, org_table {}, name {}, org_name {}",
+//             catalog, schema, table, org_table, name, org_name);
+//
+//            let md = ColumnMetaData {
+//                schema: schema,
+//                table_name: table,
+//                column_name: name
+//            };
+//
+//            println!("column {} = {:?}", i, md);
+//
+//            column_meta.push(md);
+//        }
+//
+//        Ok(column_meta)
+//    }
 
     fn process_result_row(&self,
                           row_packet: &MySQLPacket,
-                          column_meta: &Vec<ColumnMetaData>,
                           write_buf: &mut Vec<u8>,
                           tt: Option<&TupleType>) -> Result<(), String> {
 
         println!("Received row");
 
-        //TODO: if this result set does not contain any encrypted values
-        // then we can just write the packet straight to the client and
-        // skip all of this processing
+        if tt.is_some() {
 
-        //TODO do decryption here if required
-        let mut r = MySQLPacketParser::new(&row_packet);
+            let mut r = MySQLPacketParser::new(&row_packet);
 
-        let mut wtr: Vec<u8> = vec![];
+            let mut wtr: Vec<u8> = vec![];
 
-        for i in 0 .. column_meta.len() {
-
-            let value = match tt {
-                Some(t) => {
-                    match &t.elements[i].encryption {
-                        &EncryptionType::NA => r.read_lenenc_string(),
-                        encryption @ _ => match &t.elements[i].data_type {
-                            &NativeType::U64 => Some(format!("{}", u64::decrypt(&r.read_bytes().unwrap(), &encryption))),
-                            &NativeType::Varchar(_) => Some(String::decrypt(&r.read_bytes().unwrap(), &encryption)),
-                            native_type @ _ => panic!("Native type {:?} not implemented", native_type)
+            for i in 0.. tt.unwrap().elements.len() {
+                let value = match tt {
+                    Some(t) => {
+                        match &t.elements[i].encryption {
+                            &EncryptionType::NA => r.read_lenenc_string(),
+                            encryption @ _ => match &t.elements[i].data_type {
+                                &NativeType::U64 => Some(format!("{}", u64::decrypt(&r.read_bytes().unwrap(), &encryption))),
+                                &NativeType::Varchar(_) => Some(String::decrypt(&r.read_bytes().unwrap(), &encryption)),
+                                native_type @ _ => panic!("Native type {:?} not implemented", native_type)
+                            }
                         }
-                    }
-                },
-                None => r.read_lenenc_string()
-            };
+                    },
+                    None => r.read_lenenc_string()
+                };
 
-            // encode this field in the new packet
-            match value {
-                None => wtr.push(0xfb),
-                Some(v) => {
-                    let slice = v.as_bytes();
-                    //TODO: hacked to assume single byte for string length
-                    wtr.write_u8(slice.len() as u8).unwrap();
-                    wtr.extend_from_slice(&slice);
+                // encode this field in the new packet
+                match value {
+                    None => wtr.push(0xfb),
+                    Some(v) => {
+                        let slice = v.as_bytes();
+                        //TODO: hacked to assume single byte for string length
+                        wtr.write_u8(slice.len() as u8).unwrap();
+                        wtr.extend_from_slice(&slice);
+                    }
                 }
             }
 
+            let mut new_header: Vec<u8> = vec![];
+            let sequence_id = row_packet.sequence_id();
+            new_header.write_u32::<LittleEndian>(wtr.len() as u32).unwrap();
+            new_header.pop();
+            new_header.push(sequence_id);
+            write_buf.extend_from_slice(&new_header);
+            write_buf.extend_from_slice(&wtr);
+        } else {
+            // no need to decrypt, just pass the bytes along
+            write_buf.extend_from_slice(&row_packet.bytes);
         }
-
-        let mut new_header: Vec<u8> = vec![];
-        let sequence_id = row_packet.sequence_id();
-        new_header.write_u32::<LittleEndian>(wtr.len() as u32).unwrap();
-        new_header.pop();
-        new_header.push(sequence_id);
-        write_buf.extend_from_slice(&new_header);
-        write_buf.extend_from_slice(&wtr);
 
         Ok(())
     }
