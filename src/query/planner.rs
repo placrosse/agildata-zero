@@ -42,7 +42,7 @@ enum Rel {
 }
 
 struct Planner {
-    schema: String,
+    default_schema: String,
     config: Config
 }
 
@@ -79,9 +79,15 @@ impl Planner {
                     }
                 }
             },
-            &ASTNode::SQLIdentifier { id: ref table_name, parts: ref table_name_parts } => {
+            &ASTNode::SQLIdentifier { ref id, ref parts } => {
 
-                if let Some(table_config) = self.config.get_table_config(&self.schema, table_name) {
+                let (table_schema, table_name) = if parts.len() == 2 {
+                    (&parts[0], parts[1].clone())
+                } else {
+                    (&self.default_schema, id.clone())
+                };
+
+                if let Some(table_config) = self.config.get_table_config(table_schema, &table_name) {
                     let tt = TupleType::new(table_config.column_map
                         .iter()
                         .map(|(k,v)| Element {
