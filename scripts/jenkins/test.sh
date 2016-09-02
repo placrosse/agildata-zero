@@ -9,8 +9,16 @@ rustup override set nightly-2016-08-03
 cargo build
 
 # Start server in the background, storing the PID of the app
+echo "Generated binaries:"
+ls -al target/debug
+
+# Launch AgilData Zero
+echo "Launching AgilData Zero."
 target/debug/agildata-zero &
 AGILDATA_ZERO_PID=$!
+
+# PS to make sure the process is running
+ps -ax | grep $AGILDATA_ZERO_PID
 
 # Drop test databases
 
