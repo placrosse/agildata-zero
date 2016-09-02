@@ -52,7 +52,8 @@ pub enum Rel {
     Projection { project: Box<Rex>, input: Box<Rel> , tt: TupleType},
     Selection { expr: Box<Rex>, input: Box<Rel> },
     TableScan { table: String, tt: TupleType },
-    Dual { tt: TupleType }
+    Dual { tt: TupleType },
+    Insert {table: String, columns: Box<Rex>, values: Box<Rex>, tt: TupleType}
 }
 
 pub trait HasTupleType {
@@ -65,7 +66,8 @@ impl HasTupleType for Rel {
             &Rel::Projection { ref tt, .. } => tt,
             &Rel::Selection { ref input, .. } => input.tt(),
             &Rel::TableScan { ref tt, .. } => tt,
-            &Rel::Dual { ref tt, .. } => tt
+            &Rel::Dual { ref tt, .. } => tt,
+            &Rel::Insert {ref tt, ..} => tt
         }
     }
 }
@@ -140,6 +142,21 @@ impl<'a> Planner<'a> {
                 }))
 
             },
+            &ASTNode::SQLInsert {box ref table, box ref column_list, box ref values_list} => {
+                match self.sql_to_rel(table)? {
+                    Some(Rel::TableScan {table, tt}) => {
+                        Ok(Some(Rel::Insert{
+                            table: table,
+                            columns: Box::new(self.sql_to_rex(column_list, &tt)?),
+                            values: Box::new(self.sql_to_rex(values_list, &tt)?),
+                            tt: tt
+                        }))
+                    },
+                    Some(other) => return Err(format!("Unsupported table relation for INSERT {:?}", other)),
+                    None => return Ok(None)
+                }
+
+            },
             &ASTNode::SQLIdentifier { ref id, ref parts } => {
 
                 let (table_schema, table_name) = if parts.len() == 2 {
@@ -167,7 +184,7 @@ impl<'a> Planner<'a> {
 
             }
             //ASTNode::SQLInsert => {},
-            _ => Err(String::from("oops)"))
+            _ => Err(format!("Unsupported expr for planning {:?}", sql))
         }
     }
 }
@@ -187,6 +204,11 @@ fn get_element(expr: &Rex) -> Element {
         &Rex::Identifier{ref el, ..} => el.clone(),
         _ => panic!("Unsupported")
     }
+}
+
+pub trait RelVisitor {
+    fn visit_rel(&mut self, rel: &Rel) -> Result<(), String>;
+    fn visit_rex(&mut self, rex: &Rex, tt: &TupleType) -> Result<(), String>;
 }
 
 #[cfg(test)]
@@ -209,8 +231,9 @@ mod tests {
         let sql = String::from("SELECT id, first_name, last_name, ssn, age, sex FROM users");
         let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
 
-        let default_schema = String::from("zero");
-        let planner = Planner{default_schema: &default_schema, config: &config};
+        let s = String::from("zero");
+        let default_schema = Some(&s);
+        let planner = Planner{default_schema: default_schema, config: &config};
 
         let plan = planner.sql_to_rel(&parsed).unwrap();
 
@@ -227,16 +250,31 @@ mod tests {
         let sql = String::from("SELECT id, first_name, last_name, ssn, age, sex FROM users WHERE first_name = 'Frodo'");
         let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
 
-        let default_schema = String::from("zero");
-        let planner = Planner{default_schema: &default_schema, config: &config};
+        let s = String::from("zero");
+        let default_schema = Some(&s);
+        let planner = Planner::new(default_schema, &config);
 
         let plan = planner.sql_to_rel(&parsed).unwrap();
 
         println!("Plan {:#?}", plan);
     }
-}
 
-pub trait RelVisitor {
-    fn visit_rel(&mut self, rel: &Rel) -> Result<(), String>;
-    fn visit_rex(&mut self, rex: &Rex, tt: &TupleType) -> Result<(), String>;
+    #[test]
+    fn plan_simple_insert() {
+        let config = config::parse_config("zero-config.xml");
+
+        let ansi = AnsiSQLDialect::new();
+        let dialect = MySQLDialect::new(&ansi);
+
+        let sql = String::from("INSERT INTO users  (id, first_name, last_name, ssn, age, sex) VALUES(1, 'Frodo', 'Baggins', '123456789', 50, 'M')");
+        let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
+
+        let s = String::from("zero");
+        let default_schema = Some(&s);
+        let planner = Planner{default_schema: default_schema, config: &config};
+
+        let plan = planner.sql_to_rel(&parsed).unwrap();
+
+        println!("Plan {:#?}", plan);
+    }
 }
