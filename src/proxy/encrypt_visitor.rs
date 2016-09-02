@@ -56,7 +56,7 @@ impl RelVisitor for EncryptVisitor  {
 												&LiteralExpr::LiteralString(ref i, ref val) => {
 													self.valuemap.insert(i.clone(), val.clone().encrypt(&element.encryption));
 												}
-												_ => panic!("Unsupported value type {:?}", literal)
+												_ => return Err(format!("Unsupported value type {:?} for encryption", literal))
 											}
 										},
 										_ => return Err(format!("Operator {:?} not supported for encrypted column {}", op, element.name))
