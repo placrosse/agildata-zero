@@ -2,7 +2,7 @@
 export app=agildata-zero
 export exe=target/release/$app
 
-rustup override set nightly-2016-08-03
+rustup override set nightly-2016-08-31
 
 cargo test --color always
 rc=$?; if [[ $rc != 0 ]]; then
