@@ -38,7 +38,7 @@ ps -aux | grep $AGILDATA_ZERO_PID | grep -v grep
 
 # Create Database
 echo "Creating database: $AGILDATA_TEST_DB"
-mysql --host=127.0.0.1 --port=3306 -u$MYSQL_USER -p$MYSQL_PASS -e "CREATE DATABASE $AGILDATA_TEST_DB"
+mysql --host=127.0.0.1 --port=3306 -u$MYSQL_USER -p$MYSQL_PASS -e "CREATE DATABASE $AGILDATA_TEST_DB CHARACTER SET UTF8"
 
 # Copy test database info into MySQL
 mysql --host=127.0.0.1 --port=3307 -u$MYSQL_USER -p$MYSQL_PASS -D $AGILDATA_TEST_DB < scripts/test/test1.sql
