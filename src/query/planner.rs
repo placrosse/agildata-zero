@@ -89,7 +89,7 @@ impl<'a> Planner<'a> {
         match sql {
             &ASTNode::SQLExprList(ref v) => Ok(Rex::RexExprList(v.iter()
                 .map(|x| self.sql_to_rex(&x, tt))
-                .collect()?)),
+                .collect::<Result<Vec<_>,_>>()?)),
             &ASTNode::SQLIdentifier { ref id, ref parts } => {
                 let element = tt.elements.iter().filter(|e| e.name == *id).next();
                 match element {
