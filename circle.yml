@@ -1,0 +1,24 @@
+machine:
+  pre:
+    - mkdir -p rust-setup
+    - curl -sS https://static.rust-lang.org/rustup.sh > rust-setup/rustup.sh
+    - chmod +x rust-setup/rustup.sh
+    - rust-setup/rustup.sh --yes
+
+dependencies:
+  override:
+    - cargo build
+
+  cache_directories:
+    - "/home/ubuntu/rust-setup"
+
+test:
+  override:
+    - cargo test
+
+# deployment:
+#   deploy:
+#     branch: [develop, master]
+#     commands:
+#       - cargo deploy
+
