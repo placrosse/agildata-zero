@@ -1,6 +1,8 @@
 machine:
   pre:
-    - curl https://sh.rustup.rs -sSf | sh
+    - if [ ! -f "/home/ubuntu/rustup.sh" ]; then curl https://sh.rustup.rs -sSf > /home/ubuntu/rustup.sh; fi
+    - chmod ogu+x /home/ubuntu/rustup.sh
+    - /home/ubuntu/rust.sh -y
     - echo "source $HOME/.cargo/env" >> /home/ubuntu/.bashrc
     - rustup default nightly
     - rm -f /home/ubuntu/.gitconfig
@@ -10,7 +12,7 @@ dependencies:
     - cargo build
 
   cache_directories:
-    - "/home/ubuntu/rust-setup"
+    - "/home/ubuntu/rustup.sh"
 
 test:
   override:
