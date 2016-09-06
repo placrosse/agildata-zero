@@ -2,7 +2,7 @@ machine:
   pre:
     - if [ ! -f "/home/ubuntu/rustup.sh" ]; then curl https://sh.rustup.rs -sSf > /home/ubuntu/rustup.sh; fi
     - chmod ogu+x /home/ubuntu/rustup.sh
-    - /home/ubuntu/rust.sh -y
+    - /home/ubuntu/rustup.sh -y
     - echo "source $HOME/.cargo/env" >> /home/ubuntu/.bashrc
     - rustup default nightly
     - rm -f /home/ubuntu/.gitconfig
