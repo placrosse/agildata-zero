@@ -7,14 +7,14 @@ machine:
 
 dependencies:
   override:
-    - cargo build
+    - eval `ssh-agent` && ssh-add /home/ubuntu/.ssh/id_circleci_github && cargo build
 
   cache_directories:
     - "/home/ubuntu/rust-setup"
 
 test:
   override:
-    - cargo test
+    - eval `ssh-agent` && ssh-add /home/ubuntu/.ssh/id_circleci_github && cargo test
 
 # deployment:
 #   deploy:
