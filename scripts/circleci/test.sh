@@ -38,6 +38,11 @@ rm -f scripts/test/test*-output.sql
 echo "Running test script: test1.sql"
 mysql --host=127.0.0.1 --port=3307 -u$MYSQL_USER -p$MYSQL_PASS -D $AGILDATA_TEST_DB < scripts/test/test1.sql > scripts/test/test1-output.sql
 
+echo
+echo "Comparing output from test1.sql against expected output."
+diff scripts/test/expected1.sql scripts/test/test1-output.sql
+echo
+
 # echo "Comparing output from test1.sql against expected1.sql (Any output indicates an error.)"
 # diff scripts/test/expected1.sql scripts/test/output1.sql
 
