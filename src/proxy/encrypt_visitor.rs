@@ -17,7 +17,7 @@ impl EncryptVisitor {
 
 
 impl RelVisitor for EncryptVisitor  {
-	fn visit_rel(&mut self, rel: &Rel) -> Result<(), String> {
+	fn visit_rel(&mut self, rel: &Rel) -> Result<(),  Box<Error>> {
 		match rel {
 			&Rel::Projection{box ref project, box ref input, ref tt} => {
 				self.visit_rex(project, tt)?;
@@ -44,26 +44,26 @@ impl RelVisitor for EncryptVisitor  {
 												&LiteralExpr::LiteralString(ref i, ref val) => {
 													self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption));
 												}
-												_ => return Err(format!("Unsupported value type {:?} for encryption", lit))
+												_ => return Err(format!("Unsupported value type {:?} for encryption", lit).into())
 											}
 										}
 
 									} else {
-										return Err(format!("Expected identifier at column list index {}, received {:?}", index, c_list[index]))
+										return Err(format!("Expected identifier at column list index {}, received {:?}", index, c_list[index]).into())
 									}
 								},
 								_ => {}
 							}
 						}
 					},
-					_ => return Err(String::from("Unsupported INSERT syntax"))
+					_ => return Err(String::from("Unsupported INSERT syntax").into())
 				}
 			}
 		}
 		Ok(())
 	}
 
-	fn visit_rex(&mut self, rex: &Rex, tt: &TupleType) -> Result<(), String> {
+	fn visit_rex(&mut self, rex: &Rex, tt: &TupleType) -> Result<(),  Box<Error>> {
 		match rex {
 			&Rex::BinaryExpr{box ref left, ref op, box ref right} => {
 				match op {
@@ -96,10 +96,10 @@ impl RelVisitor for EncryptVisitor  {
 												&LiteralExpr::LiteralString(ref i, ref val) => {
 													self.valuemap.insert(i.clone(), val.clone().encrypt(&element.encryption));
 												}
-												_ => return Err(format!("Unsupported value type {:?} for encryption", literal))
+												_ => return Err(format!("Unsupported value type {:?} for encryption", literal).into())
 											}
 										},
-										_ => return Err(format!("Operator {:?} not supported for encrypted column {}", op, element.name))
+										_ => return Err(format!("Operator {:?} not supported for encrypted column {}", op, element.name).into())
 									}
 								}
 							}

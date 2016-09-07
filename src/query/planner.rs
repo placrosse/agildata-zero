@@ -1,7 +1,7 @@
 use super::super::encrypt;
 use super::super::config;
 use super::{ASTNode, Operator, LiteralExpr};
-
+use std::error::Error;
 use encrypt::EncryptionType;
 use config::*;
 use encrypt::NativeType;
@@ -85,7 +85,7 @@ impl<'a> Planner<'a> {
         Planner { default_schema: s, config: c }
     }
 
-    fn sql_to_rex(&self, sql: &ASTNode, tt: &TupleType) -> Result<Rex, String> {
+    fn sql_to_rex(&self, sql: &ASTNode, tt: &TupleType) -> Result<Rex, Box<Error>> {
         match sql {
             &ASTNode::SQLExprList(ref v) => Ok(Rex::RexExprList(v.iter()
                 .map(|x| self.sql_to_rex(&x, tt))
@@ -94,7 +94,7 @@ impl<'a> Planner<'a> {
                 let element = tt.elements.iter().filter(|e| e.name == *id).next();
                 match element {
                     Some(e) => Ok(Rex::Identifier{id: parts.clone(), el: e.clone()}),
-                    None => Err(format!("Invalid identifier {}", id)) // TODO better..
+                    None => Err(format!("Invalid identifier {}", id).into()) // TODO better..
                 }
             },
             &ASTNode::SQLBinary{box ref left, ref op, box ref right} => {
@@ -105,11 +105,11 @@ impl<'a> Planner<'a> {
                 })
             },
             &ASTNode::SQLLiteral(ref literal) => Ok(Rex::Literal(literal.clone())),
-            _ => Err(format!("Unsupported expr {:?}", sql))
+            _ => Err(format!("Unsupported expr {:?}", sql).into())
         }
     }
 
-    pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Option<Rel>, String> {
+    pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Option<Rel>, Box<Error>> {
         match sql {
             &ASTNode::SQLSelect { box ref expr_list, ref relation, ref selection, ref order } => {
 
@@ -152,7 +152,7 @@ impl<'a> Planner<'a> {
                             tt: tt
                         }))
                     },
-                    Some(other) => return Err(format!("Unsupported table relation for INSERT {:?}", other)),
+                    Some(other) => return Err(format!("Unsupported table relation for INSERT {:?}", other).into()),
                     None => return Ok(None)
                 }
 
@@ -185,7 +185,7 @@ impl<'a> Planner<'a> {
             },
             &ASTNode::MySQLCreateTable{..} => Ok(None), // Dont need to plan this yet...
             //ASTNode::SQLInsert => {},
-            _ => Err(format!("Unsupported expr for planning {:?}", sql))
+            _ => Err(format!("Unsupported expr for planning {:?}", sql).into())
         }
     }
 }
@@ -208,8 +208,8 @@ fn get_element(expr: &Rex) -> Element {
 }
 
 pub trait RelVisitor {
-    fn visit_rel(&mut self, rel: &Rel) -> Result<(), String>;
-    fn visit_rex(&mut self, rex: &Rex, tt: &TupleType) -> Result<(), String>;
+    fn visit_rel(&mut self, rel: &Rel) -> Result<(), Box<Error>>;
+    fn visit_rex(&mut self, rex: &Rex, tt: &TupleType) -> Result<(), Box<Error>>;
 }
 
 #[cfg(test)]

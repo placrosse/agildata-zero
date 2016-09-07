@@ -3,7 +3,6 @@ use std::io::{Read, Write, Cursor};
 use std::collections::HashMap;
 use std::error::Error;
 use byteorder::*;
-
 use query::{Tokenizer, Parser, Writer, SQLWriter, ASTNode};
 use query::dialects::mysqlsql::*;
 use query::dialects::ansisql::*;
@@ -247,7 +246,7 @@ impl<'a> MySQLConnectionHandler <'a> {
     }
 
     /// process a single mysql packet from the client
-    pub fn read(&mut self, event_loop: &mut mio::EventLoop<Proxy>) {
+    pub fn read(&mut self, event_loop: &mut mio::EventLoop<Proxy>){
         println!("Reading from client");
 
         let mut buf = Vec::with_capacity(1024);
@@ -270,8 +269,25 @@ impl<'a> MySQLConnectionHandler <'a> {
                                 let packet_type = buf[4];
                                 match packet_type {
                                     0x02 => self.process_init_db(&buf, packet_len),
-                                    0x03 => self.process_query(&buf, packet_len),
-                                    _ => self.mysql_process_query(&buf[0..packet_len + 4], None),
+                                    0x03 => {
+                                        let res = self.process_query(&buf, packet_len);
+                                        match res {
+                                            Err(e) => {
+                                                self.send_error(&String::from("42000"), &e.to_string());
+                                             },
+                                            Ok(()) => {}
+                                        }
+                                    },
+                                    _ => {
+                                        let res = self.mysql_process_query(&buf[0..packet_len + 4], None);
+                                        match res {
+                                            Err(e) => {
+                                                self.send_error(&String::from("42000"), &e.to_string());
+                                            },
+                                            Ok(()) => {}
+
+                                        }
+                                    },
                                 }
                             },
                         }
@@ -286,6 +302,7 @@ impl<'a> MySQLConnectionHandler <'a> {
                 // Re-register the socket with the event loop. The current
                 // state is used to determine whether we are currently reading
                 // or writing.
+                println!("Reregistering");
                 self.reregister(event_loop);
             },
             Ok(None) => {
@@ -320,7 +337,7 @@ impl<'a> MySQLConnectionHandler <'a> {
         }
 
         // pass along to MySQL
-        self.mysql_process_query(&buf[0..packet_len + 4], None)
+        self.mysql_process_query(&buf[0..packet_len + 4], None);
     }
 
     fn process_init_db(&mut self, buf: &Vec<u8>, packet_len: usize) {
@@ -330,7 +347,7 @@ impl<'a> MySQLConnectionHandler <'a> {
         self.mysql_process_query(&buf[0 .. packet_len+4], None);
     }
 
-    fn process_query(&mut self, buf: &Vec<u8>, packet_len: usize) {
+    fn process_query(&mut self, buf: &Vec<u8>, packet_len: usize) -> Result<(), Box<Error>> {
         println!("0x03");
 
         let query = parse_string(&buf[5 as usize .. (packet_len+4) as usize]);
@@ -365,14 +382,7 @@ impl<'a> MySQLConnectionHandler <'a> {
             }
         };
 
-        let plan = match self.plan(&parsed) {
-            Ok(None) => None,
-            Ok(Some(p)) => Some(p),
-            Err(e) => {
-                self.send_error(&String::from("42000"), &e);
-                return;
-            }
-        };
+        let plan = try!(self.plan(&parsed));
 
         // reqwrite query
         if parsed.is_some() {
@@ -383,13 +393,7 @@ impl<'a> MySQLConnectionHandler <'a> {
             // Visit and conditionally encrypt (if there was a plan)
             match plan {
                 Some(ref p) => {
-                    match encrypt_vis.visit_rel(p) {
-                        Ok(r) => {},
-                        Err(ref e) => {
-                            self.send_error("4200", e); //TODO: send a specfic error
-                            return
-                        }
-                    }
+                    try!(encrypt_vis.visit_rel(p));
                 },
                 None => {}
             }
@@ -427,20 +431,23 @@ impl<'a> MySQLConnectionHandler <'a> {
 
             match plan {
                 None => {
-                    self.mysql_process_query(&wtr, None);
+                    try!(self.mysql_process_query(&wtr, None));
+                    return Ok(());
                 },
                 Some(p) => {
                     let tt = p.tt();
-                    self.mysql_process_query(&wtr, Some(tt));
+                    try!(self.mysql_process_query(&wtr, Some(tt)));
+                    return Ok(());
                 }
             }
 
         } else {
-            self.mysql_process_query(&buf[0 .. packet_len+4], None);
+            try!(self.mysql_process_query(&buf[0 .. packet_len+4], None));
+            return Ok(());
         }
     }
 
-    fn plan(&self, parsed: &Option<ASTNode>) -> Result<Option<Rel>, String> {
+    fn plan(&self, parsed: &Option<ASTNode>) -> Result<Option<Rel>, Box<Error>> {
         match parsed {
             &None => Ok(None),
             &Some(ref sql) => {
@@ -454,7 +461,7 @@ impl<'a> MySQLConnectionHandler <'a> {
         }
     }
 
-    fn mysql_process_query<'b>(&'b mut self, request: &'b [u8], tt: Option<&TupleType>) {
+    fn mysql_process_query<'b>(&'b mut self, request: &'b [u8], tt: Option<&TupleType>) -> Result<(), Box<Error>> {
         println!("Sending packet to mysql");
         self.remote.write(request).unwrap();
         self.remote.flush().unwrap();
@@ -486,7 +493,7 @@ impl<'a> MySQLConnectionHandler <'a> {
                             println!("column meta data packet type {}", field_packet.bytes[4]);
                             write_buf.extend_from_slice(&field_packet.bytes);
                         }
-                        self.process_result_set(&mut write_buf, tt);
+                        try!(self.process_result_set(&mut write_buf, tt));
                     },
                     None => {
                         loop {
@@ -523,7 +530,7 @@ impl<'a> MySQLConnectionHandler <'a> {
                     write_buf.extend_from_slice(&field_packet.bytes);
                 }
 
-                self.process_result_set(&mut write_buf, tt);
+                try!(self.process_result_set(&mut write_buf, tt));
 
             }
         }
@@ -532,9 +539,10 @@ impl<'a> MySQLConnectionHandler <'a> {
         let buf_len = write_buf.len();
         let curs = Cursor::new(write_buf);
         self.state = State::Writing(Take::new(curs, buf_len));
+        Ok(())
     }
 
-    fn process_result_set(&mut self, write_buf: &mut Vec<u8>, tt: Option<&TupleType>) {
+    fn process_result_set(&mut self, write_buf: &mut Vec<u8>, tt: Option<&TupleType>)  -> Result<(), Box<Error>> {
         // process row packets until ERR or EOF
         loop {
             let row_packet = self.remote.read_packet().unwrap();
@@ -543,10 +551,10 @@ impl<'a> MySQLConnectionHandler <'a> {
                 0xfe | 0xff => {
                     println!("End of result rows");
                     write_buf.extend_from_slice(&row_packet.bytes);
-                    break
+                    return Ok(());
                 },
                 _ => {
-                    self.process_result_row(&row_packet, write_buf, tt).unwrap();
+                    try!(self.process_result_row(&row_packet, write_buf, tt));
                 }
             }
         }
@@ -589,10 +597,10 @@ impl<'a> MySQLConnectionHandler <'a> {
 //        Ok(column_meta)
 //    }
 
-    fn process_result_row(&self,
+    fn process_result_row(&mut self,
                           row_packet: &MySQLPacket,
                           write_buf: &mut Vec<u8>,
-                          tt: Option<&TupleType>) -> Result<(), String> {
+                          tt: Option<&TupleType>) -> Result<(), Box<Error>> {
 
         println!("Received row");
 
@@ -608,12 +616,18 @@ impl<'a> MySQLConnectionHandler <'a> {
                         match &t.elements[i].encryption {
                             &EncryptionType::NA => r.read_lenenc_string(),
                             encryption @ _ => match &t.elements[i].data_type {
-                                &NativeType::U64 => Some(format!("{}", u64::decrypt(&r.read_bytes().unwrap(), &encryption))),
-                                &NativeType::Varchar(_) => Some(String::decrypt(&r.read_bytes().unwrap(), &encryption)),
+                                &NativeType::U64 => {
+                                    let res = try!(u64::decrypt(&r.read_bytes().unwrap(), &encryption));
+                                    Some(format!("{}", res))},
+                                &NativeType::Varchar(_) => {
+                                    let res = try!(String::decrypt(&r.read_bytes().unwrap(), &encryption));
+                                    Some(res)
+                                },
                                 native_type @ _ => panic!("Native type {:?} not implemented", native_type)
                             }
                         }
                     },
+
                     None => r.read_lenenc_string()
                 };
 
@@ -653,12 +667,14 @@ impl<'a> MySQLConnectionHandler <'a> {
             Ok(Some(_)) => {
                 // If the entire line has been written, transition back to the
                 // reading state
+                println!("Transitioning to reading");
                 self.state.try_transition_to_reading();
 
                 // Re-register the socket with the event loop.
                 self.reregister(event_loop);
             }
             Ok(None) => {
+                println!("Just Reregistering");
                 // The socket wasn't actually ready, re-register the socket
                 // with the event loop
                 self.reregister(event_loop);
