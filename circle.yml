@@ -1,4 +1,7 @@
 machine:
+  mysql:
+    version: 5.7.12
+
   pre:
     - if [ ! -f "/home/ubuntu/rustup.sh" ]; then curl https://sh.rustup.rs -sSf > /home/ubuntu/rustup.sh; fi
     - chmod ogu+x /home/ubuntu/rustup.sh
@@ -6,6 +9,7 @@ machine:
     - echo "source $HOME/.cargo/env" >> /home/ubuntu/.bashrc
     - rustup default nightly
     - rm -f /home/ubuntu/.gitconfig
+    - sudo service mysql start
 
 dependencies:
   override:
