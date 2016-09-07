@@ -1,0 +1,27 @@
+machine:
+  pre:
+    - if [ ! -f "/home/ubuntu/rustup.sh" ]; then curl https://sh.rustup.rs -sSf > /home/ubuntu/rustup.sh; fi
+    - chmod ogu+x /home/ubuntu/rustup.sh
+    - /home/ubuntu/rustup.sh -y
+    - echo "source $HOME/.cargo/env" >> /home/ubuntu/.bashrc
+    - rustup default nightly
+    - rm -f /home/ubuntu/.gitconfig
+
+dependencies:
+  override:
+#    - source /home/ubuntu/.cargo/env && rustup default nightly && cargo build
+    - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-08-03 && cargo build
+
+  cache_directories:
+    - "/home/ubuntu/rustup.sh"
+
+test:
+  override:
+    - cargo test
+
+# deployment:
+#   deploy:
+#     branch: [develop, master]
+#     commands:
+#       - cargo deploy
+
