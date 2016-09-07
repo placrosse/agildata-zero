@@ -256,7 +256,7 @@ pub enum UnionType {
 	DISTINCT
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum JoinType {
 	INNER,
 	LEFT,
