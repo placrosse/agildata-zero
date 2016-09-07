@@ -31,10 +31,11 @@ dependencies:
   cache_directories:
     - "/home/ubuntu/rustup.sh"
     - "/home/ubuntu/.cargo"
+    - "/home/ubuntu/.multirust"
 
 test:
   override:
-    - cargo test
+    - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-08-03 && cargo test
 
 # deployment:
 #   deploy:
