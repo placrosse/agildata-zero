@@ -11,7 +11,3 @@ id	first_name	last_name	ssn	age	sex
 10	Arnold Judas	Rimmer	623456789	3000043	M
 id	first_name	last_name	ssn	age	sex
 5	Barry	Kripke	123452789	34	M
-asdf
-asdf
-asdf
-
