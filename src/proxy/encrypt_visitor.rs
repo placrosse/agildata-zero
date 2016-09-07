@@ -183,7 +183,10 @@ mod tests {
 
 		let rewritten = writer.write(&parsed).unwrap();
 
-		println!("Rewritten: {}", rewritten);	}
+		println!("Rewritten: {}", rewritten);
+
+		assert_eq!(rewritten, String::from("SELECT id, first_name, last_name, ssn, age, sex FROM users WHERE first_name =X'0000000000000000000000001634B73C83460779A2179A0134D8F22A82F7EF5FD4'"));
+	}
 
 	#[test]
 	fn test_relvis_insert() {
@@ -208,6 +211,8 @@ mod tests {
 		let rewritten = writer.write(&parsed).unwrap();
 
 		println!("Rewritten: {}", rewritten);
+
+		assert_eq!(rewritten, String::from("INSERT INTO users ( id, first_name, last_name, ssn, age, sex) VALUES( 1,X'0000000000000000000000001A27B6319FFE5092BC87E3F8A8D59DEFC1CEFC35AA',X'0000000000000000000000001A29A8348545EF85B58E92DFE127DD4942CB5622F01F',X'0000000000000000000000006174EB6CD91D111BD46235D350E485AA0BA1DCCBF442BE0C8A',X'0000000000000000000000005046D858EC2B26384619838AA28512F4082E25592BD37DBC',X'00000000000000000000000016A2122F7E9A44212C8CD2FC4185084959')"));
 
 	}
 
@@ -235,6 +240,8 @@ mod tests {
 		let rewritten = writer.write(&parsed).unwrap();
 
 		println!("Rewritten: {}", rewritten);
+
+		assert_eq!(rewritten, String::from("SELECT l.id, r.id, l.first_name, r.user_id FROM users AS l INNER JOIN user_purchases AS r ON l.id = r.user_id"));
 	}
 
 	#[test]
