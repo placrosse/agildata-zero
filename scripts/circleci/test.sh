@@ -10,7 +10,10 @@ AGILDATA_TEST_DB="zero"
 MYSQL_USER="agiluser"
 MYSQL_PASS="password123"
 
-TESTS={test1 test2}
+TESTS=(
+  'test1'
+  'test2'
+)
 
 # # Clear out binaries already built
 # echo "Clearing out already built binaries."
@@ -32,10 +35,6 @@ echo "AgilData Zero launched: Process ID=$AGILDATA_ZERO_PID"
 
 # PS to make sure the process is running
 ps -aux | grep $AGILDATA_ZERO_PID | grep -v grep
-
-# Create Database
-echo "Creating database: $AGILDATA_TEST_DB"
-mysql --host=127.0.0.1 --port=3307 -u$MYSQL_USER -p$MYSQL_PASS -e "CREATE DATABASE $AGILDATA_TEST_DB CHARACTER SET UTF8"
 
 # Clear out previous run results
 rm -f scripts/test/output*.sql
