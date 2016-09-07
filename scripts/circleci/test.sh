@@ -40,7 +40,12 @@ mysql --host=127.0.0.1 --port=3307 -u$MYSQL_USER -p$MYSQL_PASS -D $AGILDATA_TEST
 
 echo
 echo "Comparing output from test1.sql against expected output."
-diff scripts/test/expected1.sql scripts/test/test1-output.sql
+output=$(diff scripts/test/expected1.sql scripts/test/test1-output.sql)
+if [ output ne "" ]; then
+  echo "Output from test1.sql does not match expected output; integration test fails!"
+  exit 2
+fi
+
 echo
 
 # echo "Comparing output from test1.sql against expected1.sql (Any output indicates an error.)"
