@@ -9,7 +9,8 @@ machine:
 
 dependencies:
   override:
-    - cargo build
+#    - source /home/ubuntu/.cargo/env && rustup default nightly && cargo build
+    - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-08-03 && cargo build
 
   cache_directories:
     - "/home/ubuntu/rustup.sh"
