@@ -239,6 +239,8 @@ mod tests {
 
 	#[test]
 	fn test_relvis_join_unsupported() {
+
+		// mismatched encryption types
 		let mut sql = String::from("SELECT l.id, r.id, l.first_name, r.user_id
 		 FROM users AS l
 		 JOIN user_purchases AS r ON l.id = r.item_code");
@@ -251,6 +253,7 @@ mod tests {
 
 		assert_eq!(encrypt_vis.visit_rel(&plan), Err(String::from("Unsupported operation:  l.id [NA, U64] EQ r.item_code [AES, U64]")));
 
+		// two unencryped columns
 		sql = String::from("SELECT l.id, r.id, l.first_name, r.user_id
 		 FROM users AS l
 		 JOIN user_purchases AS r ON l.id > r.user_id");
@@ -258,6 +261,7 @@ mod tests {
 
 		assert_eq!(encrypt_vis.visit_rel(&plan).is_ok(), true);
 
+		// unsupported operator on two encrypted columns
 		sql = String::from("SELECT l.id, r.id, l.first_name, r.user_id
 		 FROM users AS l
 		 JOIN user_purchases AS r ON l.age > r.item_code");
