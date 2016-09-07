@@ -10,20 +10,12 @@ AGILDATA_TEST_DB="zero"
 MYSQL_USER="agiluser"
 MYSQL_PASS="password123"
 
-# # Clear out binaries already built
-# echo "Clearing out already built binaries."
-# rm -rf target
-# 
-# # Build Zero
-# echo "Building AgilData Zero"
-# cargo build
-
 # Start server in the background, storing the PID of the app
 echo "Generated binaries:"
 ls -al target/debug
+echo
 
 # Launch AgilData Zero
-echo "Launching AgilData Zero."
 target/debug/agildata-zero 2>&1 >/dev/null & 
 AGILDATA_ZERO_PID=$!
 echo "AgilData Zero launched: Process ID=$AGILDATA_ZERO_PID"
@@ -43,6 +35,11 @@ echo "Comparing output from test1.sql against expected output."
 output=$(diff scripts/test/expected1.sql scripts/test/test1-output.sql)
 if [ "${output}" != "" ]; then
   echo "Output from test1.sql does not match expected output; integration test fails!"
+  echo
+  echo "--- DIFF OUTPUT: ---"
+  echo "${output}"
+  echo "--- END DIFF OUTPUT ---"
+  echo
   exit 2
 fi
 
