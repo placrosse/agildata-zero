@@ -10,11 +10,6 @@ AGILDATA_TEST_DB="zero"
 MYSQL_USER="agiluser"
 MYSQL_PASS="password123"
 
-TESTS=(
-  'test1'
-  'test2'
-)
-
 # # Clear out binaries already built
 # echo "Clearing out already built binaries."
 # rm -rf target
@@ -37,13 +32,11 @@ echo "AgilData Zero launched: Process ID=$AGILDATA_ZERO_PID"
 ps -aux | grep $AGILDATA_ZERO_PID | grep -v grep
 
 # Clear out previous run results
-rm -f scripts/test/output*.sql
+rm -f scripts/test/test*-output.sql
 
 # Copy test database info into MySQL
-for mysql_script in ${TESTS[@]}; do
-  echo "Running test script: ${mysql_script}.sql"
-  mysql --host=127.0.0.1 --port=3307 -u$MYSQL_USER -p$MYSQL_PASS -D $AGILDATA_TEST_DB < scripts/test/${mysql_script}.sql > scripts/test/${mysql_script}-output.sql
-done
+echo "Running test script: test1.sql"
+mysql --host=127.0.0.1 --port=3307 -u$MYSQL_USER -p$MYSQL_PASS -D $AGILDATA_TEST_DB < scripts/test/test1.sql > scripts/test/test1-output.sql
 
 # echo "Comparing output from test1.sql against expected1.sql (Any output indicates an error.)"
 # diff scripts/test/expected1.sql scripts/test/output1.sql
