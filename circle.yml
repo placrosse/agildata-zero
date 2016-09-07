@@ -1,0 +1,45 @@
+machine:
+  services:
+    - docker
+
+  pre:
+    - if [ ! -f "/home/ubuntu/rustup.sh" ]; then curl https://sh.rustup.rs -sSf > /home/ubuntu/rustup.sh; fi
+    - chmod ogu+x /home/ubuntu/rustup.sh
+    - /home/ubuntu/rustup.sh -y
+    - echo "source $HOME/.cargo/env" >> /home/ubuntu/.bashrc
+    - rustup default nightly
+    - rm -f /home/ubuntu/.gitconfig
+    - sudo service mysql stop
+
+dependencies:
+  pre:
+    - >
+      docker run
+      --detach
+      --name mysql
+      --publish 3306:3306
+      --env MYSQL_ALLOW_EMPTY_PASSWORD='yes'
+      --env MYSQL_DATABASE=zero
+      --env MYSQL_USER=agiluser
+      --env MYSQL_PASSWORD=password123
+      mysql:5.7.12 ; echo "MySQL 5.7.12 Docker Image started."
+
+  override:
+#    - source /home/ubuntu/.cargo/env && rustup default nightly && cargo build
+    - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-08-03 && cargo build
+
+  cache_directories:
+    - "/home/ubuntu/rustup.sh"
+    - "/home/ubuntu/.cargo"
+    - "/home/ubuntu/.multirust"
+
+test:
+  override:
+    - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-08-03 && cargo test
+
+# deployment:
+#   deploy:
+#     branch: [develop, master]
+#     commands:
+#       - cargo deploy
+
