@@ -1,4 +1,7 @@
 machine:
+  services:
+    - docker
+
   pre:
     - if [ ! -f "/home/ubuntu/rustup.sh" ]; then curl https://sh.rustup.rs -sSf > /home/ubuntu/rustup.sh; fi
     - chmod ogu+x /home/ubuntu/rustup.sh
