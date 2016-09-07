@@ -9,7 +9,7 @@ use query::dialects::ansisql::*;
 
 use query::planner::{Planner, TupleType, Element, HasTupleType, RelVisitor, Rel};
 use super::writers::*;
-
+use std::net::Shutdown as ShutdownStd;
 use mio::{self, TryRead, TryWrite};
 use mio::tcp::*;
 
@@ -22,6 +22,7 @@ use encrypt::{Decrypt, NativeType, EncryptionType};
 use super::encrypt_visitor::EncryptVisitor;
 use super::server::Proxy;
 use super::server::State;
+
 
 #[derive(Debug)]
 pub struct MySQLPacket {
@@ -274,7 +275,10 @@ impl<'a> MySQLConnectionHandler <'a> {
                                         match res {
                                             Err(e) => {
                                                 self.send_error(&String::from("42000"), &e.to_string());
-                                             },
+                                                self.clear_mysql_read();
+
+                                                },
+
                                             Ok(()) => {}
                                         }
                                     },
@@ -283,6 +287,7 @@ impl<'a> MySQLConnectionHandler <'a> {
                                         match res {
                                             Err(e) => {
                                                 self.send_error(&String::from("42000"), &e.to_string());
+                                                self.clear_mysql_read();
                                             },
                                             Ok(()) => {}
 
@@ -302,7 +307,7 @@ impl<'a> MySQLConnectionHandler <'a> {
                 // Re-register the socket with the event loop. The current
                 // state is used to determine whether we are currently reading
                 // or writing.
-                println!("Reregistering");
+                println!("Reregistering - {:?}", self.phase);
                 self.reregister(event_loop);
             },
             Ok(None) => {
@@ -709,6 +714,19 @@ impl<'a> MySQLConnectionHandler <'a> {
         self.state = State::Writing(Take::new(curs, buf_len));
     }
 
+    pub fn clear_mysql_read(&mut self){ //TODO: This is a hack for now.
+        loop {
+            let row_packet = self.remote.read_packet().unwrap();
+            match row_packet.packet_type() {
+                // break on receiving Err_Packet, or EOF_Packet
+                0xfe | 0xff => {
+                    println!("End of result rows");
+                    //write_buf.extend_from_slice(&row_packet.bytes);
+                    break;
+                },
+                _=>{}
+            }}
+    }
     pub fn reregister(&self, event_loop: &mut mio::EventLoop<Proxy>) {
         event_loop.reregister(&self.socket, self.token, self.state.event_set(), mio::PollOpt::oneshot())
             .unwrap();
