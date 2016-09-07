@@ -28,6 +28,15 @@ impl RelVisitor for EncryptVisitor  {
 				self.visit_rel(input)?;
 			},
 			&Rel::TableScan{..} => {},
+			&Rel::Join{box ref left, ref join_type, box ref right, ref on_expr, ref tt} => {
+				self.visit_rel(left)?;
+				self.visit_rel(right)?;
+				match on_expr {
+					&Some(box ref o) => self.visit_rex(o, tt)?,
+					&None => {}
+				}
+			},
+			&Rel::AliasedRel{box ref input, ..} => self.visit_rel(input)?,
 			&Rel::Dual{..} => {},
 			&Rel::Insert{ref table, box ref columns, box ref values, ref tt} => {
 				match (columns, values) {
@@ -59,6 +68,7 @@ impl RelVisitor for EncryptVisitor  {
 					_ => return Err(String::from("Unsupported INSERT syntax"))
 				}
 			}
+			//_ => return Err(format!("Unsupported rel {:?}", rel))
 		}
 		Ok(())
 	}
@@ -104,6 +114,32 @@ impl RelVisitor for EncryptVisitor  {
 								}
 							}
 
+						} else if let Some((left_element, right_element)) = match (left, right) {
+							(&Rex::Identifier{el: ref l, ..}, &Rex::Identifier{el: ref r, .. }) => Some((l, r)),
+							_ => None
+						} {
+							// If there is a mismatch on an operation between two identifiers, return an error
+							if !(left_element.encryption == right_element.encryption && left_element.data_type == right_element.data_type) {
+								return Err(format!(
+									"Unsupported operation:  {}.{} [{:?}, {:?}] {:?} {}.{} [{:?}, {:?}]",
+									left_element.relation, left_element.name, left_element.encryption, left_element.data_type,
+									op,
+									right_element.relation, right_element.name, right_element.encryption, right_element.data_type
+								))
+							} else {
+								// If they do match, validate
+								if left_element.encryption != EncryptionType::NA {
+									match op {
+										&Operator::EQ => {}, // OK,
+										_ => return Err(format!(
+											"Unsupported operation:  {}.{} [{:?}, {:?}] {:?} {}.{} [{:?}, {:?}]",
+											left_element.relation, left_element.name, left_element.encryption, left_element.data_type,
+											op,
+											right_element.relation, right_element.name, right_element.encryption, right_element.data_type
+										))
+									}
+								}
+							}
 						}
 					}
 				}
@@ -121,33 +157,24 @@ mod tests {
 	use std::collections::HashMap;
 	use query::dialects::ansisql::*;
 	use query::dialects::mysqlsql::*;
-	use query::{Tokenizer, Parser, SQLWriter, Writer};
-	use query::planner::{Planner, RelVisitor};
+	use query::{Tokenizer, Parser, SQLWriter, Writer, ASTNode};
+	use query::planner::{Planner, RelVisitor, Rel};
 	use std::error::Error;
 	use super::super::writers::*;
 
 	#[test]
 	fn test_rel_visitor() {
-		let config = config::parse_config("zero-config.xml");
-
-        let ansi = AnsiSQLDialect::new();
-        let dialect = MySQLDialect::new(&ansi);
-
         let sql = String::from("SELECT id, first_name, last_name, ssn, age, sex FROM users WHERE first_name = 'Frodo'");
-        let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
-
-        let s = String::from("zero");
-        let default_schema = Some(&s);
-        let planner = Planner::new(default_schema, &config);
-
-        let plan = planner.sql_to_rel(&parsed).unwrap().unwrap();
+		let res = parse_and_plan(sql).unwrap();
+		let parsed = res.0;
+		let plan = res.1;
 
 		let value_map: HashMap<u32, Result<Vec<u8>, Box<Error>>> = HashMap::new();
 		let mut encrypt_vis = EncryptVisitor {
 			valuemap: value_map
 		};
 
-		encrypt_vis.visit_rel(&plan);
+		encrypt_vis.visit_rel(&plan).unwrap();
 
 		let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
 		let ansi_writer = AnsiSQLWriter{};
@@ -160,26 +187,18 @@ mod tests {
 
 	#[test]
 	fn test_relvis_insert() {
-		let config = config::parse_config("zero-config.xml");
-
-		let ansi = AnsiSQLDialect::new();
-		let dialect = MySQLDialect::new(&ansi);
 
 		let sql = String::from("INSERT INTO users (id, first_name, last_name, ssn, age, sex) VALUES(1, 'Janis', 'Joplin', '123456789', 27, 'F')");
-		let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
-
-		let s = String::from("zero");
-		let default_schema = Some(&s);
-		let planner = Planner::new(default_schema, &config);
-
-		let plan = planner.sql_to_rel(&parsed).unwrap().unwrap();
+		let res = parse_and_plan(sql).unwrap();
+		let parsed = res.0;
+		let plan = res.1;
 
 		let value_map: HashMap<u32, Result<Vec<u8>, Box<Error>>> = HashMap::new();
 		let mut encrypt_vis = EncryptVisitor {
 			valuemap: value_map
 		};
 
-		encrypt_vis.visit_rel(&plan);
+		encrypt_vis.visit_rel(&plan).unwrap();
 
 		let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
 		let ansi_writer = AnsiSQLWriter{};
@@ -189,6 +208,80 @@ mod tests {
 		let rewritten = writer.write(&parsed).unwrap();
 
 		println!("Rewritten: {}", rewritten);
+
+	}
+
+	#[test]
+	fn test_relvis_join() {
+		let sql = String::from("SELECT l.id, r.id, l.first_name, r.user_id
+         FROM users AS l
+         JOIN user_purchases AS r ON l.id = r.user_id");
+		let res = parse_and_plan(sql).unwrap();
+ 		let parsed = res.0;
+ 		let plan = res.1;
+
+		let value_map: HashMap<u32, Result<Vec<u8>, Box<Error>>> = HashMap::new();
+		let mut encrypt_vis = EncryptVisitor {
+			valuemap: value_map
+		};
+
+		encrypt_vis.visit_rel(&plan).unwrap();
+
+		let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
+		let ansi_writer = AnsiSQLWriter{};
+
+		let writer = SQLWriter::new(vec![&lit_writer, &ansi_writer]);
+
+		let rewritten = writer.write(&parsed).unwrap();
+
+		println!("Rewritten: {}", rewritten);
+	}
+
+	#[test]
+	fn test_relvis_join_unsupported() {
+		let mut sql = String::from("SELECT l.id, r.id, l.first_name, r.user_id
+		 FROM users AS l
+		 JOIN user_purchases AS r ON l.id = r.item_code");
+		let mut plan = parse_and_plan(sql).unwrap().1;
+
+		let value_map: HashMap<u32, Result<Vec<u8>, Box<Error>>> = HashMap::new();
+		let mut encrypt_vis = EncryptVisitor {
+			valuemap: value_map
+		};
+
+		assert_eq!(encrypt_vis.visit_rel(&plan), Err(String::from("Unsupported operation:  l.id [NA, U64] EQ r.item_code [AES, U64]")));
+
+		sql = String::from("SELECT l.id, r.id, l.first_name, r.user_id
+		 FROM users AS l
+		 JOIN user_purchases AS r ON l.id > r.user_id");
+		plan = parse_and_plan(sql).unwrap().1;
+
+		assert_eq!(encrypt_vis.visit_rel(&plan).is_ok(), true);
+
+		sql = String::from("SELECT l.id, r.id, l.first_name, r.user_id
+		 FROM users AS l
+		 JOIN user_purchases AS r ON l.age > r.item_code");
+		plan = parse_and_plan(sql).unwrap().1;
+
+		assert_eq!(encrypt_vis.visit_rel(&plan), Err(String::from("Unsupported operation:  l.age [AES, U64] GT r.item_code [AES, U64]")));
+
+
+	}
+
+	fn parse_and_plan(sql: String) -> Result<(ASTNode, Rel), String> {
+		let config = config::parse_config("zero-config.xml");
+
+		let ansi = AnsiSQLDialect::new();
+		let dialect = MySQLDialect::new(&ansi);
+
+		let parsed = sql.tokenize(&dialect)?.parse()?;
+
+		let s = String::from("zero");
+		let default_schema = Some(&s);
+		let planner = Planner::new(default_schema, &config);
+
+		let plan = planner.sql_to_rel(&parsed)?.unwrap();
+		Ok((parsed, plan))
 
 	}
 
