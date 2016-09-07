@@ -271,26 +271,21 @@ impl<'a> MySQLConnectionHandler <'a> {
                                 match packet_type {
                                     0x02 => self.process_init_db(&buf, packet_len),
                                     0x03 => {
-                                        let res = self.process_query(&buf, packet_len);
-                                        match res {
-                                            Err(e) => {
-                                                self.send_error(&String::from("42000"), &e.to_string());
-                                                self.clear_mysql_read();
-
-                                                },
-
-                                            Ok(()) => {}
-                                        }
-                                    },
-                                    _ => {
-                                        let res = self.mysql_process_query(&buf[0..packet_len + 4], None);
-                                        match res {
+                                        match self.process_query(&buf, packet_len) {
                                             Err(e) => {
                                                 self.send_error(&String::from("42000"), &e.to_string());
                                                 self.clear_mysql_read();
                                             },
                                             Ok(()) => {}
-
+                                        }
+                                    },
+                                    _ => {
+                                        match self.mysql_process_query(&buf[0..packet_len + 4], None) {
+                                            Err(e) => {
+                                                self.send_error(&String::from("42000"), &e.to_string());
+                                                self.clear_mysql_read();
+                                            },
+                                            Ok(()) => {}
                                         }
                                     },
                                 }
@@ -721,7 +716,6 @@ impl<'a> MySQLConnectionHandler <'a> {
                 // break on receiving Err_Packet, or EOF_Packet
                 0xfe | 0xff => {
                     println!("End of result rows");
-                    //write_buf.extend_from_slice(&row_packet.bytes);
                     break;
                 },
                 _=>{}
