@@ -125,7 +125,7 @@ impl RelVisitor for EncryptVisitor  {
 									left_element.relation, left_element.name, left_element.encryption, left_element.data_type,
 									op,
 									right_element.relation, right_element.name, right_element.encryption, right_element.data_type
-								))
+								).into())
 							} else {
 								// If they do match, validate
 								if left_element.encryption != EncryptionType::NA {
@@ -136,7 +136,7 @@ impl RelVisitor for EncryptVisitor  {
 											left_element.relation, left_element.name, left_element.encryption, left_element.data_type,
 											op,
 											right_element.relation, right_element.name, right_element.encryption, right_element.data_type
-										))
+										).into())
 									}
 								}
 							}
@@ -258,9 +258,9 @@ mod tests {
 			valuemap: value_map
 		};
 
-		assert_eq!(encrypt_vis.visit_rel(&plan), Err(String::from("Unsupported operation:  l.id [NA, U64] EQ r.item_code [AES, U64]")));
+        assert_eq!(encrypt_vis.visit_rel(&plan).err().unwrap().description(), String::from("Unsupported operation:  l.id [NA, U64] EQ r.item_code [AES, U64]"));
 
-		// two unencryped columns
+        // two unencryped columns
 		sql = String::from("SELECT l.id, r.id, l.first_name, r.user_id
 		 FROM users AS l
 		 JOIN user_purchases AS r ON l.id > r.user_id");
@@ -273,13 +273,12 @@ mod tests {
 		 FROM users AS l
 		 JOIN user_purchases AS r ON l.age > r.item_code");
 		plan = parse_and_plan(sql).unwrap().1;
-
-		assert_eq!(encrypt_vis.visit_rel(&plan), Err(String::from("Unsupported operation:  l.age [AES, U64] GT r.item_code [AES, U64]")));
+		assert_eq!(encrypt_vis.visit_rel(&plan).err().unwrap().description(), String::from("Unsupported operation:  l.age [AES, U64] GT r.item_code [AES, U64]"));
 
 
 	}
 
-	fn parse_and_plan(sql: String) -> Result<(ASTNode, Rel), String> {
+	fn parse_and_plan(sql: String) -> Result<(ASTNode, Rel), Box<Error>> {
 		let config = config::parse_config("zero-config.xml");
 
 		let ansi = AnsiSQLDialect::new();
@@ -290,6 +289,9 @@ mod tests {
 		let s = String::from("zero");
 		let default_schema = Some(&s);
 		let planner = Planner::new(default_schema, &config);
+
+
+
 
 		let plan = planner.sql_to_rel(&parsed)?.unwrap();
 		Ok((parsed, plan))

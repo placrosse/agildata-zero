@@ -96,7 +96,7 @@ impl<'a> Planner<'a> {
                 .collect()?)),
             &ASTNode::SQLIdentifier { ref id, ref parts } => {
                 let (relation, name) = match parts.len() {
-                    0 => return Err(format!("Illegal identifier {:?}", id)),
+                    0 => return Err(format!("Illegal identifier {:?}", id).into()),
                     1 => (None, &parts[0]),
                     _ => (Some(&parts[0]), &parts[1])
                 };
@@ -220,7 +220,7 @@ impl<'a> Planner<'a> {
                     (None, None) => Ok(None),
                     // Mismatch
                     (Some(e), None) | (None, Some(e)) => {
-                        Err(String::from("Unsupported: Mismatch join between encrypted and unencrypted relations"))
+                        Err(String::from("Unsupported: Mismatch join between encrypted and unencrypted relations").into())
                     }
 
                 }
@@ -232,7 +232,7 @@ impl<'a> Planner<'a> {
                 let input = self.sql_to_rel(expr)?;
                 let a = match alias {
                     &ASTNode::SQLIdentifier{ref id, ..} => id.clone(),
-                    _ => return Err(format!("Unsupported alias expr {:?}", alias))
+                    _ => return Err(format!("Unsupported alias expr {:?}", alias).into())
                 };
 
                 match input {
