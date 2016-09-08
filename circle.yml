@@ -36,7 +36,7 @@ dependencies:
 test:
   override:
     - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-08-03 && cargo test
-    - sh scripts/circleci/test.sh
+    - /bin/bash scripts/circleci/test.sh
 
 # deployment:
 #   deploy:

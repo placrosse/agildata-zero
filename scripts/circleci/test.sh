@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Script for testing AgilData Zero with Jenkins
 #
@@ -9,6 +9,8 @@ RUST_BUILD="nightly-2016-08-03"
 AGILDATA_TEST_DB="zero"
 MYSQL_USER="agiluser"
 MYSQL_PASS="password123"
+
+TESTS=('test1' 'test2')
 
 # Start server in the background, storing the PID of the app
 echo "Generated binaries:"
@@ -31,17 +33,20 @@ echo "Running test script: test1.sql"
 mysql --host=127.0.0.1 --port=3307 -u$MYSQL_USER -p$MYSQL_PASS -D $AGILDATA_TEST_DB < scripts/test/test1.sql > scripts/test/test1-output.sql
 
 echo
-echo "Comparing output from test1.sql against expected output."
-output=$(diff scripts/test/expected1.sql scripts/test/test1-output.sql)
-if [ "${output}" != "" ]; then
-  echo "Output from test1.sql does not match expected output; integration test fails!"
-  echo
-  echo "--- DIFF OUTPUT: ---"
-  echo "${output}"
-  echo "--- END DIFF OUTPUT ---"
-  echo
-  exit 2
-fi
+for test_script in $TESTS
+do
+  echo "Comparing output from ${test_script}.sql against expected output."
+  output=$(diff scripts/test/${test_script}-expected.sql scripts/test/${test_script}-output.sql)
+  if [ "${output}" != "" ]; then
+    echo "Output from ${test_script}.sql does not match expected output; integration test fails!"
+    echo
+    echo "--- DIFF OUTPUT: ---"
+    echo "${output}"
+    echo "--- END DIFF OUTPUT ---"
+    echo
+    exit 2
+  fi
+done
 
 echo
 
