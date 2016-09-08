@@ -30,7 +30,7 @@ rm -f scripts/test/test*-output.sql
 
 # Copy test database info into MySQL
 echo
-for test_script in $TESTS
+for test_script in "${TESTS[@]}"
 do
   echo "Running test script: ${test_script}.sql"
   mysql --host=127.0.0.1 --port=3307 -u$MYSQL_USER -p$MYSQL_PASS -D $AGILDATA_TEST_DB < scripts/test/${test_script}.sql > scripts/test/${test_script}-output.sql
