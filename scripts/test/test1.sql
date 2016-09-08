@@ -11,4 +11,3 @@ INSERT INTO users (id, first_name, last_name, ssn, age, sex) VALUES (9, 'David "
 INSERT INTO users (id, first_name, last_name, ssn, age, sex) VALUES (10, 'Arnold Judas', 'Rimmer', '623456789', 3000043, 'M');
 SELECT id, first_name, last_name, ssn, age, sex FROM users;
 SELECT id, first_name, last_name, ssn, age, sex FROM users WHERE first_name = 'Barry';
-SELECT id, first_name, last_name, ssn, age, sex FROM users WHERE age > 30;
