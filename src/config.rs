@@ -87,6 +87,21 @@ fn parse_client_config(builder: &mut ConfigBuilder, children: Vec<Xml>) {
 							}
 						}
 					},
+                    "parsing" => {
+                        for prop in e.children {
+                            match prop {
+                                Xml::ElementNode(n) => match &n.name as &str {
+                                    "property" => {
+                                        let key = get_attr_or_fail("name", &n);
+                                        let val = get_attr_or_fail("value", &n);
+                                        builder.add_parsing_prop(key, val)
+                                    },
+                                    _ => panic!("expected property, received {}", n.name)
+                                },
+                                _ => {} // dont care yet
+                            }
+                        }
+                    },
 					_ => panic!("Unexpected element tag {}", e.name)
 				}
 			},
@@ -243,16 +258,24 @@ pub struct ClientConfig {
 }
 
 #[derive(Debug)]
+pub struct ParsingConfig {
+    pub props: HashMap<String, String>
+}
+
+
+#[derive(Debug)]
 pub struct Config {
 	schema_map: HashMap<String, SchemaConfig>,
 	connection_config : ConnectionConfig,
-	client_config: ClientConfig
+	client_config: ClientConfig,
+    parsing_config: ParsingConfig
 }
 
 struct ConfigBuilder {
 	schema_map : HashMap<String, SchemaConfig>,
 	conn_props : HashMap<String, String>,
-	client_props : HashMap<String,String>
+	client_props : HashMap<String,String>,
+    parsing_props : HashMap<String, String>
 }
 
 impl ConfigBuilder {
@@ -261,6 +284,7 @@ impl ConfigBuilder {
 			schema_map: HashMap::new(),
 			conn_props: HashMap::new(),
 			client_props: HashMap::new(),
+            parsing_props: HashMap::new()
 		}
 	}
 
@@ -273,15 +297,20 @@ impl ConfigBuilder {
 		self.client_props.insert(key, value);
 	}
 
-	fn add_conn_prop(&mut self, key: String, value: String) {
-		self.conn_props.insert(key, value);
-	}
+    fn add_conn_prop(&mut self, key: String, value: String) {
+        self.conn_props.insert(key, value);
+    }
+
+    fn add_parsing_prop(&mut self, key: String, value: String) {
+        self.parsing_props.insert(key, value);
+    }
 
 	fn build(self) -> Config {
 		Config {
 			schema_map: self.schema_map,
 			connection_config : ConnectionConfig {props: self.conn_props},
-			client_config: ClientConfig {props: self.client_props}
+			client_config: ClientConfig {props: self.client_props},
+            parsing_config: ParsingConfig{props: self.parsing_props}
 		}
 	}
 }
@@ -290,7 +319,7 @@ pub trait TConfig {
 	fn get_column_config(&self, schema: &String, table: &String, column: &String) -> Option<&ColumnConfig>;
 	fn get_table_config(&self, schema: &String, table: &String) -> Option<&TableConfig>;
 	fn get_schema_config(&self, schema: &String) -> Option<&SchemaConfig>;
-
+    fn get_parsing_config(&self) -> &ParsingConfig;
 	fn get_connection_config(&self) -> &ConnectionConfig;
 	fn get_client_config(&self) -> &ClientConfig;
 }
@@ -322,6 +351,10 @@ impl TConfig for Config {
 	fn get_client_config(&self) -> &ClientConfig {
 		&self.client_config
 	}
+
+    fn get_parsing_config(&self) -> &ParsingConfig {
+        &self.parsing_config
+    }
 
 }
 

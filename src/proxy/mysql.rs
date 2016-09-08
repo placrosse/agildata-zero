@@ -6,7 +6,7 @@ use byteorder::*;
 use query::{Tokenizer, Parser, Writer, SQLWriter, ASTNode};
 use query::dialects::mysqlsql::*;
 use query::dialects::ansisql::*;
-
+use std::net::Shutdown as ShutdownSTD;
 use query::planner::{Planner, TupleType, Element, HasTupleType, RelVisitor, Rel};
 use super::writers::*;
 use std::net::Shutdown as ShutdownStd;
@@ -145,6 +145,21 @@ fn parse_string(bytes: &[u8]) -> String {
     String::from_utf8(bytes.to_vec()).expect("Invalid UTF-8")
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum ParsingMode {
+    Strict,
+    Passive
+}
+
+fn determine_parsing_mode(mode: &String) -> ParsingMode {
+    match &mode.to_uppercase() as &str {
+        "STRICT" => ParsingMode::Strict,
+        "PASSIVE" => ParsingMode::Passive,
+        _ => panic!("Unsupported parsing mode {}", mode)
+    }
+
+}
+
 pub trait MySQLConnection {
     fn read_packet(&mut self) -> Result<MySQLPacket, &'static str>;
 }
@@ -180,6 +195,8 @@ struct ColumnMetaData {
     column_name: String
 }
 
+
+
 #[derive(Debug)]
 enum ConnectionPhase {
     Handshake, Query
@@ -193,7 +210,8 @@ pub struct MySQLConnectionHandler<'a> {
     phase: ConnectionPhase,
     remote: net::TcpStream, // this is the connection to the remote mysql server
     schema: Option<String>, // the current schema
-    config: &'a Config
+    config: &'a Config,
+    parsing_mode: ParsingMode
     //authenticating: bool
 }
 
@@ -206,7 +224,7 @@ impl<'a> MySQLConnectionHandler <'a> {
         let conn_host = conn.props.get("host").unwrap();
         let default_port = &String::from("3306");
         let conn_port = conn.props.get("port").unwrap_or(default_port);
-
+        let parsing_mode = determine_parsing_mode(&config.get_parsing_config().props.get("mode").unwrap());
         let conn_addr = format!("{}:{}",conn_host,conn_port);
 
         // connect to real MySQL
@@ -227,7 +245,8 @@ impl<'a> MySQLConnectionHandler <'a> {
             phase: ConnectionPhase::Handshake,
             remote: mysql,
             schema: None,
-            config: &config
+            config: &config,
+            parsing_mode:parsing_mode
             // authenticating: true
         }
     }
@@ -372,7 +391,20 @@ impl<'a> MySQLConnectionHandler <'a> {
                     },
                     Err(e) => {
                         println!("Failed to parse with: {}", e);
-                        None
+                        match self.parsing_mode{
+                            ParsingMode::Strict =>{
+                                /*TODO: We need to implement custom errors, so we can distinguish between parse errors
+                                 TODO: And errors coming back from MySQL, and Ecryption errors. This handled seperately
+                                TODO: For now, since we cant call clear_mysql_read() on parse errors.*/
+                                println!("In Strict mode, failing.");
+                                self.send_error(&String::from("42000"), &e.to_string());
+                                return Ok(());
+                            },
+                            ParsingMode::Passive =>{
+                                println!("In Passive mode, falling through to MySQL");
+                                None
+                            }
+                        }
                     }
                 }
             },
@@ -710,16 +742,24 @@ impl<'a> MySQLConnectionHandler <'a> {
     }
 
     pub fn clear_mysql_read(&mut self){ //TODO: This is a hack for now.
+        println!("a");
+
+       // let a = self.remote.shutdown(ShutdownSTD::Both);
+      //  self.remote.read_packet();
+        println!("b");
+        self.remote.set_nonblocking(true);
         loop {
             let row_packet = self.remote.read_packet().unwrap();
             match row_packet.packet_type() {
-                // break on receiving Err_Packet, or EOF_Packet
+            // break on receiving Err_Packet, or EOF_Packet
                 0xfe | 0xff => {
                     println!("End of result rows");
                     break;
                 },
-                _=>{}
-            }}
+                _ => {}
+            }
+        }
+        self.remote.set_nonblocking(false);
     }
     pub fn reregister(&self, event_loop: &mut mio::EventLoop<Proxy>) {
         event_loop.reregister(&self.socket, self.token, self.state.event_set(), mio::PollOpt::oneshot())
@@ -732,4 +772,5 @@ impl<'a> MySQLConnectionHandler <'a> {
             _ => false,
         }
     }
+
 }
