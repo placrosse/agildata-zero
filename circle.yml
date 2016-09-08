@@ -41,7 +41,7 @@ test:
 
 general:
   artifacts:
-    - "/home/ubuntu/agildata-zero/target/doc"
+    - "/home/ubuntu/agildata-zero/target/doc/agildata_zero"
 
 # deployment:
 #   deploy:
