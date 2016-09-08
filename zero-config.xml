@@ -18,7 +18,8 @@
 	</connection>
 
     <parsing>
-        <property name="mode" value="permissive"/>
+        <!--<property name="mode" value="passive"/>-->
+        <property name="mode" value="strict"/>
     </parsing>
 
 	<schema name="zero">
