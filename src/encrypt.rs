@@ -27,15 +27,17 @@ pub trait Encrypt {
 }
 
 pub trait Decrypt {
-	fn decrypt(value: &[u8], scheme: &EncryptionType) -> Self;
+    type DecType;
+	fn decrypt(value: &[u8], scheme: &EncryptionType) -> Result<Self::DecType,  Box<Error>>;
 }
 
 impl Decrypt for u64 {
-	fn decrypt(value: &[u8], scheme: &EncryptionType) -> u64 {
+    type DecType = u64;
+	fn decrypt(value: &[u8], scheme: &EncryptionType) ->  Result<u64,  Box<Error>> {
 		match scheme {
 			&EncryptionType::AES => {
-				let mut decrypted = Cursor::new(decrypt(&get_key(), value).unwrap());
-				decrypted.read_u64::<BigEndian>().unwrap()
+				let mut decrypted = try!(decrypt(&get_key(), value));
+                Ok(Cursor::new(decrypted).read_u64::<BigEndian>().unwrap())
 			},
 			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
 			_ => panic!("Not implemented")
@@ -44,12 +46,13 @@ impl Decrypt for u64 {
 }
 
 impl Decrypt for String {
-
-	fn decrypt(value: &[u8], scheme: &EncryptionType) -> String {
+    type DecType = String;
+	fn decrypt(value: &[u8], scheme: &EncryptionType) ->  Result<String,  Box<Error>>{
         match scheme {
 			&EncryptionType::AES => {
-				let decrypted = decrypt(&get_key(), value);
-				String::from_utf8(decrypted.unwrap()).expect("Invalid UTF-8")
+				let mut decrypted = try!(decrypt(&get_key(), value));
+				Ok(String::from_utf8(decrypted).expect("Invalid UTF-8"))
+
 			},
 			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
 			_ => panic!("Not implemented")
@@ -136,6 +139,10 @@ pub fn encrypt(key: &[u8], buf: &[u8]) -> Result<Vec<u8>, Box<Error>> {
 }
 
 pub fn decrypt(key: &[u8], buf: &[u8]) -> Result<Vec<u8>, Box<Error>> {
+    if buf.len() < 12 {
+        println!("ERROR: Buffer Length too short, are you trying to decrypt non-encrypted data?");
+        return Err("Failed decrypting data".into());
+    }
     let iv: &[u8] = &buf[0..12];
     let mut decipher = AesGcm::new(KeySize::KeySize256, &key, &iv, &[]);
     let inp = &buf[12..buf.len() - 16];
@@ -145,6 +152,7 @@ pub fn decrypt(key: &[u8], buf: &[u8]) -> Result<Vec<u8>, Box<Error>> {
         println!("decrypt: inp={:?} out={:?}", inp, out);
         Ok(out)
     } else{
+
         Err("Failed to Decrypt".into())
     }
 }
