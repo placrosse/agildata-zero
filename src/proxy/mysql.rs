@@ -194,13 +194,14 @@ pub struct MySQLConnectionHandler<'a> {
     phase: ConnectionPhase,
     remote: net::TcpStream, // this is the connection to the remote mysql server
     schema: Option<String>, // the current schema
-    config: &'a Config
+    config: &'a Config,
+    provider: &'a MySQLBackedSchemaProvider<'a>
     //authenticating: bool
 }
 
 impl<'a> MySQLConnectionHandler <'a> {
 
-    pub fn new(socket: TcpStream, token: mio::Token, config: &Config) -> MySQLConnectionHandler {
+    pub fn new(socket: TcpStream, token: mio::Token, config: &'a Config, provider: &'a MySQLBackedSchemaProvider) -> MySQLConnectionHandler<'a> {
         println!("Creating remote connection...");
 
         let conn = config.get_connection_config();
@@ -228,7 +229,8 @@ impl<'a> MySQLConnectionHandler <'a> {
             phase: ConnectionPhase::Handshake,
             remote: mysql,
             schema: None,
-            config: &config
+            config: &config,
+            provider: &provider
             // authenticating: true
         }
     }

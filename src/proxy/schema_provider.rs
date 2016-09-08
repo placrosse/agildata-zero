@@ -13,6 +13,7 @@ use mysql;
 
 // Mysql and config backed provider
 // locks on mutex to prevent multiple threads querying the database for uncached meta
+#[derive(Debug)]
 pub struct MySQLBackedSchemaProvider<'a> {
 	config: &'a Config,
 	pool: mysql::Pool,
