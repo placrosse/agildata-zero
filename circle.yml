@@ -22,7 +22,7 @@ dependencies:
       --env MYSQL_DATABASE=zero
       --env MYSQL_USER=agiluser
       --env MYSQL_PASSWORD=password123
-      mysql:5.7.12 ; echo "MySQL 5.7.12 Docker Image started."
+      mysql:5.7.12 ; sleep 10
 
   override:
 #    - source /home/ubuntu/.cargo/env && rustup default nightly && cargo build
@@ -36,6 +36,7 @@ dependencies:
 test:
   override:
     - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-08-03 && cargo test
+    - /bin/bash scripts/circleci/test.sh
 
 # deployment:
 #   deploy:
