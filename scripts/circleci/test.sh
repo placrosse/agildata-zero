@@ -10,7 +10,7 @@ AGILDATA_TEST_DB="zero"
 MYSQL_USER="agiluser"
 MYSQL_PASS="password123"
 
-TESTS=('test1' 'test2')
+TESTS=(test1 test2)
 
 # Start server in the background, storing the PID of the app
 echo "Generated binaries:"
@@ -29,12 +29,11 @@ ps -aux | grep $AGILDATA_ZERO_PID | grep -v grep
 rm -f scripts/test/test*-output.sql
 
 # Copy test database info into MySQL
-echo "Running test script: test1.sql"
-mysql --host=127.0.0.1 --port=3307 -u$MYSQL_USER -p$MYSQL_PASS -D $AGILDATA_TEST_DB < scripts/test/test1.sql > scripts/test/test1-output.sql
-
 echo
 for test_script in $TESTS
 do
+  echo "Running test script: ${test_script}.sql"
+  mysql --host=127.0.0.1 --port=3307 -u$MYSQL_USER -p$MYSQL_PASS -D $AGILDATA_TEST_DB < scripts/test/${test_script}.sql > scripts/test/${test_script}-output.sql
   echo "Comparing output from ${test_script}.sql against expected output."
   output=$(diff scripts/test/${test_script}-expected.sql scripts/test/${test_script}-output.sql)
   if [ "${output}" != "" ]; then
@@ -49,9 +48,6 @@ do
 done
 
 echo
-
-# echo "Comparing output from test1.sql against expected1.sql (Any output indicates an error.)"
-# diff scripts/test/expected1.sql scripts/test/output1.sql
 
 # Drop Database
 echo "Dropping database: $AGILDATA_TEST_DB"
