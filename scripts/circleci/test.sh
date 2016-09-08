@@ -32,18 +32,22 @@ rm -f scripts/test/test*-output.sql
 echo
 for test_script in "${TESTS[@]}"
 do
-  echo "Running test script: ${test_script}.sql"
-  mysql --host=127.0.0.1 --port=3307 -u$MYSQL_USER -p$MYSQL_PASS -D $AGILDATA_TEST_DB < scripts/test/${test_script}.sql > scripts/test/${test_script}-output.sql
-  echo "Comparing output from ${test_script}.sql against expected output."
-  output=$(diff scripts/test/${test_script}-expected.sql scripts/test/${test_script}-output.sql)
-  if [ "${output}" != "" ]; then
-    echo "Output from ${test_script}.sql does not match expected output; integration test fails!"
-    echo
-    echo "--- DIFF OUTPUT: ---"
-    echo "${output}"
-    echo "--- END DIFF OUTPUT ---"
-    echo
-    exit 2
+  if [ -f "${test_script}.sql" ]; then
+    echo "Running test script: ${test_script}.sql"
+    mysql --host=127.0.0.1 --port=3307 -u$MYSQL_USER -p$MYSQL_PASS -D $AGILDATA_TEST_DB < scripts/test/${test_script}.sql > scripts/test/${test_script}-output.sql
+    echo "Comparing output from ${test_script}.sql against expected output."
+    output=$(diff scripts/test/${test_script}-expected.sql scripts/test/${test_script}-output.sql)
+    if [ "${output}" != "" ]; then
+      echo "Output from ${test_script}.sql does not match expected output; integration test fails!"
+      echo
+      echo "--- DIFF OUTPUT: ---"
+      echo "${output}"
+      echo "--- END DIFF OUTPUT ---"
+      echo
+      exit 2
+    fi
+  else
+    echo "Skipping eval of test script ${test_script}.sql: file not found (or test does not exist.)"
   fi
 done
 
