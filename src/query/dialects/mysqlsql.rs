@@ -27,12 +27,11 @@ impl <'d> Dialect for MySQLDialect<'d> {
 				'`' => {
 					chars.next();
 					let mut text = String::new();
-	                while let Some(&c) = chars.peek() { // will break when it.peek() => None
+	                while let Some(c) = chars.next() { // will break when it.peek() => None
 
 						if c != '`' {
 							text.push(c);
 						} else {
-							chars.next();
 							break;
 						}
 	                }
@@ -150,6 +149,7 @@ impl<'d> MySQLDialect<'d> {
 				"CHARACTER" | "CHARSET" => {
 					tokens.next();
 					tokens.consume_keyword("SET");
+					tokens.consume_operator("=");
 					Ok(Some(ASTNode::MySQLTableOption(MySQLTableOption::Charset(Box::new(tokens.parse_expr(0)?)))))
 				},
 				"COMMENT" => {

@@ -22,6 +22,7 @@ use encrypt::{Decrypt, NativeType, EncryptionType};
 use super::encrypt_visitor::EncryptVisitor;
 use super::server::Proxy;
 use super::server::State;
+use super::schema_provider::MySQLBackedSchemaProvider;
 
 
 #[derive(Debug)]

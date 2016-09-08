@@ -14,6 +14,8 @@ extern crate byteorder;
 extern crate mio;
 extern crate bytes;
 
+extern crate mysql;
+
 use std::env;
 use std::str;
 

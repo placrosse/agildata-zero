@@ -6,6 +6,22 @@ use encrypt::EncryptionType;
 use config::*;
 use encrypt::NativeType;
 
+pub trait SchemaProvider {
+    fn get_table_meta(&mut self, schema: &String, table: &String) -> Result<Option<&TableMeta>, String>;
+}
+
+#[derive(Debug, Clone)]
+pub struct TableMeta {
+    pub columns: Vec<ColumnMeta>
+}
+
+#[derive(Debug, Clone)]
+pub struct ColumnMeta {
+    pub name: String,
+    pub native_type: NativeType,
+    pub encryption: EncryptionType
+}
+
 #[derive(Debug, Clone)]
 pub struct TupleType {
     pub elements: Vec<Element>

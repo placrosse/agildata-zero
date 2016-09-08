@@ -12,6 +12,7 @@ const SERVER: mio::Token = mio::Token(0);
 use config::{Config, TConfig};
 
 use super::mysql::MySQLConnectionHandler;
+use super::schema_provider::MySQLBackedSchemaProvider;
 
 pub struct Proxy<'a> {
     server: TcpListener,
@@ -38,6 +39,7 @@ impl<'a> Proxy<'a> {
         // starting at 1.
         let slab = Slab::new_starting_at(mio::Token(1), 1024);
 
+        let provider = MySQLBackedSchemaProvider::new(&config);
         let mut proxy = Proxy {
             server: server,
             connections: slab,
