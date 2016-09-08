@@ -9,7 +9,7 @@ machine:
     - echo "source $HOME/.cargo/env" >> /home/ubuntu/.bashrc
     - rustup default nightly
     - rm -f /home/ubuntu/.gitconfig
-    - sudo killall -9 mysql
+    - sudo service mysql stop
 
 dependencies:
   pre:
