@@ -37,6 +37,11 @@ test:
   override:
     - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-08-03 && cargo test
     - /bin/bash scripts/circleci/test.sh
+    - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-08-03 && cargo doc
+
+general:
+  artifacts:
+    - "/home/ubuntu/agildata-zero/target/doc"
 
 # deployment:
 #   deploy:
