@@ -43,9 +43,9 @@ general:
   artifacts:
     - "/home/ubuntu/agildata-zero/target/doc/agildata_zero"
 
-# deployment:
-#   deploy:
-#     branch: [develop, master]
-#     commands:
-#       - cargo deploy
+deployment:
+  deploy:
+    branch: [develop, master, feature-cci-deploy]
+    commands:
+      - /bin/bash scripts/circleci/deploy.sh
 
