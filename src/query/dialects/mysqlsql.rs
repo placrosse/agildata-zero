@@ -80,7 +80,7 @@ impl<'d> MySQLDialect<'d> {
 		 {
 
 		tokens.consume_keyword("CREATE");
-
+		// tokens.consume_keyword("TEMPORARY");
 		if tokens.consume_keyword("TABLE") {
 			let table = self.ansi.parse_identifier(tokens)?;
 			tokens.consume_punctuator("(");

@@ -57,8 +57,9 @@ impl<'a> MySQLBackedSchemaProvider<'a> {
 					let ansi = AnsiSQLDialect::new();
 					let dialect = MySQLDialect::new(&ansi);
 
+					println!("HERE");
 					let parsed = sql.tokenize(&dialect)?.parse()?;
-
+					println!("THERE");
 					self._build_meta(schema, parsed)
 
 				},
@@ -155,8 +156,16 @@ impl<'a> SchemaProvider for MySQLBackedSchemaProvider<'a> {
 mod tests {
 
 	use super::*;
-	use query::planner::SchemaProvider;
+	// use query::planner::SchemaProvider;
 	use config;
+
+	use query::dialects::ansisql::*;
+	use query::dialects::mysqlsql::*;
+	use query::{Tokenizer, Parser, SQLWriter, Writer, ASTNode};
+	use query::planner::{Planner, RelVisitor, Rel, SchemaProvider, TableMeta, ColumnMeta};
+	use encrypt::{EncryptionType, NativeType};
+	use std::rc::Rc;
+	use std::error::Error;
 
 	#[test]
 	fn test_provider_controlled() {
@@ -175,9 +184,31 @@ mod tests {
 
 		let mut provider = MySQLBackedSchemaProvider::new(&config);
 
-		let meta = provider.get_table_meta(&String::from("zero"), &String::from("uncontrolled")).unwrap();
+		let meta = provider.get_table_meta(&String::from("information_schema"), &String::from("processlist")).unwrap();
 
 		println!("META {:?}", meta);
+
+	}
+
+	#[test]
+	fn test_real() {
+		let sql = String::from("SELECT ID FROM information_schema.processlist");
+		parse_and_plan(sql).unwrap();
+	}
+
+	fn parse_and_plan(sql: String) -> Result<(ASTNode, Rel), Box<Error>> {
+		let config = config::parse_config("zero-config.xml");
+		let provider = MySQLBackedSchemaProvider::new(&config);
+		let ansi = AnsiSQLDialect::new();
+		let dialect = MySQLDialect::new(&ansi);
+
+		let parsed = sql.tokenize(&dialect)?.parse()?;
+
+		let s = String::from("zero");
+		let default_schema = Some(&s);
+		let planner = Planner::new(default_schema, &provider);
+		let plan = planner.sql_to_rel(&parsed)?.unwrap();
+		Ok((parsed, plan))
 
 	}
 }
