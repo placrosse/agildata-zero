@@ -5,9 +5,10 @@ use super::{ASTNode, Operator, LiteralExpr, JoinType};
 use encrypt::EncryptionType;
 use config::*;
 use encrypt::NativeType;
+use std::rc::Rc;
 
 pub trait SchemaProvider {
-    fn get_table_meta(&mut self, schema: &String, table: &String) -> Result<Option<&TableMeta>, String>;
+    fn get_table_meta(&self, schema: &String, table: &String) -> Result<Option<Rc<TableMeta>>, String>;
 }
 
 #[derive(Debug, Clone)]

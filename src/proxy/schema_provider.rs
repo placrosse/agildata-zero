@@ -7,6 +7,7 @@ use query::{Parser, Tokenizer, ASTNode, MySQLDataType};
 use query::dialects::ansisql::*;
 use query::dialects::mysqlsql::*;
 use encrypt::{NativeType, EncryptionType};
+use std::rc::Rc;
 
 //extern crate mysql;
 use mysql;
@@ -17,8 +18,8 @@ use mysql;
 pub struct MySQLBackedSchemaProvider<'a> {
 	config: &'a Config,
 	pool: mysql::Pool,
-	cache: HashMap<String, TableMeta>,
-	mutex: Mutex<u8>
+	//cache: HashMap<String, Rc<TableMeta>>,
+	cache: Mutex<HashMap<String, Rc<TableMeta>>>
 }
 
 impl<'a> MySQLBackedSchemaProvider<'a> {
@@ -43,8 +44,7 @@ impl<'a> MySQLBackedSchemaProvider<'a> {
 		MySQLBackedSchemaProvider {
 			config: config,
 			pool: pool,
-			cache: HashMap::new(),
-			mutex: Mutex::new(0_u8)
+			cache: Mutex::new(HashMap::new())
 		}
 	}
 
@@ -109,15 +109,13 @@ impl<'a> MySQLBackedSchemaProvider<'a> {
 }
 
 impl<'a> SchemaProvider for MySQLBackedSchemaProvider<'a> {
-	fn get_table_meta(&mut self, schema: &String, table: &String) -> Result<Option<&TableMeta>, String> {
+	fn get_table_meta(&self, schema: &String, table: &String) -> Result<Option<Rc<TableMeta>>, String> {
 		// Lock and do work
 		println!("get_table_meta()");
-		let _guard = self.mutex.lock();
+		let mut c = self.cache.lock().unwrap();
 
 		let key = format!("{}.{}", schema.to_lowercase(), table.to_lowercase());
-		if self.cache.contains_key(&key){
-			Ok(self.cache.get(&key))
-		} else {
+		if !c.contains_key(&key){
 			match self.pool.prep_exec(format!("SHOW TABLES IN {} LIKE '{}'", schema, table),()) {
 				Ok(mut result) => {
 					match result.next() {
@@ -126,54 +124,59 @@ impl<'a> SchemaProvider for MySQLBackedSchemaProvider<'a> {
 							if t.to_lowercase() ==  table.to_lowercase() {
 								match self._get_meta(schema, table)? {
 									Some(m) => {
-										self.cache.insert(key.clone(), m);
-										Ok(self.cache.get(&key))
+										c.insert(key.clone(), Rc::new(m));
+
 									},
-									None => Ok(None)
+									None => return Ok(None)
 								}
 
 							} else {
-								Err(format!("Illegal result table name {}", t)) // shouldn't happen.
+								return Err(format!("Illegal result table name {}", t)) // shouldn't happen.
 							}
 						},
-						Some(Err(e)) => Err(format!("{}", e)),
-						None => Ok(None)
+						Some(Err(e)) => return Err(format!("{}", e)),
+						None => return Ok(None)
 					}
 				},
-				Err(e) => Err(format!("{}", e)),
+				Err(e) => return Err(format!("{}", e)),
 			}
+		}
+
+		match c.get(&key) {
+			Some(rc) => Ok(Some(rc.clone())),
+			None => Ok(None)
 		}
 	}
 }
 
 // TODO These are more of integration tests...
-// #[cfg(test)]
-// mod tests {
-//
-// 	use super::*;
-// 	use query::planner::SchemaProvider;
-// 	use config;
-//
-// 	#[test]
-// 	fn test_provider_controlled() {
-// 		let config = config::parse_config("zero-config.xml");
-//
-// 		let mut provider = MySQLBackedSchemaProvider::new(&config);
-//
-// 		let meta = provider.get_table_meta(&String::from("zero"), &String::from("users")).unwrap();
-//
-// 		println!("META {:?}", meta);
-// 	}
-//
-// 	#[test]
-// 	fn test_provider_uncontrolled() {
-// 		let config = config::parse_config("zero-config.xml");
-//
-// 		let mut provider = MySQLBackedSchemaProvider::new(&config);
-//
-// 		let meta = provider.get_table_meta(&String::from("zero"), &String::from("uncontrolled")).unwrap();
-//
-// 		println!("META {:?}", meta);
-//
-// 	}
-// }
+#[cfg(test)]
+mod tests {
+
+	use super::*;
+	use query::planner::SchemaProvider;
+	use config;
+
+	#[test]
+	fn test_provider_controlled() {
+		let config = config::parse_config("zero-config.xml");
+
+		let mut provider = MySQLBackedSchemaProvider::new(&config);
+
+		let meta = provider.get_table_meta(&String::from("zero"), &String::from("users")).unwrap();
+
+		println!("META {:?}", meta);
+	}
+
+	#[test]
+	fn test_provider_uncontrolled() {
+		let config = config::parse_config("zero-config.xml");
+
+		let mut provider = MySQLBackedSchemaProvider::new(&config);
+
+		let meta = provider.get_table_meta(&String::from("zero"), &String::from("uncontrolled")).unwrap();
+
+		println!("META {:?}", meta);
+
+	}
+}
