@@ -28,7 +28,7 @@ impl RelVisitor for EncryptVisitor  {
 				self.visit_rel(input)?;
 			},
 			&Rel::TableScan{..} => {},
-			&Rel::Join{box ref left, ref join_type, box ref right, ref on_expr, ref tt} => {
+			&Rel::Join{box ref left, box ref right, ref on_expr, ref tt, ..} => {
 				self.visit_rel(left)?;
 				self.visit_rel(right)?;
 				match on_expr {
@@ -38,7 +38,7 @@ impl RelVisitor for EncryptVisitor  {
 			},
 			&Rel::AliasedRel{box ref input, ..} => self.visit_rel(input)?,
 			&Rel::Dual{..} => {},
-			&Rel::Insert{ref table, box ref columns, box ref values, ref tt} => {
+			&Rel::Insert{ref table, box ref columns, box ref values, ..} => {
 				match (columns, values) {
 					(&Rex::RexExprList(ref c_list), &Rex::RexExprList(ref v_list)) => {
 						for (index, v) in v_list.iter().enumerate() {

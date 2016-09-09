@@ -7,7 +7,7 @@ use query::{Tokenizer, Parser, Writer, SQLWriter, ASTNode};
 use query::dialects::mysqlsql::*;
 use query::dialects::ansisql::*;
 use std::net::Shutdown as ShutdownSTD;
-use query::planner::{Planner, TupleType, Element, HasTupleType, RelVisitor, Rel};
+use query::planner::{Planner, TupleType, HasTupleType, RelVisitor, Rel};
 use super::writers::*;
 use std::net::Shutdown as ShutdownStd;
 use mio::{self, TryRead, TryWrite};
@@ -191,14 +191,6 @@ impl MySQLConnection for net::TcpStream {
         }
     }
 }
-
-#[derive(Debug)]
-struct ColumnMetaData {
-    schema: String,
-    table_name: String,
-    column_name: String
-}
-
 
 
 #[derive(Debug)]
@@ -495,7 +487,7 @@ impl<'a> MySQLConnectionHandler <'a> {
         match parsed {
             &None => Ok(None),
             &Some(ref sql) => {
-                let mut foo = match self.schema {
+                let foo = match self.schema {
                     Some(ref s) => Some(s),
                     None => None
                 };

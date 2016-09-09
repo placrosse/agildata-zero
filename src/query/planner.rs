@@ -1,5 +1,3 @@
-use super::super::encrypt;
-use super::super::config;
 use std::error::Error;
 use super::{ASTNode, Operator, LiteralExpr, JoinType};
 use encrypt::EncryptionType;
@@ -236,7 +234,7 @@ impl<'a> Planner<'a> {
                     // Neither relation we control
                     (None, None) => Ok(None),
                     // Mismatch
-                    (Some(e), None) | (None, Some(e)) => {
+                    (Some(_), None) | (None, Some(_)) => {
                         Err(String::from("Unsupported: Mismatch join between encrypted and unencrypted relations").into())
                     }
 

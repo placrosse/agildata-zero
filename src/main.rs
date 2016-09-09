@@ -31,6 +31,6 @@ fn main() {
 
     let config_path = "zero-config.xml";
     let config = config::parse_config(config_path);
-    let mut provider = proxy::schema_provider::MySQLBackedSchemaProvider::new(&config);
+    let provider = proxy::schema_provider::MySQLBackedSchemaProvider::new(&config);
     proxy::server::Proxy::run(&config, &provider);
 }
