@@ -742,12 +742,6 @@ impl<'a> MySQLConnectionHandler <'a> {
     }
 
     pub fn clear_mysql_read(&mut self){ //TODO: This is a hack for now.
-        println!("a");
-
-       // let a = self.remote.shutdown(ShutdownSTD::Both);
-      //  self.remote.read_packet();
-        println!("b");
-        self.remote.set_nonblocking(true);
         loop {
             let row_packet = self.remote.read_packet().unwrap();
             match row_packet.packet_type() {
@@ -759,7 +753,6 @@ impl<'a> MySQLConnectionHandler <'a> {
                 _ => {}
             }
         }
-        self.remote.set_nonblocking(false);
     }
     pub fn reregister(&self, event_loop: &mut mio::EventLoop<Proxy>) {
         event_loop.reregister(&self.socket, self.token, self.state.event_set(), mio::PollOpt::oneshot())
