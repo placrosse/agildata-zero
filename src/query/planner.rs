@@ -281,6 +281,7 @@ impl<'a> Planner<'a> {
             },
             &ASTNode::MySQLCreateTable{..} => Ok(None), // Dont need to plan this yet...
             //ASTNode::SQLInsert => {},
+            &ASTNode::SQLUpdate{..} => Ok(None),
             _ => Err(format!("Unsupported expr for planning {:?}", sql).into())
         }
     }
