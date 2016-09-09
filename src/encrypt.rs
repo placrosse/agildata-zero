@@ -15,6 +15,8 @@ pub enum EncryptionType {
 	NA,
 }
 
+
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum NativeType {
 	U64,

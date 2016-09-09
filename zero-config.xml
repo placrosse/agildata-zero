@@ -17,6 +17,11 @@
 		<property name="driverClassName" value="com.mysql.jdbc.Driver"/>
 	</connection>
 
+    <parsing>
+        <!--<property name="mode" value="passive"/>-->
+        <property name="mode" value="strict"/>
+    </parsing>
+
 	<schema name="zero">
 		<table name="users">
 			<column name="id" type="INTEGER" encryption="none" pkOrdinal="0"/>

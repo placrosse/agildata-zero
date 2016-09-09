@@ -393,6 +393,21 @@ fn insert() {
 }
 
 #[test]
+fn insert_invalid() {
+
+	let dialect = AnsiSQLDialect::new();
+	let sql = String::from("INSERT INTO foo VALUES(1, 20.45, 'abcdefghijk')");
+	let tokens = sql.tokenize(&dialect).unwrap();
+	let parsed = tokens.parse();
+
+	println!("{:#?}", parsed);
+
+	assert!(parsed.is_err());
+	assert_eq!(parsed.unwrap_err(), "Expected column list paren, received Some(Keyword(\"VALUES\"))");
+}
+
+
+#[test]
 fn update() {
 
 	let dialect = AnsiSQLDialect::new();
