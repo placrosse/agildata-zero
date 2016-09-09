@@ -3,11 +3,11 @@ machine:
     - docker
 
   pre:
-    - if [ ! -f "/home/ubuntu/rustup.sh" ]; then curl https://sh.rustup.rs -sSf > /home/ubuntu/rustup.sh && chmod ogu+x /home/ubuntu/rustup.sh && /home/ubuntu/rustup.sh -y ; fi
+#    - if [ ! -f "/home/ubuntu/rustup.sh" ]; then curl https://sh.rustup.rs -sSf > /home/ubuntu/rustup.sh && chmod ogu+x /home/ubuntu/rustup.sh && /home/ubuntu/rustup.sh -y ; fi
 #    - chmod ogu+x /home/ubuntu/rustup.sh
 #    - /home/ubuntu/rustup.sh -y
-    - echo "source $HOME/.cargo/env" >> /home/ubuntu/.bashrc
-    - rustup default nightly-2016-09-05
+#    - echo "source $HOME/.cargo/env" >> /home/ubuntu/.bashrc
+#    - rustup default nightly-2016-09-05
     - rm -f /home/ubuntu/.gitconfig
     - sudo service mysql stop
 
@@ -25,6 +25,11 @@ dependencies:
       mysql:5.7.12 ; sleep 10
 
   override:
+    - if [ ! -f "/home/ubuntu/rustup.sh" ]; then curl https://sh.rustup.rs -sSf > /home/ubuntu/rustup.sh && chmod ogu+x /home/ubuntu/rustup.sh && /home/ubuntu/rustup.sh -y ; fi
+#    - chmod ogu+x /home/ubuntu/rustup.sh
+#    - /home/ubuntu/rustup.sh -y
+    - echo "source $HOME/.cargo/env" >> /home/ubuntu/.bashrc
+    - rustup default nightly-2016-09-05
     - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-09-05 && cargo build
 
   cache_directories:
