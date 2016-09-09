@@ -11,7 +11,7 @@ mkdir agildata-zero/doc
 mkdir agildata-zero/conf
 cp target/debug/agildata-zero agildata-zero/bin
 cp zero-config.xml agildata-zero/conf
-cp -r target/doc agildata-zero/doc
+cp -r target/doc agildata-zero
 cp doc/README.md agildata-zero
 tar -cvjf agildata-zero-dist.tar.bz2 agildata-zero
 
