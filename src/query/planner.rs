@@ -8,7 +8,7 @@ use encrypt::NativeType;
 use std::rc::Rc;
 
 pub trait SchemaProvider {
-    fn get_table_meta(&self, schema: &String, table: &String) -> Result<Option<Rc<TableMeta>>, String>;
+    fn get_table_meta(&self, schema: &String, table: &String) -> Result<Option<Rc<TableMeta>>, Box<Error>>;
 }
 
 #[derive(Debug, Clone)]
@@ -95,15 +95,15 @@ impl HasTupleType for Rel {
 
 pub struct Planner<'a> {
     default_schema: Option<&'a String>,
-    config: &'a Config
+    provider: &'a SchemaProvider
 }
 
 impl<'a> Planner<'a> {
 
     pub fn new(s: Option<&'a String>,
-               c: &'a Config) -> Self {
+               p: &'a SchemaProvider) -> Self {
 
-        Planner { default_schema: s, config: c }
+        Planner { default_schema: s, provider: p }
     }
 
     fn sql_to_rex(&self, sql: &ASTNode, tt: &TupleType) -> Result<Rex, Box<Error>> {
@@ -276,23 +276,21 @@ impl<'a> Planner<'a> {
                     (self.default_schema, id.clone())
                 };
 
-                // if no default schema and no qualified identifier, then we're not handling it
-                if table_schema.is_none() {
-                    return Ok(None);
-                }
 
-                if let Some(table_config) = self.config.get_table_config(table_schema.unwrap(), &table_name) {
-                    let tt = TupleType::new(table_config.column_map
-                        .iter()
-                        .map(|(k,v)| Element {
-                            name: v.name.clone(), encryption: v.encryption.clone(),
-                            data_type: v.native_type.clone(), relation: table_name.clone(),
-                            p_name: None, p_relation: None
-                        })
-                        .collect());
-                    Ok(Some(Rel::TableScan { table: table_name.clone(), tt: tt }))
-                } else {
-                    Ok(None) // this isn't an encrypted table, so not our problem!
+                match self.provider.get_table_meta(&table_schema.unwrap(), &table_name)? {
+                    Some(meta) => {
+                        let tt = TupleType::new(
+                            meta.columns.iter()
+                                .map(|c| Element {
+                                    name: c.name.clone(), encryption: c.encryption.clone(),
+                                    data_type: c.native_type.clone(), relation: table_name.clone(),
+                                    p_name: None, p_relation: None
+                                })
+                                .collect()
+                        );
+                        Ok(Some(Rel::TableScan { table: table_name.clone(), tt: tt }))
+                    },
+                    None => Err(format!("Invalid table {}.{}", table_schema.unwrap(), table_name).into())
                 }
 
             },
@@ -332,12 +330,14 @@ mod tests {
     use config;
     use query::dialects::ansisql::*;
     use query::dialects::mysqlsql::*;
-
-    use super::Planner;
+    use std::error::Error;
+    use encrypt::{NativeType, EncryptionType};
+    use std::rc::Rc;
+    use super::{Planner, SchemaProvider, TableMeta, ColumnMeta};
 
     #[test]
     fn plan_simple() {
-        let config = config::parse_config("zero-config.xml");
+        let provider = DummyProvider{};
 
         let ansi = AnsiSQLDialect::new();
         let dialect = MySQLDialect::new(&ansi);
@@ -347,7 +347,7 @@ mod tests {
 
         let s = String::from("zero");
         let default_schema = Some(&s);
-        let planner = Planner{default_schema: default_schema, config: &config};
+        let planner = Planner{default_schema: default_schema, provider: &provider};
 
         let plan = planner.sql_to_rel(&parsed).unwrap();
 
@@ -356,7 +356,7 @@ mod tests {
 
     #[test]
     fn plan_simple_selection() {
-        let config = config::parse_config("zero-config.xml");
+        let provider = DummyProvider{};
 
         let ansi = AnsiSQLDialect::new();
         let dialect = MySQLDialect::new(&ansi);
@@ -366,7 +366,7 @@ mod tests {
 
         let s = String::from("zero");
         let default_schema = Some(&s);
-        let planner = Planner::new(default_schema, &config);
+        let planner = Planner::new(default_schema, &provider);
 
         let plan = planner.sql_to_rel(&parsed).unwrap();
 
@@ -375,7 +375,7 @@ mod tests {
 
     #[test]
     fn plan_simple_insert() {
-        let config = config::parse_config("zero-config.xml");
+        let provider = DummyProvider{};
 
         let ansi = AnsiSQLDialect::new();
         let dialect = MySQLDialect::new(&ansi);
@@ -385,7 +385,7 @@ mod tests {
 
         let s = String::from("zero");
         let default_schema = Some(&s);
-        let planner = Planner{default_schema: default_schema, config: &config};
+        let planner = Planner{default_schema: default_schema, provider: &provider};
 
         let plan = planner.sql_to_rel(&parsed).unwrap();
 
@@ -394,7 +394,7 @@ mod tests {
 
     #[test]
     fn plan_simple_join() {
-        let config = config::parse_config("zero-config.xml");
+        let provider = DummyProvider{};
 
         let ansi = AnsiSQLDialect::new();
         let dialect = MySQLDialect::new(&ansi);
@@ -404,13 +404,47 @@ mod tests {
          JOIN user_purchases AS r ON l.id = r.user_id");
         let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
 
-        println!("HERE {:#?}", parsed);
         let s = String::from("zero");
         let default_schema = Some(&s);
-        let planner = Planner::new(default_schema, &config);
+        let planner = Planner::new(default_schema, &provider);
 
         let plan = planner.sql_to_rel(&parsed).unwrap();
 
         println!("Plan {:#?}", plan);
+    }
+
+    struct DummyProvider {}
+    impl SchemaProvider for DummyProvider {
+        fn get_table_meta(&self, schema: &String, table: &String) -> Result<Option<Rc<TableMeta>>, Box<Error>> {
+
+            let rc = match (schema as &str, table as &str) {
+                ("zero", "users") => {
+                    Some(Rc::new(TableMeta {
+                        columns: vec![
+                            ColumnMeta {name: String::from("id"), native_type: NativeType::U64, encryption: EncryptionType::NA},
+                            ColumnMeta {name: String::from("first_name"), native_type: NativeType::Varchar(50), encryption: EncryptionType::AES},
+                            ColumnMeta {name: String::from("last_name"), native_type: NativeType::Varchar(50), encryption: EncryptionType::AES},
+                            ColumnMeta {name: String::from("ssn"), native_type: NativeType::Varchar(50), encryption: EncryptionType::AES},
+                            ColumnMeta {name: String::from("age"), native_type: NativeType::U64, encryption: EncryptionType::AES},
+                            ColumnMeta {name: String::from("sex"), native_type: NativeType::Varchar(50), encryption: EncryptionType::AES},
+
+                        ]
+                    }))
+                },
+                ("zero", "user_purchases") => {
+                    Some(Rc::new(TableMeta {
+                        columns: vec![
+                            ColumnMeta {name: String::from("id"), native_type: NativeType::U64, encryption: EncryptionType::NA},
+                            ColumnMeta {name: String::from("user_id"), native_type: NativeType::U64, encryption: EncryptionType::NA},
+                            ColumnMeta {name: String::from("item_code"), native_type: NativeType::U64, encryption: EncryptionType::AES},
+                            ColumnMeta {name: String::from("amount"), native_type: NativeType::F64, encryption: EncryptionType::AES}
+                        ]
+                    }))
+                },
+                _ => None
+            };
+            Ok(rc)
+        }
+
     }
 }

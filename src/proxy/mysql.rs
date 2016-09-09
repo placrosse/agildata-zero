@@ -458,7 +458,7 @@ impl<'a> MySQLConnectionHandler <'a> {
                     Some(ref s) => Some(s),
                     None => None
                 };
-                let planner = Planner::new(foo, &self.config);
+                let planner = Planner::new(foo, self.provider);
                 planner.sql_to_rel(sql)
             }
         }

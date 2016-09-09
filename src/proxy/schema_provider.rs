@@ -8,6 +8,7 @@ use query::dialects::ansisql::*;
 use query::dialects::mysqlsql::*;
 use encrypt::{NativeType, EncryptionType};
 use std::rc::Rc;
+use std::error::Error;
 
 //extern crate mysql;
 use mysql;
@@ -48,7 +49,7 @@ impl<'a> MySQLBackedSchemaProvider<'a> {
 		}
 	}
 
-	fn _get_meta(&self, schema: &String, table: &String) -> Result<Option<TableMeta>, String> {
+	fn _get_meta(&self, schema: &String, table: &String) -> Result<Option<TableMeta>, Box<Error>> {
 		match self.pool.prep_exec(format!("SHOW CREATE TABLE {}.{}", schema, table),()) {
 			Ok(mut result) => match result.next() {
 				Some(Ok(row)) => {
@@ -61,14 +62,14 @@ impl<'a> MySQLBackedSchemaProvider<'a> {
 					self._build_meta(schema, parsed)
 
 				},
-				Some(Err(e)) => Err(format!("{}", e)),
+				Some(Err(e)) => Err(format!("{}", e).into()),
 				None => Ok(None)
 			},
-			Err(e) => Err(format!("{}", e)),
+			Err(e) => Err(format!("{}", e).into()),
 		}
 	}
 
-	fn _build_meta(&self, schema: &String, parsed: ASTNode) -> Result<Option<TableMeta>, String> {
+	fn _build_meta(&self, schema: &String, parsed: ASTNode) -> Result<Option<TableMeta>, Box<Error>> {
 		match parsed {
 			ASTNode::MySQLCreateTable{table: box ASTNode::SQLIdentifier{id: ref table, ..}, ref column_list, ..} => {
 				let columns = column_list.iter().map(|c| {
@@ -88,28 +89,28 @@ impl<'a> MySQLBackedSchemaProvider<'a> {
 								})
 							}
 						},
-						_ => Err(format!("Illegal"))
+						_ => Err(format!("Illegal").into())
 
 					}
-				}).collect::<Result<Vec<ColumnMeta>, String>>()?;
+				}).collect::<Result<Vec<ColumnMeta>, Box<Error>>>()?;
 
 				Ok(Some(TableMeta{columns: columns}))
 			},
-			_ => Err(format!("Unsupported AST to build table meta {:?}", parsed))
+			_ => Err(format!("Unsupported AST to build table meta {:?}", parsed).into())
 		}
 	}
 
-	fn _reconcile_native_type(&self, data_type: &MySQLDataType) -> Result<NativeType, String> {
+	fn _reconcile_native_type(&self, data_type: &MySQLDataType) -> Result<NativeType, Box<Error>> {
 		match data_type {
 			&MySQLDataType::Int{..} => Ok(NativeType::U64), // TODO use display
 			&MySQLDataType::Varchar{ref length} => Ok(NativeType::Varchar(length.unwrap().clone())),
-			_ => Err(format!("Unsupported data type for reconciliation {:?}", data_type))
+			_ => Err(format!("Unsupported data type for reconciliation {:?}", data_type).into())
 		}
 	}
 }
 
 impl<'a> SchemaProvider for MySQLBackedSchemaProvider<'a> {
-	fn get_table_meta(&self, schema: &String, table: &String) -> Result<Option<Rc<TableMeta>>, String> {
+	fn get_table_meta(&self, schema: &String, table: &String) -> Result<Option<Rc<TableMeta>>, Box<Error>> {
 		// Lock and do work
 		println!("get_table_meta()");
 		let mut c = self.cache.lock().unwrap();
@@ -131,14 +132,14 @@ impl<'a> SchemaProvider for MySQLBackedSchemaProvider<'a> {
 								}
 
 							} else {
-								return Err(format!("Illegal result table name {}", t)) // shouldn't happen.
+								return Err(format!("Illegal result table name {}", t).into()) // shouldn't happen.
 							}
 						},
-						Some(Err(e)) => return Err(format!("{}", e)),
+						Some(Err(e)) => return Err(format!("{}", e).into()),
 						None => return Ok(None)
 					}
 				},
-				Err(e) => return Err(format!("{}", e)),
+				Err(e) => return Err(format!("{}", e).into()),
 			}
 		}
 
