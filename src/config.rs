@@ -6,7 +6,6 @@ use std::process;
 use self::xml::Xml;
 
 use encrypt::*;
-use query::planner::SchemaProvider;
 
 pub fn parse_config(path: &'static str) -> Config {
 	println!("parse_config() path: {}", path);

@@ -185,6 +185,7 @@ impl MySQLConnection for net::TcpStream {
                 Ok(MySQLPacket { bytes: header_vec })
             },
             Err(e) => {
+                // TODO needs better error handling
                 println!("ERROR {:?}", e);
                 Err("oops")
             }
