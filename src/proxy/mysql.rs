@@ -184,7 +184,10 @@ impl MySQLConnection for net::TcpStream {
 
                 Ok(MySQLPacket { bytes: header_vec })
             },
-            Err(_) => Err("oops")
+            Err(e) => {
+                println!("ERROR {:?}", e);
+                Err("oops")
+            }
         }
     }
 }
@@ -417,7 +420,13 @@ impl<'a> MySQLConnectionHandler <'a> {
             }
         };
 
-        let plan = try!(self.plan(&parsed));
+        let plan = match self.plan(&parsed) {
+            Ok(p) => p,
+            Err(e) => {
+                self.send_error(&String::from("42000"), &e.to_string());
+                return Ok(())
+            }
+        };
 
         // reqwrite query
         if parsed.is_some() {
