@@ -2,12 +2,16 @@ machine:
   services:
     - docker
 
+  environment:
+    RUST_VERSION: nightly-2016-09-05
+    MYSQL_VERSION: 5.7.12
+
   pre:
-    - if [ ! -f "/home/ubuntu/rustup.sh" ]; then curl https://sh.rustup.rs -sSf > /home/ubuntu/rustup.sh; fi
-    - chmod ogu+x /home/ubuntu/rustup.sh
-    - /home/ubuntu/rustup.sh -y
+    - if [ ! -f "/home/ubuntu/rustup.sh" ]; then curl https://sh.rustup.rs -sSf > /home/ubuntu/rustup.sh && chmod ogu+x /home/ubuntu/rustup.sh && /home/ubuntu/rustup.sh -y ; fi
+#    - chmod ogu+x /home/ubuntu/rustup.sh
+#    - /home/ubuntu/rustup.sh -y
     - echo "source $HOME/.cargo/env" >> /home/ubuntu/.bashrc
-    - rustup default nightly
+    - rustup default $RUST_VERSION
     - rm -f /home/ubuntu/.gitconfig
     - sudo service mysql stop
 
@@ -22,11 +26,10 @@ dependencies:
       --env MYSQL_DATABASE=zero
       --env MYSQL_USER=agiluser
       --env MYSQL_PASSWORD=password123
-      mysql:5.7.12 ; sleep 10
+      mysql:$MYSQL_VERSION ; sleep 10
 
   override:
-#    - source /home/ubuntu/.cargo/env && rustup default nightly && cargo build
-    - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-08-03 && cargo build
+    - source /home/ubuntu/.cargo/env && rustup override set $RUST_VERSION && cargo build
 
   cache_directories:
     - "/home/ubuntu/rustup.sh"
@@ -35,9 +38,9 @@ dependencies:
 
 test:
   override:
-    - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-08-03 && cargo test
+    - source /home/ubuntu/.cargo/env && rustup override set $RUST_VERSION && cargo test
     - /bin/bash scripts/circleci/test.sh
-    - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-08-03 && cargo doc
+    - source /home/ubuntu/.cargo/env && rustup override set $RUST_VERSION && cargo doc
 
 general:
   artifacts:
