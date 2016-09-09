@@ -13,7 +13,7 @@ cp target/debug/agildata-zero agildata-zero/bin
 cp zero-config.xml agildata-zero/conf
 cp -r target/doc agildata-zero/doc
 cp doc/README.md agildata-zero
-tar -czf agildata-zero-dist.tar.gz agildata-zero
+tar -cvjf agildata-zero-dist.tar.bz2 agildata-zero
 
 echo "Deployment archive completed."
-ls -al agildata-zero-dist.tar.gz
+ls -al agildata-zero-dist.tar.bz2
