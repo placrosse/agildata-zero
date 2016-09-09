@@ -19,7 +19,6 @@ use mysql;
 pub struct MySQLBackedSchemaProvider<'a> {
 	config: &'a Config,
 	pool: mysql::Pool,
-	//cache: HashMap<String, Rc<TableMeta>>,
 	cache: Mutex<HashMap<String, Rc<TableMeta>>>
 }
 

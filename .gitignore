@@ -7,4 +7,3 @@ dist
 *.tgz
 .idea
 *.iml
-Cargo.lock
