@@ -453,7 +453,7 @@ fn update() {
 }
 {
 	let dialect = AnsiSQLDialect::new();
-	let sql = String::from("UPDATE warehouse SET w_ytd = w_ytd + 2117.0 WHERE w_id = 1");
+	let sql = String::from("UPDATE warehouse SET w_ytd = w_ytd + 2117.1 WHERE w_id = 1");
 	let tokens = sql.tokenize(&dialect).unwrap();
 	let parsed = tokens.parse().unwrap();
 	
@@ -469,7 +469,7 @@ fn update() {
 								left: Box::new(SQLIdentifier{id: String::from("w_ytd"), 
 										parts: vec![String::from("w_ytd")]}),
 								op: ADD,
-								right: Box::new(SQLLiteral(LiteralDouble(0, 2117.0_f64)))})}]
+								right: Box::new(SQLLiteral(LiteralDouble(0, 2117.1_f64)))})}]
 		)
 	),
 	selection: Some(Box::new(
@@ -487,9 +487,8 @@ fn update() {
 	let ansi_writer = AnsiSQLWriter{};
 	let writer = SQLWriter::new(vec![&ansi_writer]);
 	let rewritten = writer.write(&parsed).unwrap();
-	// assertion failed: `(left == right)` (left: `"UPDATEWAREHOUSESETW_YTD=W_YTD+2117WHEREW_ID=1"`, 
-	// right: `"UPDATEWAREHOUSESETW_YTD=W_YTD+2117.0WHEREW_ID=1"`)
-	//assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
     println!("Rewritten: {:?}", rewritten);
 }
