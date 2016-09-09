@@ -29,8 +29,8 @@ dependencies:
 #    - chmod ogu+x /home/ubuntu/rustup.sh
 #    - /home/ubuntu/rustup.sh -y
     - echo "source $HOME/.cargo/env" >> /home/ubuntu/.bashrc
-    - rustup default nightly-2016-09-05
-    - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-09-05 && cargo build
+    - rustup default nightly-2016-08-03
+    - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-08-03 && cargo build
 
   cache_directories:
     - "/home/ubuntu/rustup.sh"
@@ -39,9 +39,9 @@ dependencies:
 
 test:
   override:
-    - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-09-05 && cargo test
+    - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-08-03 && cargo test
     - /bin/bash scripts/circleci/test.sh
-    - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-09-05 && cargo doc
+    - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-08-03 && cargo doc
 
 general:
   artifacts:
