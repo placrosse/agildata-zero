@@ -129,8 +129,11 @@ impl PacketHandler for ZeroHandler {
             self.handshake = false;
             Action::Forward
         } else {
-            //TODO: process request
-            Action::Forward
+            match p.packet_type() {
+                Ok(PacketType::ComInitDb) => self.process_init_db(p),
+                Ok(PacketType::ComQuery) => self.process_query(p),
+                _ => Action::Forward
+            }
         }
     }
 
@@ -139,3 +142,35 @@ impl PacketHandler for ZeroHandler {
     }
 }
 
+impl ZeroHandler {
+
+    fn process_init_db(&mut self, p:&Packet) -> Action {
+        let schema = parse_string(&p.bytes[5..]);
+        println!("COM_INIT_DB: {}", schema);
+        self.schema = Some(schema);
+        Action::Forward
+    }
+
+    fn process_query(&mut self, p:&Packet) -> Action {
+        //TODO:
+        //                    match self.process_query(&buf, packet_len) {
+        //                        Err(e) => {
+        ////                            self.send_error(, );
+        ////                            self.clear_mysql_read();
+        //                            Action::Error {
+        //                                code: 1064,
+        //                                state: &String::from("42000"),
+        //                                msg: &e.to_string() }
+        //                            }
+        //                        },
+        //                        Ok(()) => {}
+        //                    }
+
+        Action::Forward
+    }
+
+}
+
+fn parse_string(bytes: &[u8]) -> String {
+    String::from_utf8(bytes.to_vec()).expect("Invalid UTF-8")
+}
