@@ -12,9 +12,14 @@ use std::io::Cursor;
 use std::str::FromStr;
 use std::env;
 use std::rc::Rc;
+use std::error::Error;
 use config::{Config, TConfig};
 
 use super::schema_provider::MySQLBackedSchemaProvider;
+
+use query::{Tokenizer, Parser, Writer, SQLWriter, ASTNode};
+use query::dialects::mysqlsql::*;
+use query::dialects::ansisql::*;
 
 pub struct Proxy {
 //    server: TcpListener,
@@ -152,23 +157,141 @@ impl ZeroHandler {
     }
 
     fn process_query(&mut self, p:&Packet) -> Action {
-        //TODO:
-        //                    match self.process_query(&buf, packet_len) {
-        //                        Err(e) => {
-        ////                            self.send_error(, );
-        ////                            self.clear_mysql_read();
-        //                            Action::Error {
-        //                                code: 1064,
-        //                                state: &String::from("42000"),
-        //                                msg: &e.to_string() }
-        //                            }
-        //                        },
-        //                        Ok(()) => {}
-        //                    }
+        let query = parse_string(&p.bytes[5..]);
+        println!("COM_QUERY : {}", query);
+
+        // parse query
+        let ansi = AnsiSQLDialect::new();
+        let dialect = MySQLDialect::new(&ansi);
+
+        // TODO error handling
+        let parsed = match query.tokenize(&dialect) {
+            Ok(tokens) => {
+                match tokens.parse() {
+                    Ok(parsed) => {
+                        match parsed {
+                            ASTNode::MySQLUse(box ASTNode::SQLIdentifier{id: ref schema, ..}) => {
+                                self.schema = Some(schema.clone())
+                            },
+                            _ => {}
+                        };
+                        Some(parsed)
+                    },
+                    Err(e) => {
+                        println!("Failed to parse with: {}", e);
+                        match self.parsing_mode{
+                            ParsingMode::Strict =>{
+                                return create_error(e);
+                            },
+                            ParsingMode::Passive =>{
+                                println!("In Passive mode, falling through to MySQL");
+                                None
+                            }
+                        }
+                    }
+                }
+            },
+            Err(e) => {
+                println!("Failed to tokenize with: {}", e);
+                None
+            }
+        };
+
+        /*
+                                /*TODO: We need to implement custom errors, so we can distinguish between parse errors
+                                 TODO: And errors coming back from MySQL, and Ecryption errors. This handled seperately
+                                TODO: For now, since we cant call clear_mysql_read() on parse errors.*/
+                                println!("In Strict mode, failing.");
+//                                self.send_error(, );
+//                                return Ok(());
+*/
+
+//        let plan = self.plan(&parsed);
+//
+//        if plan.is_error() {
+//            return Action::Error {
+//                code: 1234,
+//                state: &String::from("42000"),
+//                msg: &e.to_string()
+//            }
+//        };
+//
+//        let plan = plan.unwrap();
 
         Action::Forward
+
+//        // reqwrite query
+//        if parsed.is_some() {
+//
+//            let value_map: HashMap<u32, Result<Vec<u8>, Box<Error>>> = HashMap::new();
+//            let mut encrypt_vis = EncryptVisitor{valuemap: value_map};
+//
+//            // Visit and conditionally encrypt (if there was a plan)
+//            match plan {
+//                Some(ref p) => {
+//                    try!(encrypt_vis.visit_rel(p));
+//                },
+//                None => {}
+//            }
+//
+//            let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
+//            let s = match self.schema {
+//                Some(ref s) => s.clone(),
+//                None => String::from("") // TODO
+//            };
+//            let translator = CreateTranslatingWriter {
+//                config: &self.config,
+//                schema: &s
+//            };
+//            let mysql_writer = MySQLWriter{};
+//            let ansi_writer = AnsiSQLWriter{};
+//
+//            let writer = SQLWriter::new(vec![
+//                                        &lit_writer,
+//                                        &translator,
+//                                        &mysql_writer,
+//                                        &ansi_writer
+//                                    ]);
+//
+//            let rewritten = writer.write(&parsed.unwrap()).unwrap();
+//
+//            println!("REWRITTEN {}", rewritten);
+//
+//            // write packed with new query
+//            let slice: &[u8] = rewritten.as_bytes();
+//            let mut wtr: Vec<u8> = vec![];
+//            wtr.write_u32::<LittleEndian>((slice.len() + 1) as u32).unwrap();
+//            assert!(0x00 == wtr[3]);
+//            wtr.push(0x03); // packet type for COM_Query
+//            wtr.extend_from_slice(slice);
+//
+//            match plan {
+//                None => {
+//                    try!(self.mysql_process_query(&wtr, None));
+//                    return Ok(());
+//                },
+//                Some(p) => {
+//                    let tt = p.tt();
+//                    try!(self.mysql_process_query(&wtr, Some(tt)));
+//                    return Ok(());
+//                }
+//            }
+//
+//        } else {
+//            try!(self.mysql_process_query(&buf[0 .. packet_len+4], None));
+//            return Ok(());
+//        }
+//
+//        Action::Forward
     }
 
+}
+
+fn create_error(e: String) -> Action {
+    Action::Error {
+        code: 1234,
+        state: [0x34, 0x32, 0x30, 0x30, 0x30], //&String::from("42000")
+        msg: e }
 }
 
 fn parse_string(bytes: &[u8]) -> String {
