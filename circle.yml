@@ -22,7 +22,7 @@ dependencies:
       --env MYSQL_DATABASE=zero
       --env MYSQL_USER=agiluser
       --env MYSQL_PASSWORD=password123
-      mysql:5.7.12 ; sleep 20
+      mysql:5.7.12 ; sleep 10
 
   override:
     - if [ ! -f "/home/ubuntu/rustup.sh" ]; then curl https://sh.rustup.rs -sSf > /home/ubuntu/rustup.sh && chmod ogu+x /home/ubuntu/rustup.sh && /home/ubuntu/rustup.sh -y ; fi
