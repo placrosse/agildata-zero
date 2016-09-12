@@ -24,7 +24,7 @@ pub struct Proxy {
 
 impl Proxy {
 
-    pub fn run(config: &Config, provider: &MySQLBackedSchemaProvider) {
+    pub fn run(config: Rc<Config>, provider: Rc<MySQLBackedSchemaProvider>) {
 
         //env_logger::init().unwrap();
 
@@ -49,11 +49,17 @@ impl Proxy {
         // for each incoming connection
         let done = socket.incoming().for_each(move |(socket, _)| {
 
+            let c = config.clone();
+            let p = provider.clone();
+
             // create a future to serve requests
             let future = TcpStream::connect(&mysql_addr, &handle).and_then(move |mysql| {
                 Ok((socket, mysql))
             }).and_then(move |(client, server)| {
-                Pipe::new(Rc::new(client), Rc::new(server), ZeroHandler {})
+                Pipe::new(Rc::new(client), Rc::new(server), ZeroHandler {
+                    config: c,
+                    provider: p,
+                })
             });
 
             // tell the tokio reactor to run the future
@@ -68,7 +74,10 @@ impl Proxy {
         l.run(done).unwrap();    }
 }
 
-struct ZeroHandler {}
+struct ZeroHandler {
+    config: Rc<Config>,
+    provider: Rc<MySQLBackedSchemaProvider>
+}
 
 impl PacketHandler for ZeroHandler {
 

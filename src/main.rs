@@ -23,6 +23,7 @@ extern crate mysql;
 
 use std::env;
 use std::str;
+use std::rc::Rc;
 
 mod encrypt;
 mod config;
@@ -66,7 +67,8 @@ fn main() {
         println!("{}", dsc);
     } else {
         let config = config::parse_config(&opt.cfg);
-        let provider = proxy::schema_provider::MySQLBackedSchemaProvider::new(&config);
-        proxy::server::Proxy::run(&config, &provider);
+        let config = Rc::new(config);
+        let provider = proxy::schema_provider::MySQLBackedSchemaProvider::new(config.clone());
+        proxy::server::Proxy::run(config, Rc::new(provider));
     }
 }

@@ -16,15 +16,15 @@ use mysql;
 // Mysql and config backed provider
 // locks on mutex to prevent multiple threads querying the database for uncached meta
 #[derive(Debug)]
-pub struct MySQLBackedSchemaProvider<'a> {
-	config: &'a Config,
+pub struct MySQLBackedSchemaProvider {
+	config: Rc<Config>,
 	pool: mysql::Pool,
 	cache: Mutex<HashMap<String, Rc<TableMeta>>>
 }
 
-impl<'a> MySQLBackedSchemaProvider<'a> {
+impl MySQLBackedSchemaProvider {
 
-	pub fn new(config: &'a Config) -> Self {
+	pub fn new(config: Rc<Config>) -> Self {
 		let conn = config.get_connection_config();
         let conn_host = conn.props.get("host").unwrap().clone();
         let default_port = &String::from("3306");
@@ -42,7 +42,7 @@ impl<'a> MySQLBackedSchemaProvider<'a> {
 		let pool = mysql::Pool::new(opts).unwrap();
 
 		MySQLBackedSchemaProvider {
-			config: config,
+			config: config.clone(),
 			pool: pool,
 			cache: Mutex::new(HashMap::new())
 		}
@@ -107,7 +107,7 @@ impl<'a> MySQLBackedSchemaProvider<'a> {
 	}
 }
 
-impl<'a> SchemaProvider for MySQLBackedSchemaProvider<'a> {
+impl SchemaProvider for MySQLBackedSchemaProvider {
 	fn get_table_meta(&self, schema: &String, table: &String) -> Result<Option<Rc<TableMeta>>, Box<Error>> {
 		// Lock and do work
 		println!("get_table_meta()");
