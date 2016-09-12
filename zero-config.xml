@@ -12,8 +12,8 @@
 		<property name="dbms" value="mysql"/>
 		<property name="host" value="127.0.0.1"/>
 		<property name="schema" value="zero"/>
-		<property name="user" value="root"/>
-		<property name="password" value=""/>
+		<property name="user" value="agiluser"/>
+		<property name="password" value="password123"/>
 		<property name="driverClassName" value="com.mysql.jdbc.Driver"/>
 	</connection>
 

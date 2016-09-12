@@ -7,7 +7,7 @@ use query::{Tokenizer, Parser, Writer, SQLWriter, ASTNode};
 use query::dialects::mysqlsql::*;
 use query::dialects::ansisql::*;
 use std::net::Shutdown as ShutdownSTD;
-use query::planner::{Planner, TupleType, Element, HasTupleType, RelVisitor, Rel};
+use query::planner::{Planner, TupleType, HasTupleType, RelVisitor, Rel};
 use super::writers::*;
 use std::net::Shutdown as ShutdownStd;
 use mio::{self, TryRead, TryWrite};
@@ -22,6 +22,7 @@ use encrypt::{Decrypt, NativeType, EncryptionType};
 use super::encrypt_visitor::EncryptVisitor;
 use super::server::Proxy;
 use super::server::State;
+use super::schema_provider::MySQLBackedSchemaProvider;
 
 
 #[derive(Debug)]
@@ -183,18 +184,14 @@ impl MySQLConnection for net::TcpStream {
 
                 Ok(MySQLPacket { bytes: header_vec })
             },
-            Err(_) => Err("oops")
+            Err(e) => {
+                // TODO needs better error handling
+                println!("ERROR {:?}", e);
+                Err("oops")
+            }
         }
     }
 }
-
-#[derive(Debug)]
-struct ColumnMetaData {
-    schema: String,
-    table_name: String,
-    column_name: String
-}
-
 
 
 #[derive(Debug)]
@@ -211,13 +208,14 @@ pub struct MySQLConnectionHandler<'a> {
     remote: net::TcpStream, // this is the connection to the remote mysql server
     schema: Option<String>, // the current schema
     config: &'a Config,
+    provider: &'a MySQLBackedSchemaProvider<'a>,
     parsing_mode: ParsingMode
     //authenticating: bool
 }
 
 impl<'a> MySQLConnectionHandler <'a> {
 
-    pub fn new(socket: TcpStream, token: mio::Token, config: &Config) -> MySQLConnectionHandler {
+    pub fn new(socket: TcpStream, token: mio::Token, config: &'a Config, provider: &'a MySQLBackedSchemaProvider) -> MySQLConnectionHandler<'a> {
         println!("Creating remote connection...");
 
         let conn = config.get_connection_config();
@@ -246,6 +244,7 @@ impl<'a> MySQLConnectionHandler <'a> {
             remote: mysql,
             schema: None,
             config: &config,
+            provider: &provider,
             parsing_mode:parsing_mode
             // authenticating: true
         }
@@ -414,7 +413,13 @@ impl<'a> MySQLConnectionHandler <'a> {
             }
         };
 
-        let plan = try!(self.plan(&parsed));
+        let plan = match self.plan(&parsed) {
+            Ok(p) => p,
+            Err(e) => {
+                self.send_error(&String::from("42000"), &e.to_string());
+                return Ok(())
+            }
+        };
 
         // reqwrite query
         if parsed.is_some() {
@@ -483,11 +488,11 @@ impl<'a> MySQLConnectionHandler <'a> {
         match parsed {
             &None => Ok(None),
             &Some(ref sql) => {
-                let mut foo = match self.schema {
+                let foo = match self.schema {
                     Some(ref s) => Some(s),
                     None => None
                 };
-                let planner = Planner::new(foo, &self.config);
+                let planner = Planner::new(foo, self.provider);
                 planner.sql_to_rel(sql)
             }
         }
