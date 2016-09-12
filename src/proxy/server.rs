@@ -189,15 +189,37 @@ impl PacketHandler for ZeroHandler {
 
     fn handle_response(&mut self, p: &Packet) -> Action {
 
-//        match p.bytes[4] {
-//            0xfe | 0xff => Action::Forward,
-//            _ => {
-//                try!(self.process_result_row(&row_packet, write_buf, tt));
-//            }
-//        }
+        // this logic only applies to the very first response packet after a request
+        match p.bytes[4] {
+            0x00 | 0xfe | 0xff => Action::Forward,
+            0xfb => panic!("not implemented"), //TODO: should not panic
+            0x03 => {
+                match self.tt {
+                    Some(ref tt) => {
+                        // expect one field_meta packet per column defined in tt
+                        // expect 0 or more result rows
+                        // expect result set terminator
+                        Action::Forward
+                    },
+                    None => {
+                        // in this case we do not need to process any of these packets
 
-        Action::Forward
-    }
+                        // expect ??? x field_meta packet
+                        // expect 0 or more result rows
+                        // expect result set terminator
+                        Action::Forward
+                    }
+                }
+            },
+            _ => {
+                // expect a field_count packet
+                // expect field_count x field_meta packet
+                // expect 0 or more result rows
+                // expect result set terminator
+                Action::Forward
+            }
+        }
+   }
 }
 
 impl ZeroHandler {

@@ -635,9 +635,9 @@ impl<'a> MySQLConnectionHandler <'a> {
 //    }
 
     fn process_result_row(&mut self,
-                          row_packet: &MySQLPacket,
-                          write_buf: &mut Vec<u8>,
-                          tt: Option<&TupleType>) -> Result<(), Box<Error>> {
+                               row_packet: &MySQLPacket,
+                               write_buf: &mut Vec<u8>,
+                               tt: Option<&TupleType>) -> Result<(), Box<Error>> {
 
         println!("Received row");
 
