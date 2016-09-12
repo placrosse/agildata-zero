@@ -38,6 +38,9 @@ impl RelVisitor for EncryptVisitor  {
 			},
 			&Rel::AliasedRel{box ref input, ..} => self.visit_rel(input)?,
 			&Rel::Dual{..} => {},
+			&Rel::Update{ref table, box ref assns, box ref select} => {
+				{}
+			},
 			&Rel::Insert{ref table, box ref columns, box ref values, ..} => {
 				match (columns, values) {
 					(&Rex::RexExprList(ref c_list), &Rex::RexExprList(ref v_list)) => {

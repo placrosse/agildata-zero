@@ -69,8 +69,8 @@ pub enum Rel {
     AliasedRel{alias: String, input: Box<Rel>, tt: TupleType},
     Join{left: Box<Rel>, join_type: JoinType, right: Box<Rel>, on_expr: Option<Box<Rex>>, tt: TupleType},
     Dual { tt: TupleType },
-    Insert {table: String, columns: Box<Rex>, values: Box<Rex>, tt: TupleType}
-
+    Insert {table: String, columns: Box<Rex>, values: Box<Rex>, tt: TupleType},
+	Update {table: String, assns: Box<Rex>, select: Box<Rel>}    
 }
 
 pub trait HasTupleType {
@@ -86,7 +86,8 @@ impl HasTupleType for Rel {
             &Rel::Dual { ref tt, .. } => tt,
             &Rel::Insert {ref tt, ..} => tt,
             &Rel::AliasedRel{ref tt, ..} => tt,
-            &Rel::Join{ref tt, ..} => tt
+            &Rel::Join{ref tt, ..} => tt,
+            &Rel::Update{ref select, ..} => select.tt()
         }
     }
 }
@@ -186,7 +187,6 @@ impl<'a> Planner<'a> {
                     input: Box::new(input),
                     tt: project_tt
                 }))
-
             },
             &ASTNode::SQLInsert {box ref table, box ref column_list, box ref values_list} => {
                 match self.sql_to_rel(table)? {
@@ -201,7 +201,6 @@ impl<'a> Planner<'a> {
                     Some(other) => return Err(format!("Unsupported table relation for INSERT {:?}", other).into()),
                     None => return Ok(None)
                 }
-
             },
             //     SQLJoin{left: Box<ASTNode>, join_type: JoinType, right: Box<ASTNode>, on_expr: Option<Box<ASTNode>>},
 
@@ -237,10 +236,7 @@ impl<'a> Planner<'a> {
                     (Some(_), None) | (None, Some(_)) => {
                         Err(String::from("Unsupported: Mismatch join between encrypted and unencrypted relations").into())
                     }
-
                 }
-
-
             },
             &ASTNode::SQLAlias{box ref expr, box ref alias} => {
 
@@ -262,9 +258,6 @@ impl<'a> Planner<'a> {
                     },
                     None => Ok(None) // TODO expected behaviour?
                 }
-
-
-
             },
             &ASTNode::SQLIdentifier { ref id, ref parts } => {
 
@@ -290,11 +283,15 @@ impl<'a> Planner<'a> {
                     },
                     None => Err(format!("Invalid table {}.{}", table_schema.unwrap(), table_name).into())
                 }
-
             },
             &ASTNode::MySQLCreateTable{..} => Ok(None), // Dont need to plan this yet...
-            //ASTNode::SQLInsert => {},
-            &ASTNode::SQLUpdate{..} => Ok(None),
+            &ASTNode::SQLUpdate{ box ref table, ref assignments, ref selection } => {
+            	
+            	let rel = self.sql_to_rel(table)?;
+
+				// Ok(Some(Rel::Update { rel, set_list, input }))
+				Ok(None)
+            }
             _ => Err(format!("Unsupported expr for planning {:?}", sql).into())
         }
     }
