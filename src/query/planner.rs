@@ -93,13 +93,13 @@ impl HasTupleType for Rel {
 
 pub struct Planner<'a> {
     default_schema: Option<&'a String>,
-    provider: &'a SchemaProvider
+    provider: Rc<SchemaProvider>
 }
 
 impl<'a> Planner<'a> {
 
     pub fn new(s: Option<&'a String>,
-               p: &'a SchemaProvider) -> Self {
+               p: Rc<SchemaProvider>) -> Self {
 
         Planner { default_schema: s, provider: p }
     }
