@@ -97,10 +97,19 @@ impl Proxy {
         l.run(done).unwrap();    }
 }
 
+#[derive(PartialEq, Debug)]
+enum HandlerState {
+    Handshake,
+    Writing,
+    Reading,
+    ExpectFieldPacket(usize),
+    ExpectResultRow
+}
+
 struct ZeroHandler {
     config: Rc<Config>,
     provider: Rc<MySQLBackedSchemaProvider>,
-    handshake: bool,
+    state: HandlerState,
     schema: Option<String>, // the current schema
     parsing_mode: ParsingMode,
     tt: Option<TupleType>
@@ -115,7 +124,7 @@ impl ZeroHandler {
         ZeroHandler {
             config: config.clone(),
             provider: provider.clone(),
-            handshake: true,
+            state: HandlerState::Handshake,
             schema: None,
             parsing_mode: parsing_mode,
             tt: None
@@ -156,8 +165,8 @@ pub enum ParsingMode {
 impl PacketHandler for ZeroHandler {
 
     fn handle_request(&mut self, p: &Packet) -> Action {
-        if self.handshake {
-            self.handshake = false;
+        if self.state == HandlerState::Handshake {
+            self.state = HandlerState::Reading;
 
             // see https://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeResponse
             //NOTE: this code makes assumptions about what 'capabilities' are active
@@ -189,36 +198,46 @@ impl PacketHandler for ZeroHandler {
 
     fn handle_response(&mut self, p: &Packet) -> Action {
 
-        // this logic only applies to the very first response packet after a request
-        match p.bytes[4] {
-            0x00 | 0xfe | 0xff => Action::Forward,
-            0xfb => panic!("not implemented"), //TODO: should not panic
-            0x03 => {
-                match self.tt {
-                    Some(ref tt) => {
-                        // expect one field_meta packet per column defined in tt
-                        // expect 0 or more result rows
-                        // expect result set terminator
-                        Action::Forward
-                    },
-                    None => {
-                        // in this case we do not need to process any of these packets
+        let (state, action) = match self.state {
+            HandlerState::Handshake => (HandlerState::Handshake, Action::Forward),
+            HandlerState::Reading => {
+                match p.bytes[4] {
+                    0x00 | 0xfe | 0xff => (HandlerState::Writing, Action::Forward),
+                    0xfb => panic!("not implemented"), //TODO: should not panic
+                    0x03 => {
+                        match self.tt {
+                            Some(ref tt) => {
+                                // expect one field_meta packet per column defined in tt
+                                // expect 0 or more result rows
+                                // expect result set terminator
 
-                        // expect ??? x field_meta packet
+                                (HandlerState::ExpectFieldPacket(tt.elements.len()),Action::Forward)
+                            },
+                            None => {
+                                panic!("Illegal!") // TODO
+                            }
+                        }
+                    },
+                    _ => {
+                        // expect a field_count packet
+                        let field_count = p.bytes[4] as usize;
+
+                        // expect field_count x field_meta packet
                         // expect 0 or more result rows
                         // expect result set terminator
-                        Action::Forward
+                        (HandlerState::ExpectFieldPacket(field_count),Action::Forward)
                     }
                 }
             },
-            _ => {
-                // expect a field_count packet
-                // expect field_count x field_meta packet
-                // expect 0 or more result rows
-                // expect result set terminator
-                Action::Forward
-            }
-        }
+            _ => panic!("FOO")
+
+        };
+        // this logic only applies to the very first response packet after a request
+
+        self.state = state;
+        action
+
+
    }
 }
 
@@ -228,6 +247,7 @@ impl ZeroHandler {
         let schema = parse_string(&p.bytes[5..]);
         println!("COM_INIT_DB: {}", schema);
         self.schema = Some(schema);
+        self.state = HandlerState::Reading;
         Action::Forward
     }
 
