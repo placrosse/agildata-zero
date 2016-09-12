@@ -7,7 +7,7 @@ use self::xml::Xml;
 
 use encrypt::*;
 
-pub fn parse_config(path: &'static str) -> Config {
+pub fn parse_config(path: &str) -> Config {
 	println!("parse_config() path: {}", path);
 	let mut rdr = match File::open(path) {
         Ok(file) => file,

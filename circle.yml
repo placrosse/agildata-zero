@@ -3,11 +3,11 @@ machine:
     - docker
 
   pre:
-    - if [ ! -f "/home/ubuntu/rustup.sh" ]; then curl https://sh.rustup.rs -sSf > /home/ubuntu/rustup.sh; fi
-    - chmod ogu+x /home/ubuntu/rustup.sh
-    - /home/ubuntu/rustup.sh -y
-    - echo "source $HOME/.cargo/env" >> /home/ubuntu/.bashrc
-    - rustup default nightly
+#    - if [ ! -f "/home/ubuntu/rustup.sh" ]; then curl https://sh.rustup.rs -sSf > /home/ubuntu/rustup.sh && chmod ogu+x /home/ubuntu/rustup.sh && /home/ubuntu/rustup.sh -y ; fi
+#    - chmod ogu+x /home/ubuntu/rustup.sh
+#    - /home/ubuntu/rustup.sh -y
+#    - echo "source $HOME/.cargo/env" >> /home/ubuntu/.bashrc
+#    - rustup default nightly-2016-09-05
     - rm -f /home/ubuntu/.gitconfig
     - sudo service mysql stop
 
@@ -25,7 +25,11 @@ dependencies:
       mysql:5.7.12 ; sleep 10
 
   override:
-#    - source /home/ubuntu/.cargo/env && rustup default nightly && cargo build
+    - if [ ! -f "/home/ubuntu/rustup.sh" ]; then curl https://sh.rustup.rs -sSf > /home/ubuntu/rustup.sh && chmod ogu+x /home/ubuntu/rustup.sh && /home/ubuntu/rustup.sh -y ; fi
+#    - chmod ogu+x /home/ubuntu/rustup.sh
+#    - /home/ubuntu/rustup.sh -y
+    - echo "source $HOME/.cargo/env" >> /home/ubuntu/.bashrc
+    - rustup default nightly-2016-08-03
     - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-08-03 && cargo build
 
   cache_directories:
@@ -43,9 +47,9 @@ general:
   artifacts:
     - "/home/ubuntu/agildata-zero/target/doc/agildata_zero"
 
-# deployment:
-#   deploy:
-#     branch: [develop, master]
-#     commands:
-#       - cargo deploy
+deployment:
+  deploy:
+    branch: [develop, master, feature-cci-deploy]
+    commands:
+      - /bin/bash scripts/circleci/deploy.sh
 
