@@ -295,7 +295,7 @@ impl AnsiSQLDialect {
 				},
 				_ => None
 			},
-			_ => return Err(format!("unexpected token {:?}", tokens.peek()))
+			_ => None
 		};
 
 		let whr = match tokens.peek() {
