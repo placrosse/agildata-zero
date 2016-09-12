@@ -317,6 +317,59 @@ impl ZeroHandler {
 
     }
 
+    fn process_result_row(&mut self,
+                          p: &Packet,
+                          ) -> Result<Action, Box<Error>> {
+
+        println!("Received row");
+
+        match self.tt {
+            Some(ref tt) => {
+                let mut r = MySQLPacketParser::new(&p.bytes);
+                let mut wtr: Vec<u8> = vec![];
+
+                for i in 0..tt.elements.len() {
+
+                    let value = match &tt.elements[i].encryption {
+                        &EncryptionType::NA => r.read_lenenc_string(),
+                        encryption @ _ => match &tt.elements[i].data_type {
+                            &NativeType::U64 => {
+                                let res = try!(u64::decrypt(&r.read_bytes().unwrap(), &encryption));
+                                Some(format!("{}", res))
+                            },
+                            &NativeType::Varchar(_) => {
+                                let res = try!(String::decrypt(&r.read_bytes().unwrap(), &encryption));
+                                Some(res)
+                            },
+                            native_type @ _ => panic!("Native type {:?} not implemented", native_type)
+                        }
+                    };
+
+                    // encode this field in the new packet
+                    match value {
+                        None => wtr.push(0xfb),
+                        Some(v) => {
+                            let slice = v.as_bytes();
+                            //TODO: hacked to assume single byte for string length
+                            wtr.write_u8(slice.len() as u8).unwrap();
+                            wtr.extend_from_slice(&slice);
+                        }
+                    }
+                }
+
+                let mut new_packet: Vec<u8> = vec![];
+                let sequence_id = p.sequence_id();
+                new_packet.write_u32::<LittleEndian>(wtr.len() as u32).unwrap();
+                new_packet.pop();
+                new_packet.push(sequence_id);
+                new_packet.extend_from_slice(&wtr);
+
+                Ok(Action::Mutate(Packet { bytes: new_packet }))
+            },
+            None => Ok(Action::Forward)
+        }
+    }
+
 }
 
 fn create_error(e: String) -> Action {
