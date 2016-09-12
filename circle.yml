@@ -8,16 +8,7 @@ machine:
 
 dependencies:
   pre:
-    - >
-      docker run
-      --detach
-      --name mysql
-      --publish 3306:3306
-      --env MYSQL_ALLOW_EMPTY_PASSWORD='yes'
-      --env MYSQL_DATABASE=zero
-      --env MYSQL_USER=agiluser
-      --env MYSQL_PASSWORD=password123
-      mysql:5.7.12 ; sleep 10
+    - /bin/bash scripts/circleci/mysql.sh
 
   override:
     - if [ ! -f "/home/ubuntu/rustup.sh" ]; then curl https://sh.rustup.rs -sSf > /home/ubuntu/rustup.sh && chmod ogu+x /home/ubuntu/rustup.sh && /home/ubuntu/rustup.sh -y ; fi
