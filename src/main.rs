@@ -11,7 +11,12 @@ extern crate log;
 extern crate env_logger;
 
 extern crate byteorder;
-extern crate mio;
+extern crate mysql_proxy;
+#[macro_use]
+extern crate futures;
+#[macro_use]
+extern crate tokio_core;
+
 extern crate bytes;
 
 extern crate mysql;
