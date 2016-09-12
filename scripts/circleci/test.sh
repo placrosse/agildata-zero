@@ -1,9 +1,11 @@
 #!/bin/bash
 #
-# Script for testing AgilData Zero with Jenkins
+# Script for testing AgilData Zero with CircleCI
 #
 # For the record, this script is very chatty.  This is so we can verify
 # each step of the way as the build runs.
+
+source /home/ubuntu/.cargo/env
 
 RUST_BUILD="nightly-2016-08-03"
 AGILDATA_TEST_DB="zero"
@@ -11,6 +13,12 @@ MYSQL_USER="agiluser"
 MYSQL_PASS="password123"
 
 TESTS=(test1 test2)
+
+# Set up the Rust version to be overridden to the required build.
+rustup override set $RUST_BUILD
+
+# Run a full test
+cargo test
 
 # Start server in the background, storing the PID of the app
 echo "Generated binaries:"
