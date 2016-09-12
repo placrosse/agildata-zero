@@ -6,16 +6,14 @@ use byteorder::*;
 use query::{Tokenizer, Parser, Writer, SQLWriter, ASTNode};
 use query::dialects::mysqlsql::*;
 use query::dialects::ansisql::*;
-use std::net::Shutdown as ShutdownSTD;
-use query::planner::{Planner, TupleType, Element, HasTupleType, RelVisitor, Rel};
+use query::planner::{Planner, TupleType, HasTupleType, RelVisitor, Rel};
 use super::writers::*;
-use std::net::Shutdown as ShutdownStd;
 use mio::{self, TryRead, TryWrite};
 use mio::tcp::*;
 
 use bytes::Take;
 
-use config::{Config, TConfig, ColumnConfig};
+use config::{Config, TConfig};
 
 use encrypt::{Decrypt, NativeType, EncryptionType};
 
@@ -194,8 +192,6 @@ struct ColumnMetaData {
     table_name: String,
     column_name: String
 }
-
-
 
 #[derive(Debug)]
 enum ConnectionPhase {
@@ -649,10 +645,10 @@ impl<'a> MySQLConnectionHandler <'a> {
                             &EncryptionType::NA => r.read_lenenc_string(),
                             encryption @ _ => match &t.elements[i].data_type {
                                 &NativeType::U64 => {
-                                    let res = try!(u64::decrypt(&r.read_bytes().unwrap(), &encryption));
+                                    let res = u64::decrypt(&r.read_bytes().unwrap(), &encryption, &t.elements[i].key)?;
                                     Some(format!("{}", res))},
                                 &NativeType::Varchar(_) => {
-                                    let res = try!(String::decrypt(&r.read_bytes().unwrap(), &encryption));
+                                    let res = String::decrypt(&r.read_bytes().unwrap(), &encryption, &t.elements[i].key)?;
                                     Some(res)
                                 },
                                 native_type @ _ => panic!("Native type {:?} not implemented", native_type)

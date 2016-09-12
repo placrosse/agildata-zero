@@ -48,10 +48,10 @@ impl RelVisitor for EncryptVisitor  {
 										if el.encryption != EncryptionType::NA {
 											match lit {
 												&LiteralExpr::LiteralLong(ref i, ref val) => {
-													self.valuemap.insert(i.clone(), val.encrypt(&el.encryption));
+													self.valuemap.insert(i.clone(), val.encrypt(&el.encryption, &el.key));
 												},
 												&LiteralExpr::LiteralString(ref i, ref val) => {
-													self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption));
+													self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption, &el.key));
 												}
 												_ => return Err(format!("Unsupported value type {:?} for encryption", lit).into())
 											}
@@ -101,10 +101,10 @@ impl RelVisitor for EncryptVisitor  {
 										&Operator::EQ => {
 											match literal {
 												&LiteralExpr::LiteralLong(ref i, ref val) => {
-													self.valuemap.insert(i.clone(), val.encrypt(&element.encryption));
+													self.valuemap.insert(i.clone(), val.encrypt(&element.encryption, &element.key));
 												},
 												&LiteralExpr::LiteralString(ref i, ref val) => {
-													self.valuemap.insert(i.clone(), val.clone().encrypt(&element.encryption));
+													self.valuemap.insert(i.clone(), val.clone().encrypt(&element.encryption, &element.key));
 												}
 												_ => return Err(format!("Unsupported value type {:?} for encryption", literal).into())
 											}

@@ -25,21 +25,21 @@
 	<schema name="zero">
 		<table name="users">
 			<column name="id" type="INTEGER" encryption="none" pkOrdinal="0"/>
-			<column name="first_name" type="VARCHAR(50)" encryption="aes"/>
-			<column name="last_name" type="VARCHAR(50)" encryption="aes"/>
-			<column name="ssn" type="VARCHAR(50)" encryption="aes"/>
-			<column name="age" type="INTEGER" encryption="aes"/>
-			<column name="sex" type="VARCHAR(50)" encryption="aes"/>
+			<column name="first_name" type="VARCHAR(50)" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+			<column name="last_name" type="VARCHAR(50)" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+			<column name="ssn" type="VARCHAR(50)" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+			<column name="age" type="INTEGER" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+			<column name="sex" type="VARCHAR(50)" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
 		</table>
 		<table name="user_purchases">
 			<column name="id" type="INTEGER" encryption="none" pkOrdinal="0"/>
 			<column name="user_id" type="INTEGER" encryption="none"/>
-			<column name="item_code" type="INTEGER" encryption="aes"/>
-			<column name="amount" type="DOUBLE" encryption="aes"/>
+			<column name="item_code" type="INTEGER" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+			<column name="amount" type="DOUBLE" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
 		</table>
 		<table name="items">
-			<column name="item_code" type="INTEGER" encryption="aes"/>
-			<column name="item_name" type="VARCHAR(50)" encryption="aes"/>
+			<column name="item_code" type="INTEGER" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+			<column name="item_name" type="VARCHAR(50)" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
             <column name="description" type="VARCHAR(50)" encryption="none"/>
 		</table>
 	</schema>

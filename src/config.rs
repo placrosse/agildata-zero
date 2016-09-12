@@ -129,19 +129,27 @@ fn parse_schema_config(builder: &mut SchemaConfigBuilder, children: Vec<Xml>) {
 }
 
 fn parse_table_config(builder: &mut TableConfigBuilder, children: Vec<Xml>) {
+    use std::env;
+
 	for node in children {
 		match node {
 			Xml::ElementNode(e) => match &e.name as &str {
 				"column" => {
 					let name = get_attr_or_fail("name", &e);
 					let native_type = get_attr_or_fail("type", &e);
-					let encryption = get_attr_or_fail("encryption", &e);
+                    let encryption = get_attr_or_fail("encryption", &e);
 					builder.add_column(ColumnConfig{
 						name: name,
-						encryption: determine_encryption(&encryption),
-						native_type: determine_native_type(&native_type)
+                        native_type: determine_native_type(&native_type),
+                        encryption: determine_encryption(&encryption),
+                        key: if encryption.to_uppercase() != "NONE" {
+                                 determine_key(&env::var(format!("{}.{}.key", builder.name.unwrap(), name))
+                                                .ok()
+                                                .unwrap_or(get_attr_or_fail("key", &e)))
+                             } else {
+                                 [0u8; 32]
+                             },
 					});
-
 				},
 				_ => panic!("Unexpected element tag {}", e.name)
 			},
@@ -150,7 +158,7 @@ fn parse_table_config(builder: &mut TableConfigBuilder, children: Vec<Xml>) {
 	}
 }
 
-fn get_attr_or_fail(name: &'static str, element: &xml::Element) -> String {
+fn get_attr_or_fail(name: &str, element: &xml::Element) -> String {
 	match element.get_attribute(name, None) {
 		Some(v) => v.to_string(),
 		None => panic!("Missing attribute {}", name)
@@ -180,10 +188,15 @@ fn determine_encryption(encryption: &String) -> EncryptionType {
 
 }
 
+fn determine_key(key: &str) -> [u8; 32] {
+    hex_key(key)
+}
+
 #[derive(Debug)]
 pub struct ColumnConfig {
 	pub name: String,
 	pub encryption: EncryptionType,
+    pub key: [u8; 32],
 	pub native_type: NativeType
 }
 

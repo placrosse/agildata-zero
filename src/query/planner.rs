@@ -21,6 +21,7 @@ impl TupleType {
 pub struct Element {
     pub name: String,
     pub encryption: EncryptionType,
+    pub key: [u8; 32],
     pub data_type: NativeType,
     pub relation: String,
     pub p_name: Option<String>,
@@ -238,7 +239,7 @@ impl<'a> Planner<'a> {
                 match input {
                     Some(i) => {
                         let tt = TupleType::new(i.tt().elements.iter().map(|e| Element{
-                            name: e.name.clone(), encryption: e.encryption.clone(),
+                            name: e.name.clone(), encryption: e.encryption.clone(), key: e.key.clone(),
                             data_type: e.data_type.clone(), relation: a.clone(),
                             p_name: e.p_name.clone(), p_relation: Some(e.relation.clone())
                         }).collect());
@@ -268,7 +269,7 @@ impl<'a> Planner<'a> {
                     let tt = TupleType::new(table_config.column_map
                         .iter()
                         .map(|(k,v)| Element {
-                            name: v.name.clone(), encryption: v.encryption.clone(),
+                            name: v.name.clone(), encryption: v.encryption.clone(), key: v.key.clone(),
                             data_type: v.native_type.clone(), relation: table_name.clone(),
                             p_name: None, p_relation: None
                         })
