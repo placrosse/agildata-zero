@@ -87,6 +87,7 @@ impl Proxy {
 
             // tell the tokio reactor to run the future
             handle.spawn(future.map_err(|err| {
+
                 println!("Failed to spawn future: {:?}", err);
             }));
 
@@ -103,7 +104,8 @@ enum HandlerState {
     Writing,
     Reading,
     ExpectFieldPacket(usize),
-    ExpectResultRow
+    ExpectResultRow,
+    IgnoreFurtherResults
 }
 
 struct ZeroHandler {
@@ -191,7 +193,10 @@ impl PacketHandler for ZeroHandler {
             match p.packet_type() {
                 Ok(PacketType::ComInitDb) => self.process_init_db(p),
                 Ok(PacketType::ComQuery) => self.process_query(p),
-                _ => Action::Forward
+                _ => {
+                    self.state = HandlerState::Reading;
+                    Action::Forward
+                }
             }
         }
     }
@@ -201,6 +206,7 @@ impl PacketHandler for ZeroHandler {
         let (state, action) = match self.state {
             HandlerState::Handshake => (HandlerState::Handshake, Action::Forward),
             HandlerState::Reading => {
+                // this logic only applies to the very first response packet after a request
                 match p.bytes[4] {
                     0x00 | 0xfe | 0xff => (HandlerState::Writing, Action::Forward),
                     0xfb => panic!("not implemented"), //TODO: should not panic
@@ -229,10 +235,27 @@ impl PacketHandler for ZeroHandler {
                     }
                 }
             },
-            _ => panic!("FOO")
+            HandlerState::ExpectFieldPacket(n) => if n == 1 {
+                (HandlerState::ExpectResultRow, Action::Forward)
+            } else {
+                (HandlerState::ExpectFieldPacket(n -1), Action::Forward)
+            },
+            HandlerState::ExpectResultRow => match p.bytes[4] {
+                0x00 | 0xfe | 0xff => (HandlerState::Writing, Action::Forward),
+                _ => {
+                    match self.process_result_row(p) {
+                        Ok(a) => (HandlerState::ExpectResultRow, a),
+                        Err(e) => (HandlerState::IgnoreFurtherResults, create_error_from_err(e))
+                    }
+                }
+            },
+            HandlerState::IgnoreFurtherResults => match p.bytes[4] {
+                0x00 | 0xfe | 0xff => (HandlerState::Writing, Action::Drop),
+                _ => (HandlerState::IgnoreFurtherResults, Action::Drop)
+            },
+            _ => panic!("Unsupported state {:?}", self.state)
 
         };
-        // this logic only applies to the very first response packet after a request
 
         self.state = state;
         action
@@ -298,7 +321,7 @@ impl ZeroHandler {
         };
 
         // reqwrite query
-        if parsed.is_some() {
+       let action = if parsed.is_some() {
 
             let value_map: HashMap<u32, Result<Vec<u8>, Box<Error>>> = HashMap::new();
             let mut encrypt_vis = EncryptVisitor{valuemap: value_map};
@@ -355,8 +378,10 @@ impl ZeroHandler {
 
         } else {
             Action::Forward
-        }
+        };
 
+        self.state = HandlerState::Reading;
+        action
     }
 
     fn process_result_row(&mut self,
