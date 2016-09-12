@@ -28,13 +28,24 @@ impl Proxy {
 
         //env_logger::init().unwrap();
 
+        //TODO: refactor to reduce repeated code
+        let temp = config.clone();
+
         // determine address for the proxy to bind to
-        let bind_addr = env::args().nth(1).unwrap_or("127.0.0.1:3307".to_string());
-        let bind_addr = bind_addr.parse::<SocketAddr>().unwrap();
+        let conn = temp.get_client_config();
+        let conn_host = conn.props.get("host").unwrap();
+        let default_port = &String::from("3306");
+        let conn_port = conn.props.get("port").unwrap_or(default_port);
+        let conn_addr = format!("{}:{}",conn_host,conn_port);
+        let bind_addr = conn_addr.parse::<SocketAddr>().unwrap();
 
         // determine address of the MySQL instance we are proxying for
-        let mysql_addr = env::args().nth(2).unwrap_or("127.0.0.1:3306".to_string());
-        let mysql_addr = mysql_addr.parse::<SocketAddr>().unwrap();
+        let conn = temp.get_connection_config();
+        let conn_host = conn.props.get("host").unwrap();
+        let default_port = &String::from("3306");
+        let conn_port = conn.props.get("port").unwrap_or(default_port);
+        let conn_addr = format!("{}:{}",conn_host,conn_port);
+        let mysql_addr = conn_addr.parse::<SocketAddr>().unwrap();
 
         // Create the tokio event loop that will drive this server
         let mut l = Core::new().unwrap();
@@ -56,10 +67,7 @@ impl Proxy {
             let future = TcpStream::connect(&mysql_addr, &handle).and_then(move |mysql| {
                 Ok((socket, mysql))
             }).and_then(move |(client, server)| {
-                Pipe::new(Rc::new(client), Rc::new(server), ZeroHandler {
-                    config: c,
-                    provider: p,
-                })
+                Pipe::new(Rc::new(client), Rc::new(server), ZeroHandler::new(c,p))
             });
 
             // tell the tokio reactor to run the future
@@ -76,16 +84,57 @@ impl Proxy {
 
 struct ZeroHandler {
     config: Rc<Config>,
-    provider: Rc<MySQLBackedSchemaProvider>
+    provider: Rc<MySQLBackedSchemaProvider>,
+    handshake: bool,
+    schema: Option<String>, // the current schema
+    parsing_mode: ParsingMode,
 }
+
+impl ZeroHandler {
+
+    fn new(config: Rc<Config>, provider: Rc<MySQLBackedSchemaProvider>) -> Self {
+
+        let parsing_mode = determine_parsing_mode(&config.get_parsing_config().props.get("mode").unwrap());
+
+        ZeroHandler {
+            config: config.clone(),
+            provider: provider.clone(),
+            handshake: true,
+            schema: None,
+            parsing_mode: parsing_mode,
+        }
+    }
+
+}
+
+fn determine_parsing_mode(mode: &String) -> ParsingMode {
+    match &mode.to_uppercase() as &str {
+        "STRICT" => ParsingMode::Strict,
+        "PASSIVE" => ParsingMode::Passive,
+        _ => panic!("Unsupported parsing mode {}", mode)
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum ParsingMode {
+    Strict,
+    Passive
+}
+
 
 impl PacketHandler for ZeroHandler {
 
-    fn handle_request(&self, p: &Packet) -> Action {
-        Action::Forward
+    fn handle_request(&mut self, p: &Packet) -> Action {
+        if self.handshake {
+            self.handshake = false;
+            Action::Forward
+        } else {
+            //TODO: process request
+            Action::Forward
+        }
     }
 
-    fn handle_response(&self, p: &Packet) -> Action {
+    fn handle_response(&mut self, p: &Packet) -> Action {
         Action::Forward
     }
 }
