@@ -158,6 +158,25 @@ impl PacketHandler for ZeroHandler {
     fn handle_request(&mut self, p: &Packet) -> Action {
         if self.handshake {
             self.handshake = false;
+
+            // see https://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeResponse
+            //NOTE: this code makes assumptions about what 'capabilities' are active
+
+            let mut r = MySQLPacketParser::new(&p.bytes);
+            r.skip(4); // capability flags, CLIENT_PROTOCOL_41 always set
+            r.skip(4); // max-packet size
+            r.skip(1); // character set
+            r.skip(23); // reserved
+            let username = r.read_c_string().unwrap(); // username
+            println!("user: {}", username);
+            let auth_response = r.read_bytes().unwrap(); // auth-response
+            println!("auth_response: {:?}", auth_response);
+
+            if let Some(schema) = r.read_c_string() {
+                println!("HANDSHAKE: schema={}", schema);
+                self.schema = Some(schema);
+            }
+
             Action::Forward
         } else {
             match p.packet_type() {
@@ -169,6 +188,14 @@ impl PacketHandler for ZeroHandler {
     }
 
     fn handle_response(&mut self, p: &Packet) -> Action {
+
+//        match p.bytes[4] {
+//            0xfe | 0xff => Action::Forward,
+//            _ => {
+//                try!(self.process_result_row(&row_packet, write_buf, tt));
+//            }
+//        }
+
         Action::Forward
     }
 }
@@ -308,4 +335,69 @@ fn create_error_from_err(e: Box<Error>) -> Action {
 
 fn parse_string(bytes: &[u8]) -> String {
     String::from_utf8(bytes.to_vec()).expect("Invalid UTF-8")
+}
+
+pub struct MySQLPacketParser<'a> {
+    payload: &'a [u8],
+    pos: usize
+}
+
+impl<'a> MySQLPacketParser<'a> {
+
+    pub fn new(bytes: &'a [u8]) -> Self {
+        MySQLPacketParser { payload: &bytes, pos: 4 }
+    }
+
+    pub fn skip(&mut self, n: usize) {
+        self.pos += n;
+    }
+
+    /// read the length of a length-encoded field
+    pub fn read_len(&mut self) -> usize {
+        let n = self.payload[self.pos] as usize;
+        self.pos += 1;
+
+        match n {
+            //NOTE: depending on context, 0xfb could mean null and 0xff could mean error
+            0xfc | 0xfd | 0xfe => panic!("no support yet for length >= 251"),
+            _ => {
+                //println!("read_len() returning {}", n);
+                n
+            }
+        }
+    }
+
+    /// reads a length-encoded string
+    pub fn read_lenenc_string(&mut self) -> Option<String> {
+        match self.read_bytes() {
+            Some(s) => Some(String::from_utf8(s.to_vec()).expect("Invalid UTF-8")),
+            None => None
+        }
+    }
+
+    /// reads a null terminated string
+    pub fn read_c_string(&mut self) -> Option<String> {
+        let start = self.pos;
+        while self.payload[self.pos] != 0x00 {
+            self.pos += 1;
+        }
+        let mut v : Vec<u8> = vec![];
+        v.extend_from_slice(&self.payload[start..self.pos]);
+        self.pos += 1; // skip the NULL byte
+        Some(String::from_utf8(v).expect("Invalid UTF-8"))
+    }
+
+    pub fn read_bytes(&mut self) -> Option<Vec<u8>> {
+        match self.read_len() {
+            0xfb => None,
+            n @ _ => {
+                let s = &self.payload[self.pos..self.pos+n];
+                self.pos += n;
+                let mut v : Vec<u8> = vec![];
+                v.extend_from_slice(s);
+                Some(v)
+            }
+        }
+    }
+
 }
