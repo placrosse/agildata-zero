@@ -39,10 +39,11 @@ impl Proxy {
         // determine address for the proxy to bind to
         let conn = temp.get_client_config();
         let conn_host = conn.props.get("host").unwrap();
-        let default_port = &String::from("3306");
+        let default_port = &String::from("3307");
         let conn_port = conn.props.get("port").unwrap_or(default_port);
         let conn_addr = format!("{}:{}",conn_host,conn_port);
         let bind_addr = conn_addr.parse::<SocketAddr>().unwrap();
+        println!("Binding to {}", bind_addr);
 
         // determine address of the MySQL instance we are proxying for
         let conn = temp.get_connection_config();
@@ -51,6 +52,7 @@ impl Proxy {
         let conn_port = conn.props.get("port").unwrap_or(default_port);
         let conn_addr = format!("{}:{}",conn_host,conn_port);
         let mysql_addr = conn_addr.parse::<SocketAddr>().unwrap();
+        println!("MySQL server: {}", mysql_addr);
 
         // Create the tokio event loop that will drive this server
         let mut l = Core::new().unwrap();
