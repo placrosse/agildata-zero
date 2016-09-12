@@ -148,7 +148,6 @@ impl<'a> SchemaProvider for MySQLBackedSchemaProvider<'a> {
 	}
 }
 
-// // TODO These are more of integration tests...
 // #[cfg(test)]
 // mod tests {
 //
