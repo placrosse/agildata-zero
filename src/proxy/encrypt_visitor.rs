@@ -28,7 +28,7 @@ impl RelVisitor for EncryptVisitor  {
 				self.visit_rel(input)?;
 			},
 			&Rel::TableScan{..} => {},
-			&Rel::Join{box ref left, ref join_type, box ref right, ref on_expr, ref tt} => {
+			&Rel::Join{box ref left, box ref right, ref on_expr, ref tt, ..} => {
 				self.visit_rel(left)?;
 				self.visit_rel(right)?;
 				match on_expr {
@@ -38,7 +38,7 @@ impl RelVisitor for EncryptVisitor  {
 			},
 			&Rel::AliasedRel{box ref input, ..} => self.visit_rel(input)?,
 			&Rel::Dual{..} => {},
-			&Rel::Insert{ref table, box ref columns, box ref values, ref tt} => {
+			&Rel::Insert{ref table, box ref columns, box ref values, ..} => {
 				match (columns, values) {
 					(&Rex::RexExprList(ref c_list), &Rex::RexExprList(ref v_list)) => {
 						for (index, v) in v_list.iter().enumerate() {
@@ -158,7 +158,9 @@ mod tests {
 	use query::dialects::ansisql::*;
 	use query::dialects::mysqlsql::*;
 	use query::{Tokenizer, Parser, SQLWriter, Writer, ASTNode};
-	use query::planner::{Planner, RelVisitor, Rel};
+	use query::planner::{Planner, RelVisitor, Rel, SchemaProvider, TableMeta, ColumnMeta};
+	use encrypt::{EncryptionType, NativeType};
+	use std::rc::Rc;
 	use std::error::Error;
 	use super::super::writers::*;
 
@@ -279,8 +281,7 @@ mod tests {
 	}
 
 	fn parse_and_plan(sql: String) -> Result<(ASTNode, Rel), Box<Error>> {
-		let config = config::parse_config("zero-config.xml");
-
+		let provider = DummyProvider{};
 		let ansi = AnsiSQLDialect::new();
 		let dialect = MySQLDialect::new(&ansi);
 
@@ -288,14 +289,45 @@ mod tests {
 
 		let s = String::from("zero");
 		let default_schema = Some(&s);
-		let planner = Planner::new(default_schema, &config);
-
-
-
-
+		let planner = Planner::new(default_schema, &provider);
 		let plan = planner.sql_to_rel(&parsed)?.unwrap();
 		Ok((parsed, plan))
 
 	}
+
+	struct DummyProvider {}
+    impl SchemaProvider for DummyProvider {
+        fn get_table_meta(&self, schema: &String, table: &String) -> Result<Option<Rc<TableMeta>>, Box<Error>> {
+
+            let rc = match (schema as &str, table as &str) {
+                ("zero", "users") => {
+                    Some(Rc::new(TableMeta {
+                        columns: vec![
+                            ColumnMeta {name: String::from("id"), native_type: NativeType::U64, encryption: EncryptionType::NA},
+                            ColumnMeta {name: String::from("first_name"), native_type: NativeType::Varchar(50), encryption: EncryptionType::AES},
+                            ColumnMeta {name: String::from("last_name"), native_type: NativeType::Varchar(50), encryption: EncryptionType::AES},
+                            ColumnMeta {name: String::from("ssn"), native_type: NativeType::Varchar(50), encryption: EncryptionType::AES},
+                            ColumnMeta {name: String::from("age"), native_type: NativeType::U64, encryption: EncryptionType::AES},
+                            ColumnMeta {name: String::from("sex"), native_type: NativeType::Varchar(50), encryption: EncryptionType::AES},
+
+                        ]
+                    }))
+                },
+                ("zero", "user_purchases") => {
+                    Some(Rc::new(TableMeta {
+                        columns: vec![
+                            ColumnMeta {name: String::from("id"), native_type: NativeType::U64, encryption: EncryptionType::NA},
+                            ColumnMeta {name: String::from("user_id"), native_type: NativeType::U64, encryption: EncryptionType::NA},
+                            ColumnMeta {name: String::from("item_code"), native_type: NativeType::U64, encryption: EncryptionType::AES},
+                            ColumnMeta {name: String::from("amount"), native_type: NativeType::F64, encryption: EncryptionType::AES}
+                        ]
+                    }))
+                },
+                _ => None
+            };
+            Ok(rc)
+        }
+
+    }
 
 }
