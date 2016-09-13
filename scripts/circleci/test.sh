@@ -28,11 +28,15 @@ echo
 # Launch AgilData Zero
 echo
 echo "Launching AgilData-Zero proxy..."
-target/debug/agildata-zero ; sleep 5 & 
+target/debug/agildata-zero & 
+echo
+echo "Waiting for AgilData-Zero proxy to initialize."
+sleep 5
 AGILDATA_ZERO_PID=$!
+echo
 echo "AgilData Zero launched: Process ID=$AGILDATA_ZERO_PID"
 
-echo "Create database (if not exist): $AGILDATA_TEST_DB"
+echo "Create database (if not exist): $AGILDATA_TEST_DB via MySQL on 127.0.0.1 port 3306"
 mysql --host=127.0.0.1 --port=3306 -u$MYSQL_USER -p$MYSQL_PASS -e "CREATE DATABASE IF NOT EXISTS $AGILDATA_TEST_DB CHARACTER SET UTF8"
 
 # PS to make sure the process is running
@@ -56,7 +60,6 @@ do
       echo "--- DIFF OUTPUT: ---"
       echo "${output}"
       echo "--- END DIFF OUTPUT ---"
-      echo
       exit 2
     fi
   else
@@ -67,9 +70,11 @@ done
 echo
 
 # Drop Database
+echo
 echo "Dropping database: $AGILDATA_TEST_DB"
 mysql --host=127.0.0.1 --port=3306 -u$MYSQL_USER -p$MYSQL_PASS -e "DROP DATABASE $AGILDATA_TEST_DB"
 
 # Stop AgilData Zero
+echo
 echo "Stopping AgilData Zero: $AGILDATA_ZERO_PID"
 kill $AGILDATA_ZERO_PID
