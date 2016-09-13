@@ -1,6 +1,6 @@
 use super::super::*;
 
-
+use error::ZeroError;
 use std::iter::Peekable;
 use std::str::Chars;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -30,7 +30,7 @@ impl Dialect for AnsiSQLDialect {
         k
     }
 
-	fn get_token(&self, chars: &mut Peekable<Chars>, keywords: &Vec<&'static str>) -> Result<Option<Token>, String> {
+	fn get_token(&self, chars: &mut Peekable<Chars>, keywords: &Vec<&'static str>) -> Result<Option<Token>, Box<ZeroError>> {
 		match chars.peek() {
 	        Some(&ch) => match ch {
 	            ' ' | '\t' | '\n' => {
@@ -53,7 +53,10 @@ impl Dialect for AnsiSQLDialect {
 	                        }
 	                        _ => {}
 	                    },
-	                    None => return Err(String::from("Expected token received None"))
+	                    None => return Err(ZeroError::ParseError{
+                            message: format!("Expected token received None").into(),
+                            code: "1064".into()
+                        }.into())
 	                }
 	                Ok(Some(Token::Operator(op)))
 	            },
@@ -116,7 +119,10 @@ impl Dialect for AnsiSQLDialect {
 	                                        },
 	                                        _ => continue,
 	                                    },
-	                                    None => return Err(String::from("Unexpected end of string"))
+	                                    None => return Err(ZeroError::ParseError {
+                                            message: format!("Unexpected end of string").into(),
+                                            code: "1064".into()
+                                        }.into())
 	                                }
 	                            },
 	                            '\'' => {
@@ -128,7 +134,11 @@ impl Dialect for AnsiSQLDialect {
 	                                chars.next();
 	                            }
 	                        },
-	                        None => return Err(String::from("Unexpected end of string"))
+	                        None => return Err(ZeroError::ParseError {
+                                message: format!("Unexpected end of string").into(),
+                                code: "1064".into()
+                            }.into())
+
 	                    }
 	                }
 
@@ -139,14 +149,17 @@ impl Dialect for AnsiSQLDialect {
 	                Ok(Some(Token::Punctuator(ch.to_string())))
 	            },
 	            _ => {
-	                Err(format!("Unsupported char {:?}", ch))
+                    Err(ZeroError::ParseError {
+                        message: format!("Unsupported char {:?}", ch).into(),
+                        code: "1064".into()
+                    }.into())
 	            }
 	        },
 	        None => Ok(None),
 	    }
 	}
 
-    fn parse_prefix<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<Option<ASTNode>, String> {
+    fn parse_prefix<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<Option<ASTNode>, Box<ZeroError>> {
         match tokens.peek() {
 			Some(t) => match t {
 				&Token::Keyword(ref v) => match &v as &str {
@@ -154,7 +167,10 @@ impl Dialect for AnsiSQLDialect {
 					"INSERT" => Ok(Some(try!(self.parse_insert(tokens)))),
 					"UPDATE" => Ok(Some(try!(self.parse_update(tokens)))),
 					// "CREATE" => Ok(Some(try!(self.parse_create(tokens)))),
-					_ => Err(format!("Unsupported prefix {:?}", v))
+					_ => Err(ZeroError::ParseError {
+                            message: format!("Unsupported prefix {:?}", v).into(),
+                            code: "1064".into()
+                        }.into())
 				},
 				&Token::Literal(ref v) => match v {
 					&LiteralToken::LiteralLong(i, ref value) => {
@@ -180,20 +196,29 @@ impl Dialect for AnsiSQLDialect {
 					"(" => {
 						Ok(Some(try!(self.parse_nested(tokens))))
 					},
-					_ => Err(format!("Unsupported prefix for punctuator {:?}", &v))
+					_ => Err(ZeroError::ParseError {
+                        message: format!("Unsupported prefix for punctuator {:?}", &v).into(),
+                        code: "1064".into()
+                    }.into())
 				},
 				&Token::Operator(ref v) => match &v as &str {
 					"+" | "-" => Ok(Some(try!(self.parse_unary(tokens)))),
 					"*" => Ok(Some(try!(self.parse_identifier(tokens)))),
-					_ => Err(format!("Unsupported operator as prefix {:?}", &v))
+					_ => Err(ZeroError::ParseError {
+                        message: format!("Unsupported operator as prefix {:?}", &v).into(),
+                        code: "1064".into()
+                    }.into())
 				},
-				_ => Err(format!("parse_prefix() {:?}", &t))
+				_ => Err(ZeroError::ParseError {
+                    message: format!("parse_prefix() {:?}", &t).into(),
+                    code: "1064".into()
+                }.into())
 			},
 			None => Ok(None)
 		}
     }
 
-    fn get_precedence<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>)-> Result<u8, String> {
+    fn get_precedence<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>)-> Result<u8, Box<ZeroError>> {
         println!("get_precedence() token={:?}", tokens.peek());
         let prec = match tokens.peek() {
             Some(token) => match token {
@@ -205,7 +230,10 @@ impl Dialect for AnsiSQLDialect {
                     "AND" => 9,
                     "OR" => 7,
 
-                    _ => return Err(String::from(format!("Unsupported operator {}", t)))
+                    _ => return Err(ZeroError::ParseError {
+                            message: format!("Unsupported operator {}", t).into(),
+                            code: "1064".into()
+                        }.into())
                 },
                 &Token::Keyword(ref t) => match &t as &str {
                     "UNION" => 3,
@@ -221,7 +249,7 @@ impl Dialect for AnsiSQLDialect {
         Ok(prec)
     }
 
-    fn parse_infix<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>, left: ASTNode, precedence: u8)-> Result<Option<ASTNode>, String> {
+    fn parse_infix<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>, left: ASTNode, precedence: u8)-> Result<Option<ASTNode>, Box<ZeroError>> {
         println!("parse_infix() {}", precedence);
 		match tokens.peek() {
 			Some(token) => match token {
@@ -248,7 +276,7 @@ impl Dialect for AnsiSQLDialect {
 }
 
 impl AnsiSQLDialect {
-    fn parse_insert<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String>
+    fn parse_insert<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  Box<ZeroError>>
 		 {
 
 		println!("parse_insert()");
@@ -264,7 +292,10 @@ impl AnsiSQLDialect {
 			tokens.consume_punctuator(")");
 			ret
 		} else {
-			return Err(format!("Expected column list paren, received {:?}", &tokens.peek()));
+			return Err(ZeroError::ParseError {
+                message: format!("Expected column list paren, received {:?}", &tokens.peek()).into(),
+                code: "1064".into()
+            }.into())
 		};
 
 		tokens.consume_keyword("VALUES");
@@ -280,7 +311,7 @@ impl AnsiSQLDialect {
 
 	}
 
-	fn parse_select<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String> {
+	fn parse_select<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,   Box<ZeroError>> {
 
 		println!("parse_select()");
 		// consume the SELECT
@@ -295,7 +326,10 @@ impl AnsiSQLDialect {
 				},
 				_ => None
 			},
-			_ => None
+			_ => return Err(ZeroError::ParseError {
+                    message: format!("unexpected token {:?}", tokens.peek()).into(),
+                    code: "1064".into()
+                }.into())
 		};
 
 		let whr = match tokens.peek() {
@@ -314,7 +348,10 @@ impl AnsiSQLDialect {
 				if tokens.consume_keyword(&"BY") {
 					Some(Box::new(try!(self.parse_order_by_list(tokens))))
 				} else {
-					return Err(format!("Expected ORDER BY, found ORDER {:?}", tokens.peek()));
+					return Err(ZeroError::ParseError {
+                        message: format!("Expected ORDER BY, found ORDER {:?}", tokens.peek()).into(),
+                        code: "1064".into()
+                    }.into())
 				}
 			} else {
 				None
@@ -324,7 +361,7 @@ impl AnsiSQLDialect {
 		Ok(ASTNode::SQLSelect{expr_list: proj, relation: from, selection: whr, order: ob})
 	}
 
-	fn parse_update<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode, String>
+	fn parse_update<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode, Box<ZeroError>>
 		 {
 
 		tokens.consume_keyword("UPDATE");
@@ -349,11 +386,11 @@ impl AnsiSQLDialect {
 	}
 
 	// TODO real parse_relation
-	fn parse_relation<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String>{
+	fn parse_relation<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,   Box<ZeroError>>{
         tokens.parse_expr(4)
 	}
 
-	pub fn parse_expr_list<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String>
+	pub fn parse_expr_list<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,   Box<ZeroError>>
 		 {
 
 		println!("parse_expr_list()");
@@ -371,7 +408,7 @@ impl AnsiSQLDialect {
 		Ok(ASTNode::SQLExprList(v))
 	}
 
-	fn parse_order_by_list<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String>
+	fn parse_order_by_list<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,   Box<ZeroError>>
 		 {
 
 		println!("parse_order_by_list()");
@@ -388,7 +425,7 @@ impl AnsiSQLDialect {
 		Ok(ASTNode::SQLExprList(v))
 	}
 
-	fn parse_order_by_expr<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String>
+	fn parse_order_by_expr<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  Box<ZeroError>>
 		 {
 
 		let e = tokens.parse_expr(0)?;
@@ -406,7 +443,7 @@ impl AnsiSQLDialect {
 		}
 	}
 
-	fn parse_binary<'a, D: Dialect>(&self, left: ASTNode, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String>
+	fn parse_binary<'a, D: Dialect>(&self, left: ASTNode, tokens: &Tokens<'a, D>) -> Result<ASTNode,  Box<ZeroError>>
 		 {
 
 		println!("parse_binary()");
@@ -424,15 +461,21 @@ impl AnsiSQLDialect {
 				"=" => Operator::EQ,
 				"AND" => Operator::AND,
 				"OR" => Operator::OR,
-				_ => return Err(format!("Unsupported operator {}", t))
+				_ => return Err(ZeroError::ParseError {
+                     message: format!("Unsupported operator {}", t).into(),
+                     code: "1064".into()
+                 }.into())
 			},
-			_ => return Err(format!("Expected operator, received something else"))
+			_ => return Err(ZeroError::ParseError {
+             message: format!("Expected operator, received something else").into(),
+             code: "1064".into()
+         }.into())
 		};
 
 		Ok(ASTNode::SQLBinary {left: Box::new(left), op: operator, right: Box::new(tokens.parse_expr(precedence)?)})
 	}
 
-	pub fn parse_identifier<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String>
+	pub fn parse_identifier<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  Box<ZeroError>>
 		 {
 
 		println!("parse_identifier()");
@@ -440,17 +483,24 @@ impl AnsiSQLDialect {
 			&Token::Identifier(ref v) => Ok(ASTNode::SQLIdentifier{id: v.clone(), parts: self.get_identifier_parts(v)?}),
 			&Token::Operator(ref o) => match &o as &str {
 				"*" => Ok(ASTNode::SQLIdentifier{id: o.clone(), parts: vec![o.clone()]}),
-				_ => Err(format!("Unsupported operator as identifier {}", o))
+				_ => Err(ZeroError::ParseError{
+                     message: format!("Unsupported operator as identifier {}", o).into(),
+                     code: "1064".into()
+                 }.into())
+
 			},
-			_ => Err(format!("Illegal state"))
+			_ => Err(ZeroError::ParseError{
+                 message: format!("Illegal state").into(),
+                 code: "1064".into()
+             }.into())
 		}
 	}
 
-	fn get_identifier_parts(&self, id: &String) -> Result<Vec<String>, String> {
+	fn get_identifier_parts(&self, id: &String) -> Result<Vec<String>, Box<ZeroError>> {
 		Ok(id.split(".").map(|s| s.to_string()).collect())
 	}
 
-	fn parse_nested<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String>
+	fn parse_nested<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode, Box<ZeroError>>
 		 {
 
 		//consume (
@@ -460,15 +510,23 @@ impl AnsiSQLDialect {
 		match tokens.peek() {
 			Some(&Token::Punctuator(ref v)) => match &v as &str {
 				")" => {tokens.next();},
-				_ => return Err(format!("Expected , punctuator, received {}", v))
+				_ => return Err(ZeroError::ParseError{
+                     message: format!("Expected , punctuator, received {}", v).into(),
+                     code: "1064".into()
+                 }.into())
+
 			},
-			_ => return Err(format!("Illegal state, expected , received {:?}", tokens.peek()))
+			_ => return Err(ZeroError::ParseError{
+                     message: format!("Illegal state, expected , received {:?}", tokens.peek()).into(),
+                     code: "1064".into()
+                 }.into())
+
 		}
 
 		Ok(ASTNode::SQLNested(Box::new(nested)))
 	}
 
-	fn parse_unary<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String>
+	fn parse_unary<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode, Box<ZeroError>>
 		 {
 
 		let precedence = self.get_precedence(tokens)?;
@@ -476,15 +534,18 @@ impl AnsiSQLDialect {
 			Some(&Token::Operator(ref o)) => match &o as &str {
 				"+" => Operator::ADD,
 				"-" => Operator::SUB,
-				_ => return Err(format!("Illegal operator for unary {}", o))
+				_ => return Err(ZeroError::ParseError{
+                    message: format!("Illegal operator for unary {}", o).into(),
+                    code:"1064".into()
+                }.into())
 			},
-			_ => return Err(format!("Illegal state"))
+			_ => return Err(ZeroError::ParseError{message:format!("Illegal state").into(), code: "1064".into()}.into())
 		};
 		Ok(ASTNode::SQLUnary{operator: op, expr: Box::new(tokens.parse_expr(precedence)?)})
 
 	}
 
-	fn parse_union<'a, D: Dialect>(&self, left: ASTNode, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String>
+	fn parse_union<'a, D: Dialect>(&self, left: ASTNode, tokens: &Tokens<'a, D>) -> Result<ASTNode, Box<ZeroError>>
 		 {
 
 		// consume the UNION
@@ -505,7 +566,7 @@ impl AnsiSQLDialect {
 
 	}
 
-	fn parse_join<'a, D: Dialect>(&self, left: ASTNode, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String>
+	fn parse_join<'a, D: Dialect>(&self, left: ASTNode, tokens: &Tokens<'a, D>) -> Result<ASTNode, Box<ZeroError>>
 		 {
 
 		// TODO better protection on expected keyword sequences
@@ -529,7 +590,10 @@ impl AnsiSQLDialect {
 				tokens.consume_keyword("JOIN");
 				JoinType::LEFT
 			} else {
-				return Err(format!("Unsupported join keyword {:?}", tokens.peek()))
+				return Err(ZeroError::ParseError {
+                    message: format!("Unsupported join keyword {:?}", tokens.peek()).into(),
+                    code: "1064".into()
+                }.into())
 			}
 		};
 
@@ -539,7 +603,10 @@ impl AnsiSQLDialect {
 			if tokens.consume_keyword("ON") {
 				Some(Box::new(tokens.parse_expr(0)?))
 			} else if join_type != JoinType::CROSS {
-				return Err(format!("Expected ON, received token {:?}", tokens.peek()))
+				return Err(ZeroError::ParseError {
+                    message: format!("Expected ON, received token {:?}", tokens.peek()).into(),
+                    code: "1064".into()
+                }.into())
 			} else {
 				None
 			}
@@ -548,13 +615,16 @@ impl AnsiSQLDialect {
 		Ok(ASTNode::SQLJoin {left: Box::new(left), join_type: join_type, right: right, on_expr: on})
 	}
 
-	fn parse_alias<'a, D: Dialect>(&self, left: ASTNode, tokens: &Tokens<'a, D>) -> Result<ASTNode,  String>
+	fn parse_alias<'a, D: Dialect>(&self, left: ASTNode, tokens: &Tokens<'a, D>) -> Result<ASTNode, Box<ZeroError>>
 		 {
 
 		if tokens.consume_keyword(&"AS") {
 			Ok(ASTNode::SQLAlias{expr: Box::new(left), alias: Box::new(try!(self.parse_identifier(tokens)))})
 		} else {
-			Err(format!("Illegal state, expected AS, received token {:?}", tokens.peek()))
+            Err(ZeroError::ParseError {
+                message: format!("Illegal state, expected AS, received token {:?}", tokens.peek()).into(),
+                code: "1064".into()
+            }.into())
 		}
 	}
 
@@ -565,7 +635,7 @@ impl AnsiSQLDialect {
 pub struct AnsiSQLWriter{}
 
 impl ExprWriter for AnsiSQLWriter {
-	fn write(&self, writer: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, String> {
+	fn write(&self, writer: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, Box<ZeroError>> {
 		match node {
 			&ASTNode::SQLSelect{box ref expr_list, ref relation, ref selection, ref order} => {
 				builder.push_str("SELECT");

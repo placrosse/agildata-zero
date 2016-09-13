@@ -9,7 +9,7 @@ use query::dialects::mysqlsql::*;
 use encrypt::{NativeType, EncryptionType};
 use std::rc::Rc;
 use std::error::Error;
-
+use error::ZeroError;
 //extern crate mysql;
 use mysql;
 
@@ -48,7 +48,7 @@ impl MySQLBackedSchemaProvider {
 		}
 	}
 
-	fn _get_meta(&self, schema: &String, table: &String) -> Result<Option<TableMeta>, Box<Error>> {
+	fn _get_meta(&self, schema: &String, table: &String) -> Result<Option<TableMeta>, Box<ZeroError>> {
 		match self.pool.prep_exec(format!("SHOW CREATE TABLE {}.{}", schema, table),()) {
 			Ok(mut result) => match result.next() {
 				Some(Ok(row)) => {
@@ -60,14 +60,20 @@ impl MySQLBackedSchemaProvider {
 					self._build_meta(schema, parsed)
 
 				},
-				Some(Err(e)) => Err(format!("{}", e).into()),
+				Some(Err(e)) =>  Err(ZeroError::SchemaError{
+                    message: format!("{}", e).into(),
+                    code: "1064".into()
+                }.into()),
 				None => Ok(None)
 			},
-			Err(e) => Err(format!("{}", e).into()),
+			Err(e) => Err(ZeroError::SchemaError{
+                message: format!("{}", e).into(),
+                code: "1064".into()
+            }.into()),
 		}
 	}
 
-	fn _build_meta(&self, schema: &String, parsed: ASTNode) -> Result<Option<TableMeta>, Box<Error>> {
+	fn _build_meta(&self, schema: &String, parsed: ASTNode) -> Result<Option<TableMeta>, Box<ZeroError>> {
 		match parsed {
 			ASTNode::MySQLCreateTable{table: box ASTNode::SQLIdentifier{id: ref table, ..}, ref column_list, ..} => {
 				let columns = column_list.iter().map(|c| {
@@ -89,28 +95,37 @@ impl MySQLBackedSchemaProvider {
 								})
 							}
 						},
-						_ => Err(format!("Illegal").into())
+						_ => Err(ZeroError::SchemaError{
+                                message: format!("Illegal").into(),
+                                code: "1064".into()
+                            }.into())
 
 					}
-				}).collect::<Result<Vec<ColumnMeta>, Box<Error>>>()?;
+				}).collect::<Result<Vec<ColumnMeta>, Box<ZeroError>>>()?;
 
 				Ok(Some(TableMeta{columns: columns}))
 			},
-			_ => Err(format!("Unsupported AST to build table meta {:?}", parsed).into())
+			_ =>Err(ZeroError::SchemaError{
+                    message: format!("Unsupported AST to build table meta {:?}", parsed).into(),
+                    code: "1064".into()
+                }.into())
 		}
 	}
 
-	fn _reconcile_native_type(&self, data_type: &MySQLDataType) -> Result<NativeType, Box<Error>> {
+	fn _reconcile_native_type(&self, data_type: &MySQLDataType) -> Result<NativeType, Box<ZeroError>> {
 		match data_type {
 			&MySQLDataType::Int{..} => Ok(NativeType::U64), // TODO use display
 			&MySQLDataType::Varchar{ref length} => Ok(NativeType::Varchar(length.unwrap().clone())),
-			_ => Err(format!("Unsupported data type for reconciliation {:?}", data_type).into())
+			_ => Err(ZeroError::SchemaError{
+                    message: format!("Unsupported data type for reconciliation {:?}", data_type).into(),
+                    code: "1064".into()
+                }.into())
 		}
 	}
 }
 
 impl SchemaProvider for MySQLBackedSchemaProvider {
-	fn get_table_meta(&self, schema: &String, table: &String) -> Result<Option<Rc<TableMeta>>, Box<Error>> {
+	fn get_table_meta(&self, schema: &String, table: &String) -> Result<Option<Rc<TableMeta>>, Box<ZeroError>> {
 		// Lock and do work
 		println!("get_table_meta()");
 		let mut c = self.cache.lock().unwrap();
@@ -132,14 +147,24 @@ impl SchemaProvider for MySQLBackedSchemaProvider {
 								}
 
 							} else {
-								return Err(format!("Illegal result table name {}", t).into()) // shouldn't happen.
+								return Err(ZeroError::SchemaError{
+                                    message: format!("Illegal result table name {}", t).into(),
+                                    code: "1064".into()
+                                }.into())//shouldn't happen
+
 							}
 						},
-						Some(Err(e)) => return Err(format!("{}", e).into()),
+						Some(Err(e)) => return Err(ZeroError::SchemaError{
+                                    message: format!("{}", e).into(),
+                                    code: "1064".into()
+                                }.into()),
 						None => return Ok(None)
 					}
 				},
-				Err(e) => return Err(format!("{}", e).into()),
+				Err(e) => return return Err(ZeroError::SchemaError{
+                    message: format!("{}", e).into(),
+                    code: "1064".into()
+                }.into()),
 			}
 		}
 
