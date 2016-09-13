@@ -3,34 +3,17 @@ machine:
     - docker
 
   pre:
-#    - if [ ! -f "/home/ubuntu/rustup.sh" ]; then curl https://sh.rustup.rs -sSf > /home/ubuntu/rustup.sh && chmod ogu+x /home/ubuntu/rustup.sh && /home/ubuntu/rustup.sh -y ; fi
-#    - chmod ogu+x /home/ubuntu/rustup.sh
-#    - /home/ubuntu/rustup.sh -y
-#    - echo "source $HOME/.cargo/env" >> /home/ubuntu/.bashrc
-#    - rustup default nightly-2016-09-05
     - rm -f /home/ubuntu/.gitconfig
     - sudo service mysql stop
 
 dependencies:
   pre:
-    - >
-      docker run
-      --detach
-      --name mysql
-      --publish 3306:3306
-      --env MYSQL_ALLOW_EMPTY_PASSWORD='yes'
-      --env MYSQL_DATABASE=zero
-      --env MYSQL_USER=agiluser
-      --env MYSQL_PASSWORD=password123
-      mysql:5.7.12 ; sleep 10
+    - /bin/bash scripts/circleci/mysql.sh
 
   override:
     - if [ ! -f "/home/ubuntu/rustup.sh" ]; then curl https://sh.rustup.rs -sSf > /home/ubuntu/rustup.sh && chmod ogu+x /home/ubuntu/rustup.sh && /home/ubuntu/rustup.sh -y ; fi
-#    - chmod ogu+x /home/ubuntu/rustup.sh
-#    - /home/ubuntu/rustup.sh -y
     - echo "source $HOME/.cargo/env" >> /home/ubuntu/.bashrc
-    - rustup default nightly-2016-08-03
-    - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-08-03 && cargo build
+    - /bin/bash scripts/circleci/build.sh
 
   cache_directories:
     - "/home/ubuntu/rustup.sh"
@@ -39,9 +22,8 @@ dependencies:
 
 test:
   override:
-    - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-08-03 && cargo test
     - /bin/bash scripts/circleci/test.sh
-    - source /home/ubuntu/.cargo/env && rustup override set nightly-2016-08-03 && cargo doc
+    - /bin/bash scripts/circleci/doc.sh
 
 general:
   artifacts:
