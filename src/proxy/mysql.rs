@@ -1,7 +1,7 @@
 use std::net;
 use std::io::{Read, Write, Cursor};
 use std::collections::HashMap;
-use std::error::Error;
+use error::ZeroError;
 use byteorder::*;
 use query::{Tokenizer, Parser, Writer, SQLWriter, ASTNode};
 use query::dialects::mysqlsql::*;
@@ -364,7 +364,7 @@ impl<'a> MySQLConnectionHandler <'a> {
         self.mysql_process_query(&buf[0 .. packet_len+4], None);
     }
 
-    fn process_query(&mut self, buf: &Vec<u8>, packet_len: usize) -> Result<(), Box<Error>> {
+    fn process_query(&mut self, buf: &Vec<u8>, packet_len: usize) -> Result<(), Box<ZeroError>> {
         println!("0x03");
 
         let query = parse_string(&buf[5 as usize .. (packet_len+4) as usize]);
@@ -423,7 +423,7 @@ impl<'a> MySQLConnectionHandler <'a> {
         // reqwrite query
         if parsed.is_some() {
 
-            let value_map: HashMap<u32, Result<Vec<u8>, Box<Error>>> = HashMap::new();
+            let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
             let mut encrypt_vis = EncryptVisitor{valuemap: value_map};
 
             // Visit and conditionally encrypt (if there was a plan)
@@ -483,7 +483,7 @@ impl<'a> MySQLConnectionHandler <'a> {
         }
     }
 
-    fn plan(&self, parsed: &Option<ASTNode>) -> Result<Option<Rel>, Box<Error>> {
+    fn plan(&self, parsed: &Option<ASTNode>) -> Result<Option<Rel>, Box<ZeroError>> {
         match parsed {
             &None => Ok(None),
             &Some(ref sql) => {
@@ -497,7 +497,7 @@ impl<'a> MySQLConnectionHandler <'a> {
         }
     }
 
-    fn mysql_process_query<'b>(&'b mut self, request: &'b [u8], tt: Option<&TupleType>) -> Result<(), Box<Error>> {
+    fn mysql_process_query<'b>(&'b mut self, request: &'b [u8], tt: Option<&TupleType>) -> Result<(), Box<ZeroError>> {
         println!("Sending packet to mysql");
         self.remote.write(request).unwrap();
         self.remote.flush().unwrap();
@@ -578,7 +578,7 @@ impl<'a> MySQLConnectionHandler <'a> {
         Ok(())
     }
 
-    fn process_result_set(&mut self, write_buf: &mut Vec<u8>, tt: Option<&TupleType>)  -> Result<(), Box<Error>> {
+    fn process_result_set(&mut self, write_buf: &mut Vec<u8>, tt: Option<&TupleType>)  -> Result<(), Box<ZeroError>> {
         // process row packets until ERR or EOF
         loop {
             let row_packet = self.remote.read_packet().unwrap();
@@ -636,7 +636,7 @@ impl<'a> MySQLConnectionHandler <'a> {
     fn process_result_row(&mut self,
                           row_packet: &MySQLPacket,
                           write_buf: &mut Vec<u8>,
-                          tt: Option<&TupleType>) -> Result<(), Box<Error>> {
+                          tt: Option<&TupleType>) -> Result<(), Box<ZeroError>> {
 
         println!("Received row");
 

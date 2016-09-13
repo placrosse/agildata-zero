@@ -6,6 +6,7 @@ use super::super::UnionType::*;
 use super::super::{Tokenizer, Parser, SQLWriter, Writer};
 use super::super::dialects::ansisql::*;
 use super::test_helper::*;
+use std::error::Error;
 
 #[test]
 fn select_wildcard() {
@@ -403,7 +404,7 @@ fn insert_invalid() {
 	println!("{:#?}", parsed);
 
 	assert!(parsed.is_err());
-	assert_eq!(parsed.unwrap_err(), "Expected column list paren, received Some(Keyword(\"VALUES\"))");
+	assert_eq!(parsed.err().unwrap().to_string(), "Expected column list paren, received Some(Keyword(\"VALUES\"))");
 }
 
 

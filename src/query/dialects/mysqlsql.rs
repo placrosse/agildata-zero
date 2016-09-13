@@ -1,6 +1,6 @@
 use super::super::*;
 use super::ansisql::*;
-
+use error::ZeroError;
 use std::iter::Peekable;
 use std::str::Chars;
 use std::str::FromStr;
@@ -21,7 +21,7 @@ impl <'d> Dialect for MySQLDialect<'d> {
 		k
     }
 
-	fn get_token(&self, chars: &mut Peekable<Chars>, keywords: &Vec<&'static str>) -> Result<Option<Token>, String> {
+	fn get_token(&self, chars: &mut Peekable<Chars>, keywords: &Vec<&'static str>) -> Result<Option<Token>, Box<ZeroError>> {
 		match chars.peek() {
 			Some(&ch) => match ch {
 				'`' => {
@@ -45,7 +45,7 @@ impl <'d> Dialect for MySQLDialect<'d> {
 	}
 
 	fn parse_prefix<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) ->
-            Result<Option<ASTNode>, String> {
+            Result<Option<ASTNode>,  Box<ZeroError>> {
 
         match tokens.peek() {
 			Some(&Token::Keyword(ref v)) => match &v as &str {
@@ -57,11 +57,11 @@ impl <'d> Dialect for MySQLDialect<'d> {
 		}
     }
 
-    fn get_precedence<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>)-> Result<u8, String> {
+    fn get_precedence<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>)-> Result<u8,  Box<ZeroError>> {
         self.ansi.get_precedence(tokens)
     }
 
-    fn parse_infix<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>, left: ASTNode, precedence: u8)-> Result<Option<ASTNode>, String> {
+    fn parse_infix<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>, left: ASTNode, precedence: u8)-> Result<Option<ASTNode>,  Box<ZeroError>> {
         self.ansi.parse_infix(tokens, left, precedence)
     }
 
@@ -70,13 +70,13 @@ impl <'d> Dialect for MySQLDialect<'d> {
 impl<'d> MySQLDialect<'d> {
 	pub fn new(ansi: &'d AnsiSQLDialect) -> Self {MySQLDialect{ansi: ansi}}
 
-	fn parse_use<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode, String> {
+	fn parse_use<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode, Box<ZeroError>> {
 
 		assert!(tokens.consume_keyword("USE"));
 		Ok(ASTNode::MySQLUse(Box::new(self.ansi.parse_identifier(tokens)?)))
 	}
 
-	fn parse_create<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode, String>
+	fn parse_create<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  Box<ZeroError>>
 		 {
 
 		tokens.consume_keyword("CREATE");
@@ -101,7 +101,10 @@ impl<'d> MySQLDialect<'d> {
 			}
 
 			if !tokens.consume_punctuator(")") {
-				return Err(String::from(format!("Expected token ) received token {:?}", tokens.peek())))
+				return  Err(ZeroError::ParseError{
+                    message: format!("Expected token ) received token {:?}", tokens.peek()).into(),
+                    code: "1064".into()
+                }.into())
 			}
 
 			let table_options = self.parse_table_options(tokens)?;
@@ -113,16 +116,22 @@ impl<'d> MySQLDialect<'d> {
 					keys: keys,
 					table_options: table_options
 				 }),
-				_ => Err(String::from(format!("Expected end of statement, received {:?}", tokens.peek())))
+				_ => Err(ZeroError::ParseError{
+                    message: format!("Expected end of statement, received {:?}", tokens.peek()).into(),
+                    code: "1064".into()
+                }.into())
 			}
 
 		} else {
-			Err(String::from(format!("Unexpected token after CREATE {:?}", tokens.peek())))
+            Err(ZeroError::ParseError{
+                message: format!("Unexpected token after CREATE {:?}", tokens.peek()).into(),
+                code: "1064".into()
+            }.into())
 		}
 
 	}
 
-	fn parse_table_options<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<Vec<ASTNode>, String>
+	fn parse_table_options<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<Vec<ASTNode>,  Box<ZeroError>>
 		 {
 
 		let mut ret: Vec<ASTNode> = Vec::new();
@@ -133,7 +142,7 @@ impl<'d> MySQLDialect<'d> {
 		Ok(ret)
 	}
 
-	fn parse_table_option<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<Option<ASTNode>, String>
+	fn parse_table_option<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<Option<ASTNode>,  Box<ZeroError>>
 		 {
 
 		match tokens.peek() {
@@ -162,13 +171,16 @@ impl<'d> MySQLDialect<'d> {
 					Ok(Some(ASTNode::MySQLTableOption(MySQLTableOption::AutoIncrement(Box::new(tokens.parse_expr(0)?)))))
 				},
 				// "COLLATE"
-				_ => Err(String::from(format!("Unsupported Table Option {}", v)))
+				_ =>  Err(ZeroError::ParseError{
+                     message: format!("Unsupported Table Option {}", v).into(),
+                     code: "1064".into()
+                 }.into())
 			},
 			_ => Ok(None)
 		}
 	}
 
-	fn parse_key_def<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode, String>
+	fn parse_key_def<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode, Box<ZeroError>>
 		 {
 
 		println!("parse_key_def()");
@@ -227,13 +239,21 @@ impl<'d> MySQLDialect<'d> {
 						columns: self.parse_key_column_list(tokens)?
 					}))
 				},
-				_ => Err(String::from(format!("Unsupported key definition prefix {}", v)))
+				_ => Err(ZeroError::ParseError{
+                     message: format!("Unsupported key definition prefix {}", v).into(),
+                     code: "1064".into()
+                 }.into())
+
 			},
-			_ => Err(String::from(format!("Expected key definition received token {:?}", t)))
+			_ =>  Err(ZeroError::ParseError{
+                 message: format!("Expected key definition received token {:?}", t).into(),
+                 code: "1064".into()
+             }.into())
+
 		}
 	}
 
-	fn parse_optional_key_name<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<Option<Box<ASTNode>>, String>
+	fn parse_optional_key_name<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<Option<Box<ASTNode>>,  Box<ZeroError>>
 		 {
 
 		match tokens.peek() {
@@ -242,7 +262,7 @@ impl<'d> MySQLDialect<'d> {
 		}
 	}
 
-	fn parse_key_column_list<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<Vec<ASTNode>, String>
+	fn parse_key_column_list<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<Vec<ASTNode>,  Box<ZeroError>>
 		 {
 
 		tokens.consume_punctuator("(");
@@ -257,7 +277,7 @@ impl<'d> MySQLDialect<'d> {
 		Ok(columns)
 	}
 
-	fn parse_column_def<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode, String>
+	fn parse_column_def<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  Box<ZeroError>>
 		 {
 
 		let column = try!(self.ansi.parse_identifier(tokens));
@@ -266,15 +286,23 @@ impl<'d> MySQLDialect<'d> {
 		match tokens.peek() {
 			Some(&Token::Punctuator(ref p)) => match &p as &str {
 				"," | ")" => {},
-				_ => return Err(String::from(format!("Unsupported token in column definition: {:?}", tokens.peek())))
+				_ => return Err(ZeroError::ParseError{
+                         message: format!("Unsupported token in column definition: {:?}", tokens.peek()).into(),
+                         code: "1064".into()
+                     }.into())
+
+
 			},
-			_ => return Err(String::from(format!("Unsupported token in column definition: {:?}", tokens.peek())))
+			_ => return Err(ZeroError::ParseError{
+                     message: format!("Unsupported token in column definition: {:?}", tokens.peek()).into(),
+                     code: "1064".into()
+                 }.into())
 		}
 
 		Ok(ASTNode::MySQLColumnDef{column: Box::new(column), data_type: Box::new(data_type), qualifiers: qualifiers})
 	}
 
-	fn parse_column_qualifiers<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) ->  Result<Option<Vec<ASTNode>>, String>
+	fn parse_column_qualifiers<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) ->  Result<Option<Vec<ASTNode>>,  Box<ZeroError>>
 		 {
 
 		let mut ret: Vec<ASTNode> = Vec::new();
@@ -290,7 +318,7 @@ impl<'d> MySQLDialect<'d> {
 		}
 	}
 
-	fn parse_column_qualifier<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) ->  Result<Option<ASTNode>, String>
+	fn parse_column_qualifier<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) ->  Result<Option<ASTNode>,  Box<ZeroError>>
 		 {
 
 		println!("parse_column_qualifier() {:?}", tokens.peek());
@@ -301,7 +329,10 @@ impl<'d> MySQLDialect<'d> {
 					if tokens.consume_keyword("NULL") {
 						Ok(Some(ASTNode::MySQLColumnQualifier(MySQLColumnQualifier::NotNull)))
 					} else {
-						Err(format!("Expected NOT NULL, received NOT {:?}", tokens.peek()))
+                        Err(ZeroError::ParseError{
+                            message: format!("Expected NOT NULL, received NOT {:?}", tokens.peek()).into(),
+                            code: "1064".into()
+                        }.into())
 					}
 				},
 				"NULL" => {
@@ -317,7 +348,10 @@ impl<'d> MySQLDialect<'d> {
 					if tokens.consume_keyword("KEY") {
 						Ok(Some(ASTNode::MySQLColumnQualifier(MySQLColumnQualifier::PrimaryKey)))
 					} else {
-						Err(format!("Expected PRIMARY KEY, received PRIMARY {:?}", tokens.peek()))
+                        Err(ZeroError::ParseError{
+                            message: format!("Expected PRIMARY KEY, received PRIMARY {:?}", tokens.peek()).into(),
+                            code: "1064".into()
+                        }.into())
 					}
 				},
 				"UNIQUE" => {
@@ -333,7 +367,10 @@ impl<'d> MySQLDialect<'d> {
 					if tokens.consume_keyword("SET") {
 						Ok(Some(ASTNode::MySQLColumnQualifier(MySQLColumnQualifier::CharacterSet(Box::new(try!(tokens.parse_expr(0)))))))
 					} else {
-						Err(format!("Expected PRIMARY KEY, received PRIMARY {:?}", tokens.peek()))
+                        Err(ZeroError::ParseError{
+                            message: format!("Expected PRIMARY KEY, received PRIMARY {:?}", tokens.peek()).into(),
+                            code: "1064".into()
+                        }.into())
 					}
 				},
 				"COLLATE" => {
@@ -353,7 +390,10 @@ impl<'d> MySQLDialect<'d> {
 					if tokens.consume_keyword("UPDATE") {
 						Ok(Some(ASTNode::MySQLColumnQualifier(MySQLColumnQualifier::OnUpdate(Box::new(try!(tokens.parse_expr(0)))))))
 					} else {
-						Err(format!("Expected ON UPDATE, received ON {:?}", tokens.peek()))
+                        Err(ZeroError::ParseError{
+                            message: format!("Expected ON UPDATE, received ON {:?}", tokens.peek()).into(),
+                            code: "1064".into()
+                        }.into())
 					}
 				},
 				"COMMENT" => {
@@ -366,7 +406,7 @@ impl<'d> MySQLDialect<'d> {
 		}
 	}
 
-	fn parse_data_type<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) ->  Result<ASTNode, String>
+	fn parse_data_type<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) ->  Result<ASTNode,  Box<ZeroError>>
 		 {
 
 		let data_token = tokens.next();
@@ -416,7 +456,10 @@ impl<'d> MySQLDialect<'d> {
 							Ok(ASTNode::MySQLDataType(MySQLDataType::NChar{length: try!(self.parse_optional_display(tokens))}))
 						}
 					} else {
-						Err(format!("Expected NATIONAL CHAR|VARCHAR|CHARACTER [VARYING], received NATIONAL {:?}", tokens.peek()))
+                        Err(ZeroError::ParseError{
+                            message: format!("Expected NATIONAL CHAR|VARCHAR|CHARACTER [VARYING], received NATIONAL {:?}", tokens.peek()).into(),
+                            code: "1064".into()
+                        }.into())
 					}
 				},
 				"CHAR" => {
@@ -462,13 +505,20 @@ impl<'d> MySQLDialect<'d> {
 					tokens.consume_punctuator(")");
 					Ok(ASTNode::MySQLDataType(MySQLDataType::Set{values: Box::new(values)}))
 				},
-				_ => Err(format!("Data type not recognized {}", t))
+				_ => Err(ZeroError::ParseError{
+                     message: format!("Data type not recognized {}", t).into(),
+                     code: "1064".into()
+                 }.into())
 			},
-			_ => Err(format!("Expected data type, received token {:?}", tokens.peek()))
+			_ => Err(ZeroError::ParseError{
+                 message: format!("Expected data type, received token {:?}", tokens.peek()).into(),
+                 code: "1064".into()
+            }.into())
+
 		}
 	}
 
-	fn parse_optional_display<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<Option<u32>, String>
+	fn parse_optional_display<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<Option<u32>,  Box<ZeroError>>
 		 {
 
 		if tokens.consume_punctuator("(") {
@@ -479,7 +529,11 @@ impl<'d> MySQLDialect<'d> {
 					tokens.consume_punctuator(")");
 					ret
 				},
-				_ => Err(String::from(format!("Expected LiteralLong token, received {:?}", tokens.peek())))
+				_ =>  Err(ZeroError::ParseError{
+                    message: format!("Expected LiteralLong token, received {:?}", tokens.peek()).into(),
+                    code: "1064".into()
+                }.into())
+
 			}
 		} else {
 			Ok(None)
@@ -487,7 +541,7 @@ impl<'d> MySQLDialect<'d> {
 
 	}
 
-	fn parse_optional_precision_and_scale<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<Option<(u32,Option<u32>)>, String>
+	fn parse_optional_precision_and_scale<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<Option<(u32,Option<u32>)>,  Box<ZeroError>>
 		 {
 
 		tokens.consume_keyword("PRECISION");
@@ -507,7 +561,7 @@ impl<'d> MySQLDialect<'d> {
 
 	}
 
-	fn parse_long<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<u32, String>
+	fn parse_long<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<u32, Box<ZeroError>>
 		 {
 
 		match tokens.peek() {
@@ -515,7 +569,11 @@ impl<'d> MySQLDialect<'d> {
 				tokens.next();
 				Ok(u32::from_str(&v).unwrap())
 			},
-			_ => Err(String::from(format!("Expected LiteralLong token, received {:?}", tokens.peek())))
+			_ =>  Err(ZeroError::ParseError{
+                message: format!("Expected LiteralLong token, received {:?}", tokens.peek()).into(),
+                code: "1064".into()
+            }.into())
+
 		}
 	}
 }
@@ -524,7 +582,7 @@ impl<'d> MySQLDialect<'d> {
 pub struct MySQLWriter{}
 
 impl ExprWriter for MySQLWriter {
-	fn write(&self, writer: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, String> {
+	fn write(&self, writer: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool,  Box<ZeroError>> {
 		match node {
 			&ASTNode::MySQLCreateTable{box ref table, ref column_list, ref keys, ref table_options} => {
 				builder.push_str("CREATE TABLE");
@@ -586,7 +644,7 @@ impl ExprWriter for MySQLWriter {
 
 impl MySQLWriter {
 
-    fn _write_data_type(&self, writer: &Writer, builder: &mut String, data_type: &MySQLDataType) -> Result<(), String> {
+    fn _write_data_type(&self, writer: &Writer, builder: &mut String, data_type: &MySQLDataType) -> Result<(),  Box<ZeroError>> {
         match data_type {
             &MySQLDataType::Bit{ref display} => {
                 builder.push_str(" BIT");
@@ -718,7 +776,7 @@ impl MySQLWriter {
 		Ok(())
     }
 
-    fn _write_key_definition(&self, writer: &Writer, builder:  &mut String, key: &MySQLKeyDef) -> Result<(), String> {
+    fn _write_key_definition(&self, writer: &Writer, builder:  &mut String, key: &MySQLKeyDef) -> Result<(),  Box<ZeroError>> {
         match key {
             &MySQLKeyDef::Primary{ref symbol, ref name, ref columns} => {
 
@@ -804,7 +862,7 @@ impl MySQLWriter {
 		Ok(())
     }
 
-    fn _write_table_option(&self, writer: &Writer, builder:  &mut String, option: &MySQLTableOption) -> Result<(), String> {
+    fn _write_table_option(&self, writer: &Writer, builder:  &mut String, option: &MySQLTableOption) -> Result<(),  Box<ZeroError>> {
         match option {
             &MySQLTableOption::Comment(box ref e) => {
                 builder.push_str(" COMMENT");
@@ -827,7 +885,7 @@ impl MySQLWriter {
 		Ok(())
     }
 
-    fn _write_key_column_list(&self, writer: &Writer, builder: &mut String, list: &Vec<ASTNode>) -> Result<(), String> {
+    fn _write_key_column_list(&self, writer: &Writer, builder: &mut String, list: &Vec<ASTNode>) -> Result<(),  Box<ZeroError>> {
         builder.push_str(&" (");
         let mut sep = "";
         for c in list {
@@ -840,7 +898,7 @@ impl MySQLWriter {
 		Ok(())
     }
 
-    fn _write_column_qualifier(&self, writer: &Writer, builder:  &mut String, q: &MySQLColumnQualifier) -> Result<(), String> {
+    fn _write_column_qualifier(&self, writer: &Writer, builder:  &mut String, q: &MySQLColumnQualifier) -> Result<(),  Box<ZeroError>> {
         match q {
             &MySQLColumnQualifier::CharacterSet(box ref e) => {
                 builder.push_str(&" CHARACTER SET");
