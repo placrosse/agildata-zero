@@ -17,7 +17,7 @@ use std::rc::Rc;
 use std::error::Error;
 
 use config::{Config, TConfig, ColumnConfig};
-
+use error::ZeroError;
 use encrypt::{Decrypt, NativeType, EncryptionType};
 use super::encrypt_visitor::EncryptVisitor;
 
@@ -135,7 +135,7 @@ impl ZeroHandler {
     }
 
 
-    fn plan(&self, parsed: &Option<ASTNode>) -> Result<Option<Rel>, Box<Error>> {
+    fn plan(&self, parsed: &Option<ASTNode>) -> Result<Option<Rel>, Box<ZeroError>> {
         match parsed {
             &None => Ok(None),
             &Some(ref sql) => {
@@ -300,7 +300,7 @@ impl ZeroHandler {
                         println!("Failed to parse with: {}", e);
                         match self.parsing_mode{
                             ParsingMode::Strict =>{
-                                return create_error(e);
+                                return create_error(e.to_string());
                             },
                             ParsingMode::Passive =>{
                                 println!("In Passive mode, falling through to MySQL");
@@ -324,7 +324,7 @@ impl ZeroHandler {
         // reqwrite query
        let action = if parsed.is_some() {
 
-            let value_map: HashMap<u32, Result<Vec<u8>, Box<Error>>> = HashMap::new();
+            let value_map: HashMap<u32, Result<Vec<u8>, Box<ZeroError>>> = HashMap::new();
             let mut encrypt_vis = EncryptVisitor{valuemap: value_map};
 
             // Visit and conditionally encrypt (if there was a plan)
@@ -387,7 +387,7 @@ impl ZeroHandler {
 
     fn process_result_row(&mut self,
                           p: &Packet,
-                          ) -> Result<Action, Box<Error>> {
+                          ) -> Result<Action, Box<ZeroError>> {
 
         println!("Received row");
 
@@ -447,7 +447,7 @@ fn create_error(e: String) -> Action {
         msg: e }
 }
 
-fn create_error_from_err(e: Box<Error>) -> Action {
+fn create_error_from_err(e: Box<ZeroError>) -> Action {
     Action::Error {
         code: 1234,
         state: [0x34, 0x32, 0x30, 0x30, 0x30], //&String::from("42000")
