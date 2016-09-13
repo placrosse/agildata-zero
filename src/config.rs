@@ -130,25 +130,29 @@ fn parse_schema_config(builder: &mut SchemaConfigBuilder, children: Vec<Xml>) {
 
 fn parse_table_config(builder: &mut TableConfigBuilder, children: Vec<Xml>) {
     use std::env;
+    let tbl_name: String = builder.name.clone().unwrap().to_uppercase();  // TODO do we need the schema name as well?
 
 	for node in children {
 		match node {
 			Xml::ElementNode(e) => match &e.name as &str {
 				"column" => {
-					let name = get_attr_or_fail("name", &e);
+                    let name = get_attr_or_fail("name", &e);
 					let native_type = get_attr_or_fail("type", &e);
                     let encryption = get_attr_or_fail("encryption", &e);
+                    let key = if encryption.to_uppercase() != "NONE" {
+                                  determine_key(&
+                                      env::var(format!("ZERO_{}_{}", &tbl_name, &name.to_uppercase()))
+                                        .ok()
+                                        .unwrap_or_else(|| get_attr_or_fail("key", &e))
+                                  )
+                              } else {
+                                  [0u8; 32]
+                              };
 					builder.add_column(ColumnConfig{
 						name: name,
                         native_type: determine_native_type(&native_type),
                         encryption: determine_encryption(&encryption),
-                        key: if encryption.to_uppercase() != "NONE" {
-                                 determine_key(&env::var(format!("{}.{}.key", builder.name.unwrap(), name))
-                                                .ok()
-                                                .unwrap_or(get_attr_or_fail("key", &e)))
-                             } else {
-                                 [0u8; 32]
-                             },
+                        key: key,
 					});
 				},
 				_ => panic!("Unexpected element tag {}", e.name)
@@ -395,7 +399,7 @@ impl TTableConfig for TableConfig {
 mod tests {
 	use super::*;
 
-	#[test]
+    #[test]
 	fn config_test() {
 		let config = super::parse_config("zero-config.xml");
 		println!("CONFIG {:#?}", config);

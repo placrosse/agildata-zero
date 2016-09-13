@@ -34,12 +34,12 @@
 		<table name="user_purchases">
 			<column name="id" type="INTEGER" encryption="none" pkOrdinal="0"/>
 			<column name="user_id" type="INTEGER" encryption="none"/>
-			<column name="item_code" type="INTEGER" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
-			<column name="amount" type="DOUBLE" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+			<column name="item_code" type="INTEGER" encryption="aes" key="2EC2BEFE9145AA4AB462F6BCA96F53B26F8747282F9CDCBF3DF213CCB6C313DD"/>
+			<column name="amount" type="DOUBLE" encryption="aes" key="3B67EEDD7CF4A99379C18493A999922C476A6145AA43E14261D1883B754CCA6D"/>
 		</table>
 		<table name="items">
-			<column name="item_code" type="INTEGER" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
-			<column name="item_name" type="VARCHAR(50)" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+			<column name="item_code" type="INTEGER" encryption="aes" key="6A2276A37DFC7C1889C4145AA45EAF8A83CC847A887C62953F6C1EDB739F9CC3"/>
+			<column name="item_name" type="VARCHAR(50)" encryption="aes" key="6A199B65F965156B4C8399DF27AEAECCF4E856EFD843ADC62317A82AF7"/>
             <column name="description" type="VARCHAR(50)" encryption="none"/>
 		</table>
 	</schema>
