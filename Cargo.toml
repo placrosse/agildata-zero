@@ -13,6 +13,7 @@ byteorder = "0.5.3"
 RustyXML = "0.1.1"
 bytes = "0.2.10"
 mio = "0.4.4"
+mysql = "7.0.1"
 
 [features]
 default = []

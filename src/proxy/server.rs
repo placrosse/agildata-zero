@@ -12,16 +12,18 @@ const SERVER: mio::Token = mio::Token(0);
 use config::{Config, TConfig};
 
 use super::mysql::MySQLConnectionHandler;
+use super::schema_provider::MySQLBackedSchemaProvider;
 
 pub struct Proxy<'a> {
     server: TcpListener,
     connections: Slab<MySQLConnectionHandler<'a>>,
-    config: &'a Config
+    config: &'a Config,
+    provider: &'a MySQLBackedSchemaProvider<'a>
 }
 
 impl<'a> Proxy<'a> {
 
-    pub fn run(config: &Config) {
+    pub fn run(config: &Config, provider: &MySQLBackedSchemaProvider) {
 
         let bind_host = config.get_client_config().props.get("host").unwrap().clone();
         let bind_port = u16::from_str(config.get_client_config().props.get("port").unwrap()).unwrap();
@@ -41,7 +43,8 @@ impl<'a> Proxy<'a> {
         let mut proxy = Proxy {
             server: server,
             connections: slab,
-            config: config
+            config: config,
+            provider: provider
         };
 
         println!("running MySQLProxy server on host {} port {}", bind_host, bind_port);
@@ -66,8 +69,9 @@ impl<'a> mio::Handler for Proxy<'a> {
 
                         // This will fail when the connection cap is reached
                         let config = self.config;
+                        let provider = self.provider;
                         let token = self.connections
-                            .insert_with(|token| MySQLConnectionHandler::new(socket, token, config))
+                            .insert_with(|token| MySQLConnectionHandler::new(socket, token, config, provider))
                             .unwrap();
 
                         // Register the connection with the event loop.

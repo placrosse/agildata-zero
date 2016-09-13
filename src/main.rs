@@ -14,6 +14,8 @@ extern crate byteorder;
 extern crate mio;
 extern crate bytes;
 
+extern crate mysql;
+
 use std::env;
 use std::str;
 
@@ -59,6 +61,7 @@ fn main() {
         println!("{}", dsc);
     } else {
         let config = config::parse_config(&opt.cfg);
-        proxy::server::Proxy::run(&config);
+        let provider = proxy::schema_provider::MySQLBackedSchemaProvider::new(&config);
+        proxy::server::Proxy::run(&config, &provider);
     }
 }
