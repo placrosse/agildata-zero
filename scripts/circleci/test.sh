@@ -26,7 +26,9 @@ ls -al target/debug
 echo
 
 # Launch AgilData Zero
-target/debug/agildata-zero & 
+echo
+echo "Launching AgilData-Zero proxy..."
+target/debug/agildata-zero ; sleep 5 & 
 AGILDATA_ZERO_PID=$!
 echo "AgilData Zero launched: Process ID=$AGILDATA_ZERO_PID"
 
@@ -44,7 +46,7 @@ echo
 for test_script in "${TESTS[@]}"
 do
   if [ -f "scripts/test/${test_script}.sql" ]; then
-    echo "Running test script: ${test_script}.sql"
+    echo "Running test script: ${test_script}.sql against MySQL on 127.0.0.1 port 3307"
     mysql --host=127.0.0.1 --port=3307 -u$MYSQL_USER -p$MYSQL_PASS -D $AGILDATA_TEST_DB < scripts/test/${test_script}.sql > scripts/test/${test_script}-output.sql
     echo "Comparing output from ${test_script}.sql against expected output."
     output=$(diff scripts/test/${test_script}-expected.sql scripts/test/${test_script}-output.sql)
