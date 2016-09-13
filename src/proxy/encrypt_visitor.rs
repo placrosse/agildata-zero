@@ -187,7 +187,7 @@ mod tests {
 
 		println!("Rewritten: {}", rewritten);
 
-		assert_eq!(rewritten, String::from("SELECT id, first_name, last_name, ssn, age, sex FROM users WHERE first_name =X'0000000000000000000000001634B73C83460779A2179A0134D8F22A82F7EF5FD4'"));
+		assert_eq!(rewritten, String::from("SELECT id, first_name, last_name, ssn, age, sex FROM users WHERE first_name =X'00000000000000000000000088D52F592281137DB2A0D5F0B3BD40CF004D3AA9F7'"));
 	}
 
 	#[test]
@@ -214,7 +214,7 @@ mod tests {
 
 		println!("Rewritten: {}", rewritten);
 
-		assert_eq!(rewritten, String::from("INSERT INTO users ( id, first_name, last_name, ssn, age, sex) VALUES( 1,X'0000000000000000000000001A27B6319FFE5092BC87E3F8A8D59DEFC1CEFC35AA',X'0000000000000000000000001A29A8348545EF85B58E92DFE127DD4942CB5622F01F',X'0000000000000000000000006174EB6CD91D111BD46235D350E485AA0BA1DCCBF442BE0C8A',X'0000000000000000000000005046D858EC2B26384619838AA28512F4082E25592BD37DBC',X'00000000000000000000000016A2122F7E9A44212C8CD2FC4185084959')"));
+		assert_eq!(rewritten, String::from("INSERT INTO users ( id, first_name, last_name, ssn, age, sex) VALUES( 1,X'00000000000000000000000084C62E543E13A88D09B8993F104387DEBDCC1C41DB',X'00000000000000000000000084C83051240E026A526D31E1F98F42C07A2FDCBB497E',X'000000000000000000000000FF95730978565C563ED2E4E8EBA993D536B7E238A72F84F163',X'000000000000000000000000CEA7403D4D606B756345DB01F9B7BEC3E4F987B62AF1F0AC',X'00000000000000000000000088FBA66E3217EC0FD67F0DE527E2933E6E')"));
 
 	}
 
@@ -303,23 +303,42 @@ mod tests {
                 ("zero", "users") => {
                     Some(Rc::new(TableMeta {
                         columns: vec![
-                            ColumnMeta {name: String::from("id"), native_type: NativeType::U64, encryption: EncryptionType::NA},
-                            ColumnMeta {name: String::from("first_name"), native_type: NativeType::Varchar(50), encryption: EncryptionType::AES},
-                            ColumnMeta {name: String::from("last_name"), native_type: NativeType::Varchar(50), encryption: EncryptionType::AES},
-                            ColumnMeta {name: String::from("ssn"), native_type: NativeType::Varchar(50), encryption: EncryptionType::AES},
-                            ColumnMeta {name: String::from("age"), native_type: NativeType::U64, encryption: EncryptionType::AES},
-                            ColumnMeta {name: String::from("sex"), native_type: NativeType::Varchar(50), encryption: EncryptionType::AES},
-
+                            ColumnMeta {name: String::from("id"), native_type: NativeType::U64,
+                                        encryption: EncryptionType::NA,
+                                        key: [0u8; 32]},
+                            ColumnMeta {name: String::from("first_name"), native_type: NativeType::Varchar(50),
+                                        encryption: EncryptionType::AES,
+                                        key: [0u8; 32]},
+                            ColumnMeta {name: String::from("last_name"), native_type: NativeType::Varchar(50),
+                                        encryption: EncryptionType::AES,
+                                        key: [0u8; 32]},
+                            ColumnMeta {name: String::from("ssn"), native_type: NativeType::Varchar(50),
+                                        encryption: EncryptionType::AES,
+                                        key: [0u8; 32]},
+                            ColumnMeta {name: String::from("age"), native_type: NativeType::U64,
+                                        encryption: EncryptionType::AES,
+                                        key: [0u8; 32]},
+                            ColumnMeta {name: String::from("sex"), native_type: NativeType::Varchar(50),
+                                        encryption: EncryptionType::AES,
+                                        key: [0u8; 32]},
                         ]
                     }))
                 },
                 ("zero", "user_purchases") => {
                     Some(Rc::new(TableMeta {
                         columns: vec![
-                            ColumnMeta {name: String::from("id"), native_type: NativeType::U64, encryption: EncryptionType::NA},
-                            ColumnMeta {name: String::from("user_id"), native_type: NativeType::U64, encryption: EncryptionType::NA},
-                            ColumnMeta {name: String::from("item_code"), native_type: NativeType::U64, encryption: EncryptionType::AES},
-                            ColumnMeta {name: String::from("amount"), native_type: NativeType::F64, encryption: EncryptionType::AES}
+                            ColumnMeta {name: String::from("id"), native_type: NativeType::U64,
+                                        encryption: EncryptionType::NA,
+                                        key: [0u8; 32]},
+                            ColumnMeta {name: String::from("user_id"), native_type: NativeType::U64,
+                                        encryption: EncryptionType::NA,
+                                        key: [0u8; 32]},
+                            ColumnMeta {name: String::from("item_code"), native_type: NativeType::U64,
+                                        encryption: EncryptionType::AES,
+                                        key: [0u8; 32]},
+                            ColumnMeta {name: String::from("amount"), native_type: NativeType::F64,
+                                        encryption: EncryptionType::AES,
+                                        key: [0u8; 32]},
                         ]
                     }))
                 },
