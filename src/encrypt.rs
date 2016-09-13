@@ -15,8 +15,6 @@ pub enum EncryptionType {
 	NA,
 }
 
-
-
 #[derive(Debug, PartialEq, Clone)]
 pub enum NativeType {
 	U64,
@@ -25,20 +23,20 @@ pub enum NativeType {
 }
 
 pub trait Encrypt {
-	fn encrypt(self, scheme: &EncryptionType) -> Result<Vec<u8>, Box<Error>>;
+	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<Error>>;
 }
 
 pub trait Decrypt {
     type DecType;
-	fn decrypt(value: &[u8], scheme: &EncryptionType) -> Result<Self::DecType,  Box<Error>>;
+	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<Self::DecType, Box<Error>>;
 }
 
 impl Decrypt for u64 {
     type DecType = u64;
-	fn decrypt(value: &[u8], scheme: &EncryptionType) ->  Result<u64,  Box<Error>> {
+	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<u64, Box<Error>> {
 		match scheme {
 			&EncryptionType::AES => {
-				let mut decrypted = try!(decrypt(&get_key(), value));
+				let decrypted = decrypt(key, value)?;
                 Ok(Cursor::new(decrypted).read_u64::<BigEndian>().unwrap())
 			},
 			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
@@ -49,10 +47,10 @@ impl Decrypt for u64 {
 
 impl Decrypt for String {
     type DecType = String;
-	fn decrypt(value: &[u8], scheme: &EncryptionType) ->  Result<String,  Box<Error>>{
+	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<String, Box<Error>>{
         match scheme {
 			&EncryptionType::AES => {
-				let mut decrypted = try!(decrypt(&get_key(), value));
+				let decrypted = decrypt(key, value)?;
 				Ok(String::from_utf8(decrypted).expect("Invalid UTF-8"))
 
 			},
@@ -63,14 +61,14 @@ impl Decrypt for String {
 }
 
 impl Encrypt for u64 {
-	fn encrypt(self, scheme: &EncryptionType) -> Result<Vec<u8>, Box<Error>> {
+	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<Error>> {
 
 		match scheme {
 			&EncryptionType::AES => {
 				let mut buf: Vec<u8> = Vec::new();
 				buf.write_u64::<BigEndian>(self).unwrap();
 
-				encrypt(&get_key(), &buf)
+				encrypt(key, &buf)
 			},
 			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
 			_ => panic!("Not implemented")
@@ -80,12 +78,12 @@ impl Encrypt for u64 {
 }
 
 impl Encrypt for String {
-	fn encrypt(self, scheme: &EncryptionType) -> Result<Vec<u8>, Box<Error>> {
+	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<Error>> {
 		match scheme {
 			&EncryptionType::AES => {
 				let buf = self.as_bytes();
 				println!("Buf length = {}", buf.len());
-				let e = encrypt(&get_key(), &buf).unwrap();
+				let e = encrypt(key, &buf).unwrap();
 				println!("Encrypted length = {}", e.len());
 				Ok(e)
 			},
@@ -95,8 +93,7 @@ impl Encrypt for String {
 	}
 }
 
-fn get_key() -> [u8; 32] {
-	let hex = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985";
+pub fn hex_key(hex: &str) -> [u8; 32] {
 	let mut k = [0_u8; 32];
 	let mut m = 0;
 	let mut b = 0;
@@ -120,11 +117,6 @@ fn get_key() -> [u8; 32] {
 }
 
 pub fn encrypt(key: &[u8], buf: &[u8]) -> Result<Vec<u8>, Box<Error>> {
-    // let key: [u8; 32] = KEYS[n0 as usize].lock().deref().clone();
-    // debug!("encrypt: found key={:?} for n0={:?}", key, n0);
-    // if key == [0u8; 32] { return None; }
-
-
     let nonce = [0_u8;12];
     let mut cipher = AesGcm::new(KeySize::KeySize256, key, &nonce, &[]);
 

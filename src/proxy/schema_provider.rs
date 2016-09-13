@@ -77,13 +77,15 @@ impl<'a> MySQLBackedSchemaProvider<'a> {
 								Ok(ColumnMeta {
 								    name: id.clone(),
 								    native_type: column_config.native_type.clone(),
-								    encryption: column_config.encryption.clone()
+								    encryption: column_config.encryption.clone(),
+                                    key: column_config.key.clone(),
 								})
 							} else {
 								Ok(ColumnMeta {
 									name: id.clone(),
 									native_type: self._reconcile_native_type(dt)?,
-									encryption: EncryptionType::NA
+									encryption: EncryptionType::NA,
+                                    key: [0u8; 32],
 								})
 							}
 						},

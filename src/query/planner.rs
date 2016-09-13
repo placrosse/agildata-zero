@@ -18,7 +18,8 @@ pub struct TableMeta {
 pub struct ColumnMeta {
     pub name: String,
     pub native_type: NativeType,
-    pub encryption: EncryptionType
+    pub encryption: EncryptionType,
+    pub key: [u8; 32],
 }
 
 #[derive(Debug, Clone)]
@@ -36,6 +37,7 @@ impl TupleType {
 pub struct Element {
     pub name: String,
     pub encryption: EncryptionType,
+    pub key: [u8; 32],
     pub data_type: NativeType,
     pub relation: String,
     pub p_name: Option<String>,
@@ -253,7 +255,7 @@ impl<'a> Planner<'a> {
                 match input {
                     Some(i) => {
                         let tt = TupleType::new(i.tt().elements.iter().map(|e| Element{
-                            name: e.name.clone(), encryption: e.encryption.clone(),
+                            name: e.name.clone(), encryption: e.encryption.clone(), key: e.key.clone(),
                             data_type: e.data_type.clone(), relation: a.clone(),
                             p_name: e.p_name.clone(), p_relation: Some(e.relation.clone())
                         }).collect());
@@ -280,7 +282,7 @@ impl<'a> Planner<'a> {
                         let tt = TupleType::new(
                             meta.columns.iter()
                                 .map(|c| Element {
-                                    name: c.name.clone(), encryption: c.encryption.clone(),
+                                    name: c.name.clone(), encryption: c.encryption.clone(), key: c.key.clone(),
                                     data_type: c.native_type.clone(), relation: table_name.clone(),
                                     p_name: None, p_relation: None
                                 })
@@ -419,23 +421,42 @@ mod tests {
                 ("zero", "users") => {
                     Some(Rc::new(TableMeta {
                         columns: vec![
-                            ColumnMeta {name: String::from("id"), native_type: NativeType::U64, encryption: EncryptionType::NA},
-                            ColumnMeta {name: String::from("first_name"), native_type: NativeType::Varchar(50), encryption: EncryptionType::AES},
-                            ColumnMeta {name: String::from("last_name"), native_type: NativeType::Varchar(50), encryption: EncryptionType::AES},
-                            ColumnMeta {name: String::from("ssn"), native_type: NativeType::Varchar(50), encryption: EncryptionType::AES},
-                            ColumnMeta {name: String::from("age"), native_type: NativeType::U64, encryption: EncryptionType::AES},
-                            ColumnMeta {name: String::from("sex"), native_type: NativeType::Varchar(50), encryption: EncryptionType::AES},
-
+                            ColumnMeta {name: String::from("id"), native_type: NativeType::U64,
+                                        encryption: EncryptionType::NA,
+                                        key: [0u8; 32]},
+                            ColumnMeta {name: String::from("first_name"), native_type: NativeType::Varchar(50),
+                                        encryption: EncryptionType::AES,
+                                        key: [0u8; 32]},
+                            ColumnMeta {name: String::from("last_name"), native_type: NativeType::Varchar(50),
+                                        encryption: EncryptionType::AES,
+                                        key: [0u8; 32]},
+                            ColumnMeta {name: String::from("ssn"), native_type: NativeType::Varchar(50),
+                                        encryption: EncryptionType::AES,
+                                        key: [0u8; 32]},
+                            ColumnMeta {name: String::from("age"), native_type: NativeType::U64,
+                                        encryption: EncryptionType::AES,
+                                        key: [0u8; 32]},
+                            ColumnMeta {name: String::from("sex"), native_type: NativeType::Varchar(50),
+                                        encryption: EncryptionType::AES,
+                                        key: [0u8; 32]},
                         ]
                     }))
                 },
                 ("zero", "user_purchases") => {
                     Some(Rc::new(TableMeta {
                         columns: vec![
-                            ColumnMeta {name: String::from("id"), native_type: NativeType::U64, encryption: EncryptionType::NA},
-                            ColumnMeta {name: String::from("user_id"), native_type: NativeType::U64, encryption: EncryptionType::NA},
-                            ColumnMeta {name: String::from("item_code"), native_type: NativeType::U64, encryption: EncryptionType::AES},
-                            ColumnMeta {name: String::from("amount"), native_type: NativeType::F64, encryption: EncryptionType::AES}
+                            ColumnMeta {name: String::from("id"), native_type: NativeType::U64,
+                                        encryption: EncryptionType::NA,
+                                        key: [0u8; 32]},
+                            ColumnMeta {name: String::from("user_id"), native_type: NativeType::U64,
+                                        encryption: EncryptionType::NA,
+                                        key: [0u8; 32]},
+                            ColumnMeta {name: String::from("item_code"), native_type: NativeType::U64,
+                                        encryption: EncryptionType::AES,
+                                        key: [0u8; 32]},
+                            ColumnMeta {name: String::from("amount"), native_type: NativeType::F64,
+                                        encryption: EncryptionType::AES,
+                                        key: [0u8; 32]},
                         ]
                     }))
                 },
