@@ -3,13 +3,15 @@ use query::{Operator, LiteralExpr};
 use std::collections::HashMap;
 use encrypt::*;
 use error::ZeroError;
+
 #[derive(Debug)]
 pub struct EncryptVisitor {
-	pub valuemap: HashMap<u32, Result<Vec<u8>, Box<ZeroError>>>
+    // TODO this should be Option<Vec<u8>> for null handling
+	pub valuemap: HashMap<u32, Vec<u8>>
 }
 
 impl EncryptVisitor {
-	pub fn get_value_map(&self) -> &HashMap<u32, Result<Vec<u8>, Box<ZeroError>>> {
+	pub fn get_value_map(&self) -> &HashMap<u32, Vec<u8>> {
 		&self.valuemap
 	}
 }
@@ -47,10 +49,10 @@ impl RelVisitor for EncryptVisitor  {
 										if el.encryption != EncryptionType::NA {
 											match lit {
 												&LiteralExpr::LiteralLong(ref i, ref val) => {
-													self.valuemap.insert(i.clone(), val.encrypt(&el.encryption, &el.key));
+													self.valuemap.insert(i.clone(), val.encrypt(&el.encryption, &el.key)?);
 												},
 												&LiteralExpr::LiteralString(ref i, ref val) => {
-													self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption, &el.key));
+													self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption, &el.key)?);
 												}
 												_ => return Err(ZeroError::EncryptionError{
                                                     message: format!("Unsupported value type {:?} for encryption", lit).into(),
@@ -109,10 +111,10 @@ impl RelVisitor for EncryptVisitor  {
 										&Operator::EQ => {
 											match literal {
 												&LiteralExpr::LiteralLong(ref i, ref val) => {
-													self.valuemap.insert(i.clone(), val.encrypt(&element.encryption, &element.key));
+													self.valuemap.insert(i.clone(), val.encrypt(&element.encryption, &element.key)?);
 												},
 												&LiteralExpr::LiteralString(ref i, ref val) => {
-													self.valuemap.insert(i.clone(), val.clone().encrypt(&element.encryption, &element.key));
+													self.valuemap.insert(i.clone(), val.clone().encrypt(&element.encryption, &element.key)?);
 												}
 												_ => return  Err(ZeroError::EncryptionError{
                                                     message: format!("Unsupported value type {:?} for encryption", literal).into(),
@@ -190,7 +192,7 @@ mod tests {
 		let parsed = res.0;
 		let plan = res.1;
 
-		let value_map: HashMap<u32, Result<Vec<u8>, Box<ZeroError>>> = HashMap::new();
+		let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
 		let mut encrypt_vis = EncryptVisitor {
 			valuemap: value_map
 		};
@@ -217,7 +219,7 @@ mod tests {
 		let parsed = res.0;
 		let plan = res.1;
 
-		let value_map: HashMap<u32, Result<Vec<u8>, Box<ZeroError>>> = HashMap::new();
+        let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
 		let mut encrypt_vis = EncryptVisitor {
 			valuemap: value_map
 		};
@@ -246,7 +248,7 @@ mod tests {
  		let parsed = res.0;
  		let plan = res.1;
 
-		let value_map: HashMap<u32, Result<Vec<u8>, Box<ZeroError>>> = HashMap::new();
+        let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
 		let mut encrypt_vis = EncryptVisitor {
 			valuemap: value_map
 		};
@@ -274,7 +276,7 @@ mod tests {
 		 JOIN user_purchases AS r ON l.id = r.item_code");
 		let mut plan = parse_and_plan(sql).unwrap().1;
 
-		let value_map: HashMap<u32, Result<Vec<u8>, Box<ZeroError>>> = HashMap::new();
+        let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
 		let mut encrypt_vis = EncryptVisitor {
 			valuemap: value_map
 		};

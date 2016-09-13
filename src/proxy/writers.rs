@@ -16,7 +16,7 @@ pub fn to_hex_string(bytes: &Vec<u8>) -> String {
 }
 
 pub struct LiteralReplacingWriter<'a> {
-    pub literals: &'a HashMap<u32, Result<Vec<u8>, Box<ZeroError>>>
+    pub literals: &'a HashMap<u32, Vec<u8>>
 }
 
 impl<'a> ExprWriter for LiteralReplacingWriter<'a> {
@@ -36,12 +36,9 @@ impl<'a> ExprWriter for LiteralReplacingWriter<'a> {
 impl<'a> LiteralReplacingWriter<'a> {
 	fn optionally_write_literal(&self, index: &u32, builder: &mut String) -> Result<bool, Box<ZeroError>> {
 		match self.literals.get(index) {
-			Some(value) => match value {
-				&Ok(ref e) => {
-					write!(builder, "X'{}'", to_hex_string(e)).unwrap();
-					Ok(true)
-				},
-                &Err(_) => {panic!("Shouldnt be here");}
+			Some(value) => {
+				write!(builder, "X'{}'", to_hex_string(value)).unwrap();
+				Ok(true)
 			},
 			None => Ok(false),
 		}

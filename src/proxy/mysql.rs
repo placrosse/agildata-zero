@@ -423,7 +423,7 @@ impl<'a> MySQLConnectionHandler <'a> {
         // reqwrite query
         if parsed.is_some() {
 
-            let value_map: HashMap<u32, Result<Vec<u8>, Box<ZeroError>>> = HashMap::new();
+            let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
             let mut encrypt_vis = EncryptVisitor{valuemap: value_map};
 
             // Visit and conditionally encrypt (if there was a plan)
