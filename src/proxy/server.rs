@@ -401,11 +401,11 @@ impl ZeroHandler {
                         &EncryptionType::NA => r.read_lenenc_string(),
                         encryption @ _ => match &tt.elements[i].data_type {
                             &NativeType::U64 => {
-                                let res = try!(u64::decrypt(&r.read_bytes().unwrap(), &encryption));
+                                let res = try!(u64::decrypt(&r.read_bytes().unwrap(), &encryption, &tt.elements[i].key));
                                 Some(format!("{}", res))
                             },
                             &NativeType::Varchar(_) => {
-                                let res = try!(String::decrypt(&r.read_bytes().unwrap(), &encryption));
+                                let res = try!(String::decrypt(&r.read_bytes().unwrap(), &encryption, &tt.elements[i].key));
                                 Some(res)
                             },
                             native_type @ _ => panic!("Native type {:?} not implemented", native_type)
