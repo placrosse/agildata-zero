@@ -38,7 +38,7 @@ impl RelVisitor for EncryptVisitor  {
 			},
 			&Rel::AliasedRel{box ref input, ..} => self.visit_rel(input)?,
 			&Rel::Dual{..} => {},
-			&Rel::Update{ref table, box ref assns, box ref select} => {
+			&Rel::Update{ref table, box ref set_stmts, ref selection, ref tt} => {
 				{}
 			},
 			&Rel::Insert{ref table, box ref columns, box ref values, ..} => {

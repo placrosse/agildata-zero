@@ -1,7 +1,7 @@
 use std::error::Error;
 use super::{ASTNode, Operator, LiteralExpr, JoinType};
 use encrypt::EncryptionType;
-use config::*;
+//use config::*;
 use encrypt::NativeType;
 use std::rc::Rc;
 
@@ -48,7 +48,7 @@ pub enum Rex {
     Identifier { id: Vec<String>, el: Element },
     Literal(LiteralExpr),
     BinaryExpr{left: Box<Rex>, op: Operator, right: Box<Rex>},
-    RelationalExpr(Rel),
+    //RelationalExpr(Rel),
     RexExprList(Vec<Rex>),
 }
 
@@ -70,7 +70,7 @@ pub enum Rel {
     Join{left: Box<Rel>, join_type: JoinType, right: Box<Rel>, on_expr: Option<Box<Rex>>, tt: TupleType},
     Dual { tt: TupleType },
     Insert {table: String, columns: Box<Rex>, values: Box<Rex>, tt: TupleType},
-	Update {table: String, assns: Box<Rex>, select: Box<Rel>}    
+	Update {table: String, set_stmts: Box<Rex>, selection: Option<Box<Rex>>, tt: TupleType}    
 }
 
 pub trait HasTupleType {
@@ -87,7 +87,7 @@ impl HasTupleType for Rel {
             &Rel::Insert {ref tt, ..} => tt,
             &Rel::AliasedRel{ref tt, ..} => tt,
             &Rel::Join{ref tt, ..} => tt,
-            &Rel::Update{ref select, ..} => select.tt()
+            &Rel::Update{ref tt, ..} => tt
         }
     }
 }
@@ -202,8 +202,6 @@ impl<'a> Planner<'a> {
                     None => return Ok(None)
                 }
             },
-            //     SQLJoin{left: Box<ASTNode>, join_type: JoinType, right: Box<ASTNode>, on_expr: Option<Box<ASTNode>>},
-
             &ASTNode::SQLJoin{box ref left, ref join_type, box ref right, ref on_expr} => {
                 let left_rel = self.sql_to_rel(left)?;
                 let right_rel = self.sql_to_rel(right)?;
@@ -285,12 +283,23 @@ impl<'a> Planner<'a> {
                 }
             },
             &ASTNode::MySQLCreateTable{..} => Ok(None), // Dont need to plan this yet...
-            &ASTNode::SQLUpdate{ box ref table, ref assignments, ref selection } => {
-            	
-            	let rel = self.sql_to_rel(table)?;
+            &ASTNode::SQLUpdate{ box ref table, box ref assignments, ref selection } => {
 
-				// Ok(Some(Rel::Update { rel, set_list, input }))
-				Ok(None)
+				match self.sql_to_rel(table)? {
+                    Some(Rel::TableScan {table, tt}) => {
+
+                        Ok(Some(Rel::Update{ 
+                        			table: table, 
+                        			set_stmts: Box::new(self.sql_to_rex(assignments, &tt)?), 
+                        			selection: match selection {
+				                            &Some(box ref expr) => Some(Box::new(self.sql_to_rex(expr, &tt)?)),
+				                            &None => None
+				                        }, 
+                        			tt: tt}))
+                    },
+                    Some(other) => return Err(format!("Unsupported table relation for UPDATE {:?}", other).into()),
+                    None => return Ok(None)
+                }
             }
             _ => Err(format!("Unsupported expr for planning {:?}", sql).into())
         }

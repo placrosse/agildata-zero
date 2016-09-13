@@ -149,13 +149,13 @@ fn parse_string(bytes: &[u8]) -> String {
 #[derive(Debug, PartialEq, Clone)]
 pub enum ParsingMode {
     Strict,
-    Passive
+    Permissive
 }
 
 fn determine_parsing_mode(mode: &String) -> ParsingMode {
     match &mode.to_uppercase() as &str {
         "STRICT" => ParsingMode::Strict,
-        "PASSIVE" => ParsingMode::Passive,
+        "PERMISSIVE" => ParsingMode::Permissive,
         _ => panic!("Unsupported parsing mode {}", mode)
     }
 
@@ -399,8 +399,8 @@ impl<'a> MySQLConnectionHandler <'a> {
                                 self.send_error(&String::from("42000"), &e.to_string());
                                 return Ok(());
                             },
-                            ParsingMode::Passive =>{
-                                println!("In Passive mode, falling through to MySQL");
+                            ParsingMode::Permissive =>{
+                                println!("In Permissive mode, falling through to MySQL");
                                 None
                             }
                         }
