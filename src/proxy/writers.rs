@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use std::fmt::Write;
 use config::*;
 use encrypt::*;
-use std::error::Error;
+use error::ZeroError;
+
 
 pub fn to_hex_string(bytes: &Vec<u8>) -> String {
   let strs: Vec<String> = bytes.iter()
@@ -15,11 +16,11 @@ pub fn to_hex_string(bytes: &Vec<u8>) -> String {
 }
 
 pub struct LiteralReplacingWriter<'a> {
-    pub literals: &'a HashMap<u32, Result<Vec<u8>, Box<Error>>>
+    pub literals: &'a HashMap<u32, Result<Vec<u8>, Box<ZeroError>>>
 }
 
 impl<'a> ExprWriter for LiteralReplacingWriter<'a> {
-	fn write(&self, _: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, String> {
+	fn write(&self, _: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, Box<ZeroError>> {
 		match node {
 			&ASTNode::SQLLiteral(ref e) => match e {
 				&LiteralExpr::LiteralLong(ref i, _) => self.optionally_write_literal(i, builder),
@@ -33,7 +34,7 @@ impl<'a> ExprWriter for LiteralReplacingWriter<'a> {
 }
 
 impl<'a> LiteralReplacingWriter<'a> {
-	fn optionally_write_literal(&self, index: &u32, builder: &mut String) -> Result<bool, String> {
+	fn optionally_write_literal(&self, index: &u32, builder: &mut String) -> Result<bool, Box<ZeroError>> {
 		match self.literals.get(index) {
 			Some(value) => match value {
 				&Ok(ref e) => {
@@ -53,12 +54,15 @@ pub struct CreateTranslatingWriter<'a> {
 }
 
 impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
-	fn write(&self, writer: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, String> {
+	fn write(&self, writer: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, Box<ZeroError>> {
 		match node {
 			&ASTNode::MySQLCreateTable{box ref table, ref column_list, ref keys, ref table_options} => {
 				let table_name = match table {
 					&ASTNode::SQLIdentifier{id: ref t, ..} => t,
-					_ => return Err(String::from(format!("Expected identifier, received {:?}", table)))
+					_ => return  Err(ZeroError::ParseError{
+                            message: format!("Expected identifier, received {:?}", table).into(),
+                            code: "1064".into()
+                        }.into())
 				};
 
 				builder.push_str("CREATE TABLE");
@@ -72,9 +76,15 @@ impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
 					let column_name = match c {
 						&ASTNode::MySQLColumnDef{box ref column, ..} => match column {
 							&ASTNode::SQLIdentifier{id: ref t, ..} => t,
-							_ => return Err(String::from(format!("Expected identifier, received {:?}", table)))
+							_ => return  Err(ZeroError::ParseError{
+                        message: format!("Expected identifier, received {:?}", table).into(),
+                        code: "1064".into()
+                    }.into())
 						},
-						_ => return Err(String::from(format!("Expected column definition, received {:?}", table)))
+						_ => return  Err(ZeroError::ParseError{
+                                message: format!("Expected column definition, received {:?}", table).into(),
+                                code: "1064".into()
+                            }.into())
 					};
 
 					let col = self.config.get_column_config(&self.schema, &table_name, &column_name);
@@ -100,7 +110,10 @@ impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
 									}
 
 								},
-								_ => return Err(String::from(format!("Expected column definition, received {:?}", c)))
+								_ => return Err(ZeroError::ParseError{
+                                        message: format!("Expected column definition, received {:?}", c).into(),
+                                        code: "1064".into()
+                                    }.into())
 							}
 						},
 						_ => {
@@ -131,7 +144,7 @@ impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
 
 // TODO needs to do some real length/display math for different encryption types
 impl<'a> CreateTranslatingWriter<'a> {
-	fn translate_type(&self, data_type: &ASTNode, encryption: &EncryptionType) -> Result<ASTNode, String> {
+	fn translate_type(&self, data_type: &ASTNode, encryption: &EncryptionType) -> Result<ASTNode, Box<ZeroError>> {
 		match (data_type, encryption) {
 			(&ASTNode::MySQLDataType(ref dt), &EncryptionType::AES) => match dt {
 				&MySQLDataType::Int{..} => {
@@ -143,10 +156,16 @@ impl<'a> CreateTranslatingWriter<'a> {
 				&MySQLDataType::Binary{ref length} | &MySQLDataType::VarBinary{ref length} => {
 					Ok(ASTNode::MySQLDataType(MySQLDataType::VarBinary{length: Some(self.get_encrypted_string_length(length))}))
 				},
-				_ => Err(String::from(format!("Unsupported data type for AES translation {:?}", dt)))
+				_ => Err(ZeroError::EncryptionError{
+                        message: format!("Unsupported data type for AES translation {:?}", dt).into(),
+                        code: "1064".into()
+                    }.into())
 			},
-			_ => Err(String::from(format!("Expected data type and encryption, received data_type: {:?}, encryption: {:?}", data_type, encryption)))
-		}
+			_ => Err(ZeroError::EncryptionError{
+                    message: format!("Expected data type and encryption, received data_type: {:?}, encryption: {:?}", data_type, encryption).into(),
+                    code: "1064".into()
+                }.into())
+               		}
 	}
 
 	// TODO delegate to crypt module

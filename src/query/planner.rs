@@ -5,6 +5,7 @@ use super::{ASTNode, Operator, LiteralExpr, JoinType};
 use encrypt::EncryptionType;
 use config::*;
 use encrypt::NativeType;
+use error::ZeroError;
 
 #[derive(Debug, Clone)]
 pub struct TupleType {
@@ -89,14 +90,17 @@ impl<'a> Planner<'a> {
         Planner { default_schema: s, config: c }
     }
 
-    fn sql_to_rex(&self, sql: &ASTNode, tt: &TupleType) -> Result<Rex, Box<Error>> {
+    fn sql_to_rex(&self, sql: &ASTNode, tt: &TupleType) -> Result<Rex, Box<ZeroError>> {
         match sql {
             &ASTNode::SQLExprList(ref v) => Ok(Rex::RexExprList(v.iter()
                 .map(|x| self.sql_to_rex(&x, tt))
                 .collect()?)),
             &ASTNode::SQLIdentifier { ref id, ref parts } => {
                 let (relation, name) = match parts.len() {
-                    0 => return Err(format!("Illegal identifier {:?}", id).into()),
+                    0 => return  Err(ZeroError::ParseError{
+                            message: format!("Invalid identifier {}", id).into(),// TODO better..
+                            code: "1064".into()
+                        }.into()),
                     1 => (None, &parts[0]),
                     _ => (Some(&parts[0]), &parts[1])
                 };
@@ -125,7 +129,10 @@ impl<'a> Planner<'a> {
 
                 match element {
                     Some(e) => Ok(Rex::Identifier{id: parts.clone(), el: e.clone()}),
-                    None => Err(format!("Invalid identifier {}", id).into()) // TODO better..
+                    None => Err(ZeroError::ParseError{
+                        message: format!("Invalid identifier {}", id).into(),// TODO better..
+                        code: "1064".into()
+                    }.into())
                 }
             },
             &ASTNode::SQLBinary{box ref left, ref op, box ref right} => {
@@ -136,11 +143,14 @@ impl<'a> Planner<'a> {
                 })
             },
             &ASTNode::SQLLiteral(ref literal) => Ok(Rex::Literal(literal.clone())),
-            _ => Err(format!("Unsupported expr {:?}", sql).into())
+            _ => Err(ZeroError::ParseError{
+                message: format!("Unsupported expr {:?}", sql).into(),
+                code: "1064".into()
+            }.into())
         }
     }
 
-    pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Option<Rel>, Box<Error>> {
+    pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Option<Rel>, Box<ZeroError>> {
         match sql {
             &ASTNode::SQLSelect { box ref expr_list, ref relation, ref selection, ref order } => {
 
@@ -183,7 +193,10 @@ impl<'a> Planner<'a> {
                             tt: tt
                         }))
                     },
-                    Some(other) => return Err(format!("Unsupported table relation for INSERT {:?}", other).into()),
+                    Some(other) => return Err(ZeroError::ParseError{
+                        message: format!("Unsupported table relation for INSERT {:?}", other).into(),
+                        code: "1064".into()
+                    }.into()),
                     None => return Ok(None)
                 }
 
@@ -220,7 +233,10 @@ impl<'a> Planner<'a> {
                     (None, None) => Ok(None),
                     // Mismatch
                     (Some(e), None) | (None, Some(e)) => {
-                        Err(String::from("Unsupported: Mismatch join between encrypted and unencrypted relations").into())
+                        Err(ZeroError::ParseError {
+                            message: format!("Unsupported: Mismatch join between encrypted and unencrypted relations").into(),
+                            code: "1064".into()
+                        }.into())
                     }
 
                 }
@@ -232,7 +248,10 @@ impl<'a> Planner<'a> {
                 let input = self.sql_to_rel(expr)?;
                 let a = match alias {
                     &ASTNode::SQLIdentifier{ref id, ..} => id.clone(),
-                    _ => return Err(format!("Unsupported alias expr {:?}", alias).into())
+                    _ => return Err(ZeroError::ParseError {
+                            message: format!("Unsupported alias expr {:?}", alias).into(),
+                            code: "1064".into()
+                        }.into())
                 };
 
                 match input {
@@ -281,7 +300,10 @@ impl<'a> Planner<'a> {
             },
             &ASTNode::MySQLCreateTable{..} => Ok(None), // Dont need to plan this yet...
             //ASTNode::SQLInsert => {},
-            _ => Err(format!("Unsupported expr for planning {:?}", sql).into())
+            _ => Err(ZeroError::ParseError {
+                    message: format!("Unsupported expr for planning {:?}", sql).into(),
+                    code: "1064".into()
+                }.into())
         }
     }
 }
@@ -304,8 +326,8 @@ fn get_element(expr: &Rex) -> Element {
 }
 
 pub trait RelVisitor {
-    fn visit_rel(&mut self, rel: &Rel) -> Result<(), Box<Error>>;
-    fn visit_rex(&mut self, rex: &Rex, tt: &TupleType) -> Result<(), Box<Error>>;
+    fn visit_rel(&mut self, rel: &Rel) -> Result<(), Box<ZeroError>>;
+    fn visit_rex(&mut self, rex: &Rex, tt: &TupleType) -> Result<(), Box<ZeroError>>;
 }
 
 #[cfg(test)]

@@ -21,7 +21,7 @@ mod encrypt;
 mod config;
 mod protocol;
 mod proxy;
-
+mod error;
 mod query;
 
 pub const APP_NAME: &'static str = "AgilData Zero Gateway";

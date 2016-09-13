@@ -1,23 +1,22 @@
 use query::planner::{Rel, Rex, RelVisitor, TupleType, HasTupleType};
 use query::{Operator, LiteralExpr};
 use std::collections::HashMap;
-use std::error::Error;
 use encrypt::*;
-
+use error::ZeroError;
 #[derive(Debug)]
 pub struct EncryptVisitor {
-	pub valuemap: HashMap<u32, Result<Vec<u8>, Box<Error>>>
+	pub valuemap: HashMap<u32, Result<Vec<u8>, Box<ZeroError>>>
 }
 
 impl EncryptVisitor {
-	pub fn get_value_map(&self) -> &HashMap<u32, Result<Vec<u8>, Box<Error>>> {
+	pub fn get_value_map(&self) -> &HashMap<u32, Result<Vec<u8>, Box<ZeroError>>> {
 		&self.valuemap
 	}
 }
 
 
 impl RelVisitor for EncryptVisitor  {
-	fn visit_rel(&mut self, rel: &Rel) -> Result<(),  Box<Error>> {
+	fn visit_rel(&mut self, rel: &Rel) -> Result<(),  Box<ZeroError>> {
 		match rel {
 			&Rel::Projection{box ref project, box ref input, ref tt} => {
 				self.visit_rex(project, tt)?;
@@ -53,19 +52,28 @@ impl RelVisitor for EncryptVisitor  {
 												&LiteralExpr::LiteralString(ref i, ref val) => {
 													self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption));
 												}
-												_ => return Err(format!("Unsupported value type {:?} for encryption", lit).into())
+												_ => return Err(ZeroError::EncryptionError{
+                                                    message: format!("Unsupported value type {:?} for encryption", lit).into(),
+                                                    code: "1064".into()
+                                                }.into())
 											}
 										}
 
 									} else {
-										return Err(format!("Expected identifier at column list index {}, received {:?}", index, c_list[index]).into())
-									}
+										return Err(ZeroError::EncryptionError{
+                                            message: format!("Expected identifier at column list index {}, received {:?}", index, c_list[index]).into(),
+                                            code: "1064".into()
+                                        }.into())
+                                    }
 								},
 								_ => {}
 							}
 						}
 					},
-					_ => return Err(String::from("Unsupported INSERT syntax").into())
+					_ => return Err(ZeroError::EncryptionError{
+                        message: format!("Unsupported INSERT syntax").into(),
+                        code: "1064".into()
+                    }.into())
 				}
 			}
 			//_ => return Err(format!("Unsupported rel {:?}", rel))
@@ -73,7 +81,7 @@ impl RelVisitor for EncryptVisitor  {
 		Ok(())
 	}
 
-	fn visit_rex(&mut self, rex: &Rex, tt: &TupleType) -> Result<(),  Box<Error>> {
+	fn visit_rex(&mut self, rex: &Rex, tt: &TupleType) -> Result<(),  Box<ZeroError>> {
 		match rex {
 			&Rex::BinaryExpr{box ref left, ref op, box ref right} => {
 				match op {
@@ -106,10 +114,16 @@ impl RelVisitor for EncryptVisitor  {
 												&LiteralExpr::LiteralString(ref i, ref val) => {
 													self.valuemap.insert(i.clone(), val.clone().encrypt(&element.encryption));
 												}
-												_ => return Err(format!("Unsupported value type {:?} for encryption", literal).into())
+												_ => return  Err(ZeroError::EncryptionError{
+                                                    message: format!("Unsupported value type {:?} for encryption", literal).into(),
+                                                    code: "1064".into()
+                                                }.into())
 											}
 										},
-										_ => return Err(format!("Operator {:?} not supported for encrypted column {}", op, element.name).into())
+										_ => return  Err(ZeroError::EncryptionError{
+                                            message: format!("Operator {:?} not supported for encrypted column {}", op, element.name).into(),
+                                            code: "1064".into()
+                                        }.into())
 									}
 								}
 							}
@@ -120,23 +134,27 @@ impl RelVisitor for EncryptVisitor  {
 						} {
 							// If there is a mismatch on an operation between two identifiers, return an error
 							if !(left_element.encryption == right_element.encryption && left_element.data_type == right_element.data_type) {
-								return Err(format!(
-									"Unsupported operation:  {}.{} [{:?}, {:?}] {:?} {}.{} [{:?}, {:?}]",
-									left_element.relation, left_element.name, left_element.encryption, left_element.data_type,
-									op,
-									right_element.relation, right_element.name, right_element.encryption, right_element.data_type
-								).into())
+								return Err(ZeroError::EncryptionError{
+                                    message: format!("Unsupported operation:  {}.{} [{:?}, {:?}] {:?} {}.{} [{:?}, {:?}]",
+                                                     left_element.relation, left_element.name, left_element.encryption, left_element.data_type,
+                                                     op,
+                                                     right_element.relation, right_element.name, right_element.encryption, right_element.data_type
+                                    ).into(),
+                                    code: "1064".into()
+                                }.into())
 							} else {
 								// If they do match, validate
 								if left_element.encryption != EncryptionType::NA {
 									match op {
 										&Operator::EQ => {}, // OK,
-										_ => return Err(format!(
-											"Unsupported operation:  {}.{} [{:?}, {:?}] {:?} {}.{} [{:?}, {:?}]",
-											left_element.relation, left_element.name, left_element.encryption, left_element.data_type,
-											op,
-											right_element.relation, right_element.name, right_element.encryption, right_element.data_type
-										).into())
+										_ =>return Err(ZeroError::EncryptionError{
+                                            message: format!("Unsupported operation:  {}.{} [{:?}, {:?}] {:?} {}.{} [{:?}, {:?}]",
+                                                             left_element.relation, left_element.name, left_element.encryption, left_element.data_type,
+                                                             op,
+                                                             right_element.relation, right_element.name, right_element.encryption, right_element.data_type
+                                            ).into(),
+                                            code: "1064".into()
+                                        }.into())
 									}
 								}
 							}
@@ -154,6 +172,7 @@ impl RelVisitor for EncryptVisitor  {
 mod tests {
 	use super::*;
 	use config;
+    use error::ZeroError;
 	use std::collections::HashMap;
 	use query::dialects::ansisql::*;
 	use query::dialects::mysqlsql::*;
@@ -169,7 +188,7 @@ mod tests {
 		let parsed = res.0;
 		let plan = res.1;
 
-		let value_map: HashMap<u32, Result<Vec<u8>, Box<Error>>> = HashMap::new();
+		let value_map: HashMap<u32, Result<Vec<u8>, Box<ZeroError>>> = HashMap::new();
 		let mut encrypt_vis = EncryptVisitor {
 			valuemap: value_map
 		};
@@ -196,7 +215,7 @@ mod tests {
 		let parsed = res.0;
 		let plan = res.1;
 
-		let value_map: HashMap<u32, Result<Vec<u8>, Box<Error>>> = HashMap::new();
+		let value_map: HashMap<u32, Result<Vec<u8>, Box<ZeroError>>> = HashMap::new();
 		let mut encrypt_vis = EncryptVisitor {
 			valuemap: value_map
 		};
@@ -225,7 +244,7 @@ mod tests {
  		let parsed = res.0;
  		let plan = res.1;
 
-		let value_map: HashMap<u32, Result<Vec<u8>, Box<Error>>> = HashMap::new();
+		let value_map: HashMap<u32, Result<Vec<u8>, Box<ZeroError>>> = HashMap::new();
 		let mut encrypt_vis = EncryptVisitor {
 			valuemap: value_map
 		};
@@ -253,12 +272,12 @@ mod tests {
 		 JOIN user_purchases AS r ON l.id = r.item_code");
 		let mut plan = parse_and_plan(sql).unwrap().1;
 
-		let value_map: HashMap<u32, Result<Vec<u8>, Box<Error>>> = HashMap::new();
+		let value_map: HashMap<u32, Result<Vec<u8>, Box<ZeroError>>> = HashMap::new();
 		let mut encrypt_vis = EncryptVisitor {
 			valuemap: value_map
 		};
 
-        assert_eq!(encrypt_vis.visit_rel(&plan).err().unwrap().description(), String::from("Unsupported operation:  l.id [NA, U64] EQ r.item_code [AES, U64]"));
+        assert_eq!(encrypt_vis.visit_rel(&plan).err().unwrap().to_string(), String::from("Unsupported operation:  l.id [NA, U64] EQ r.item_code [AES, U64]"));
 
         // two unencryped columns
 		sql = String::from("SELECT l.id, r.id, l.first_name, r.user_id
@@ -273,12 +292,12 @@ mod tests {
 		 FROM users AS l
 		 JOIN user_purchases AS r ON l.age > r.item_code");
 		plan = parse_and_plan(sql).unwrap().1;
-		assert_eq!(encrypt_vis.visit_rel(&plan).err().unwrap().description(), String::from("Unsupported operation:  l.age [AES, U64] GT r.item_code [AES, U64]"));
+		assert_eq!(encrypt_vis.visit_rel(&plan).err().unwrap().to_string(), String::from("Unsupported operation:  l.age [AES, U64] GT r.item_code [AES, U64]"));
 
 
 	}
 
-	fn parse_and_plan(sql: String) -> Result<(ASTNode, Rel), Box<Error>> {
+	fn parse_and_plan(sql: String) -> Result<(ASTNode, Rel), Box<ZeroError>> {
 		let config = config::parse_config("zero-config.xml");
 
 		let ansi = AnsiSQLDialect::new();

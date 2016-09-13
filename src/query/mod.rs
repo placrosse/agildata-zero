@@ -2,7 +2,7 @@ use std::iter::Peekable;
 use std::str::Chars;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::ascii::AsciiExt;
-
+use error::ZeroError;
 pub mod dialects;
 pub mod planner;
 
@@ -14,24 +14,24 @@ pub trait Dialect {
 
 	fn get_keywords(&self) -> Vec<&'static str>;
 
-	fn get_token(&self, chars: &mut Peekable<Chars>, keywords: &Vec<&'static str>) -> Result<Option<Token>, String>;
+	fn get_token(&self, chars: &mut Peekable<Chars>, keywords: &Vec<&'static str>) -> Result<Option<Token>, Box<ZeroError>>;
 
-	fn parse_prefix<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<Option<ASTNode>, String>;
+	fn parse_prefix<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<Option<ASTNode>, Box<ZeroError>>;
 
-	fn get_precedence<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<u8, String>;
+	fn get_precedence<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<u8, Box<ZeroError>>;
 
-	fn parse_infix<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>, left: ASTNode, precedence: u8) -> Result<Option<ASTNode>, String>;
+	fn parse_infix<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>, left: ASTNode, precedence: u8) -> Result<Option<ASTNode>, Box<ZeroError>>;
 
 	// fn plan();
 }
 
 // Tokenizer apis
 pub trait Tokenizer<D: Dialect> {
-	fn tokenize<'a>(&self, dialect: &'a D) -> Result<Tokens<'a, D>, String>;
+	fn tokenize<'a>(&self, dialect: &'a D) -> Result<Tokens<'a, D>, Box<ZeroError>>;
 }
 
 impl<D: Dialect> Tokenizer<D> for String {
-	fn tokenize<'a>(&self, dialect: &'a D) -> Result<Tokens<'a, D>, String> {
+	fn tokenize<'a>(&self, dialect: &'a D) -> Result<Tokens<'a, D>, Box<ZeroError>> {
 
 		let keywords = dialect.get_keywords();
 
@@ -40,7 +40,10 @@ impl<D: Dialect> Tokenizer<D> for String {
 		while let Some(&ch) = chars.peek() {
 			match dialect.get_token(&mut chars, &keywords)? {
 				Some(t) => tokens.push(t),
-				None => return Err(String::from(format!("No token dialect support for character {:?}", ch)))
+				None => return Err(ZeroError::DecryptionError{
+                    message: format!("No token dialect support for character {:?}", ch).into(),
+                    code: "1064".into()
+                }.into())
 			}
 		}
 
@@ -154,15 +157,15 @@ pub enum LiteralToken {
 }
 // Parser APIs
 pub trait Parser<D: Dialect> {
-	fn parse(&self) -> Result<ASTNode, String>;
-	fn parse_expr(&self, precedence: u8) -> Result<ASTNode, String>;
+	fn parse(&self) -> Result<ASTNode, Box<ZeroError>>;
+	fn parse_expr(&self, precedence: u8) -> Result<ASTNode, Box<ZeroError>>;
 }
 
 
 impl<'a, D: Dialect> Parser<D> for Tokens<'a, D> {
-	fn parse(&self) -> Result<ASTNode, String> { self.parse_expr(0) }
+	fn parse(&self) -> Result<ASTNode, Box<ZeroError>> { self.parse_expr(0) }
 
-	fn parse_expr(&self, precedence: u8) -> Result<ASTNode, String> {
+	fn parse_expr(&self, precedence: u8) -> Result<ASTNode, Box<ZeroError>> {
 		let mut expr = self.dialect.parse_prefix(self)?;
 		while let Some(_) = self.peek() {
 			let next_precedence = self.dialect.get_precedence(self)?;
@@ -337,7 +340,7 @@ pub enum MySQLTableOption {
 
 // Planner APIs
 pub trait Planner<D: Dialect> {
-	fn plan(&self, dialects: D, ast: ASTNode) -> Result<Option<RelNode>, String>;
+	fn plan(&self, dialects: D, ast: ASTNode) -> Result<Option<RelNode>, Box<ZeroError>>;
 }
 
 #[allow(dead_code)]
@@ -348,13 +351,13 @@ pub enum RelNode {
 
 // Writer apis
 pub trait Writer {
-    fn write(&self, node: &ASTNode) -> Result<String, String>;
-	fn _write(&self, builder: &mut String, node: &ASTNode) -> Result<(), String>;
+    fn write(&self, node: &ASTNode) -> Result<String, Box<ZeroError>>;
+	fn _write(&self, builder: &mut String, node: &ASTNode) -> Result<(), Box<ZeroError>>;
 }
 
 // returning true/false denotes whether this variant wrote the expression
 pub trait ExprWriter {
-    fn write(&self, writer: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, String>;
+    fn write(&self, writer: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, Box<ZeroError>>;
 }
 
 pub struct SQLWriter<'a> {
@@ -372,19 +375,22 @@ impl<'a> SQLWriter<'a> {
 }
 
 impl<'a> Writer for SQLWriter<'a> {
-    fn write(&self, node: &ASTNode) -> Result<String, String> {
+    fn write(&self, node: &ASTNode) -> Result<String, Box<ZeroError>> {
         let mut builder = String::new();
         self._write(&mut builder, node)?;
         Ok(builder)
     }
 
-    fn _write(&self, builder: &mut String, node: &ASTNode) -> Result<(), String> {
+    fn _write(&self, builder: &mut String, node: &ASTNode) -> Result<(), Box<ZeroError>> {
 		for v in self.variants.iter() {
 			if v.write(self, builder, node)? {
 				return Ok(())
 			}
 		}
-		Err(String::from(format!("No provided ExprWriter writes expr {:?}", node)))
+        Err(ZeroError::DecryptionError{
+            message: format!("No provided ExprWriter writes expr {:?}", node).into(),
+            code: "1064".into()
+        }.into())
     }
 }
 

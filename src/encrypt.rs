@@ -2,9 +2,8 @@ extern crate crypto;
 use self::crypto::aes::KeySize;
 use self::crypto::aes_gcm::AesGcm;
 use self::crypto::aead::{AeadEncryptor, AeadDecryptor};
-use std::error::Error;
 use std::iter::repeat;
-
+use error::ZeroError;
 use byteorder::{WriteBytesExt,ReadBytesExt,BigEndian};
 use std::io::Cursor;
 
@@ -25,17 +24,17 @@ pub enum NativeType {
 }
 
 pub trait Encrypt {
-	fn encrypt(self, scheme: &EncryptionType) -> Result<Vec<u8>, Box<Error>>;
+	fn encrypt(self, scheme: &EncryptionType) -> Result<Vec<u8>, Box<ZeroError>>;
 }
 
 pub trait Decrypt {
     type DecType;
-	fn decrypt(value: &[u8], scheme: &EncryptionType) -> Result<Self::DecType,  Box<Error>>;
+	fn decrypt(value: &[u8], scheme: &EncryptionType) -> Result<Self::DecType,  Box<ZeroError>>;
 }
 
 impl Decrypt for u64 {
     type DecType = u64;
-	fn decrypt(value: &[u8], scheme: &EncryptionType) ->  Result<u64,  Box<Error>> {
+	fn decrypt(value: &[u8], scheme: &EncryptionType) ->  Result<u64,  Box<ZeroError>> {
 		match scheme {
 			&EncryptionType::AES => {
 				let mut decrypted = try!(decrypt(&get_key(), value));
@@ -49,7 +48,7 @@ impl Decrypt for u64 {
 
 impl Decrypt for String {
     type DecType = String;
-	fn decrypt(value: &[u8], scheme: &EncryptionType) ->  Result<String,  Box<Error>>{
+	fn decrypt(value: &[u8], scheme: &EncryptionType) ->  Result<String,  Box<ZeroError>>{
         match scheme {
 			&EncryptionType::AES => {
 				let mut decrypted = try!(decrypt(&get_key(), value));
@@ -63,7 +62,7 @@ impl Decrypt for String {
 }
 
 impl Encrypt for u64 {
-	fn encrypt(self, scheme: &EncryptionType) -> Result<Vec<u8>, Box<Error>> {
+	fn encrypt(self, scheme: &EncryptionType) -> Result<Vec<u8>, Box<ZeroError>> {
 
 		match scheme {
 			&EncryptionType::AES => {
@@ -80,7 +79,7 @@ impl Encrypt for u64 {
 }
 
 impl Encrypt for String {
-	fn encrypt(self, scheme: &EncryptionType) -> Result<Vec<u8>, Box<Error>> {
+	fn encrypt(self, scheme: &EncryptionType) -> Result<Vec<u8>, Box<ZeroError>> {
 		match scheme {
 			&EncryptionType::AES => {
 				let buf = self.as_bytes();
@@ -119,7 +118,7 @@ fn get_key() -> [u8; 32] {
 	k
 }
 
-pub fn encrypt(key: &[u8], buf: &[u8]) -> Result<Vec<u8>, Box<Error>> {
+pub fn encrypt(key: &[u8], buf: &[u8]) -> Result<Vec<u8>, Box<ZeroError>> {
     // let key: [u8; 32] = KEYS[n0 as usize].lock().deref().clone();
     // debug!("encrypt: found key={:?} for n0={:?}", key, n0);
     // if key == [0u8; 32] { return None; }
@@ -140,10 +139,10 @@ pub fn encrypt(key: &[u8], buf: &[u8]) -> Result<Vec<u8>, Box<Error>> {
     Ok(bs)
 }
 
-pub fn decrypt(key: &[u8], buf: &[u8]) -> Result<Vec<u8>, Box<Error>> {
+pub fn decrypt(key: &[u8], buf: &[u8]) -> Result<Vec<u8>, Box<ZeroError>> {
     if buf.len() < 12 {
         println!("ERROR: Buffer Length too short, are you trying to decrypt non-encrypted data?");
-        return Err("Failed decrypting data".into());
+        return Err(ZeroError::DecryptionError{message: "Failed decrypting data".into(), code: "123".into()}.into())
     }
     let iv: &[u8] = &buf[0..12];
     let mut decipher = AesGcm::new(KeySize::KeySize256, &key, &iv, &[]);
@@ -154,7 +153,6 @@ pub fn decrypt(key: &[u8], buf: &[u8]) -> Result<Vec<u8>, Box<Error>> {
         println!("decrypt: inp={:?} out={:?}", inp, out);
         Ok(out)
     } else{
-
-        Err("Failed to Decrypt".into())
+        Err(ZeroError::DecryptionError{ message: "Failed decrypting data".into(), code: "123".into()}.into())
     }
 }
