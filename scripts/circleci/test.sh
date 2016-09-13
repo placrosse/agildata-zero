@@ -1,9 +1,11 @@
 #!/bin/bash
 #
-# Script for testing AgilData Zero with Jenkins
+# Script for testing AgilData Zero with CircleCI
 #
 # For the record, this script is very chatty.  This is so we can verify
 # each step of the way as the build runs.
+
+source /home/ubuntu/.cargo/env
 
 RUST_BUILD="nightly-2016-08-03"
 AGILDATA_TEST_DB="zero"
@@ -12,17 +14,29 @@ MYSQL_PASS="password123"
 
 TESTS=(test1 test2)
 
+# Set up the Rust version to be overridden to the required build.
+rustup override set $RUST_BUILD
+
+# Run a full test
+cargo test
+
 # Start server in the background, storing the PID of the app
 echo "Generated binaries:"
 ls -al target/debug
 echo
 
 # Launch AgilData Zero
+echo
+echo "Launching AgilData-Zero proxy..."
 target/debug/agildata-zero & 
+echo
+echo "Waiting for AgilData-Zero proxy to initialize."
+sleep 5
 AGILDATA_ZERO_PID=$!
+echo
 echo "AgilData Zero launched: Process ID=$AGILDATA_ZERO_PID"
 
-echo "Create database (if not exist): $AGILDATA_TEST_DB"
+echo "Create database (if not exist): $AGILDATA_TEST_DB via MySQL on 127.0.0.1 port 3306"
 mysql --host=127.0.0.1 --port=3306 -u$MYSQL_USER -p$MYSQL_PASS -e "CREATE DATABASE IF NOT EXISTS $AGILDATA_TEST_DB CHARACTER SET UTF8"
 
 # PS to make sure the process is running
@@ -36,7 +50,7 @@ echo
 for test_script in "${TESTS[@]}"
 do
   if [ -f "scripts/test/${test_script}.sql" ]; then
-    echo "Running test script: ${test_script}.sql"
+    echo "Running test script: ${test_script}.sql against MySQL on 127.0.0.1 port 3307"
     mysql --host=127.0.0.1 --port=3307 -u$MYSQL_USER -p$MYSQL_PASS -D $AGILDATA_TEST_DB < scripts/test/${test_script}.sql > scripts/test/${test_script}-output.sql
     echo "Comparing output from ${test_script}.sql against expected output."
     output=$(diff scripts/test/${test_script}-expected.sql scripts/test/${test_script}-output.sql)
@@ -46,7 +60,6 @@ do
       echo "--- DIFF OUTPUT: ---"
       echo "${output}"
       echo "--- END DIFF OUTPUT ---"
-      echo
       exit 2
     fi
   else
@@ -57,9 +70,11 @@ done
 echo
 
 # Drop Database
+echo
 echo "Dropping database: $AGILDATA_TEST_DB"
 mysql --host=127.0.0.1 --port=3306 -u$MYSQL_USER -p$MYSQL_PASS -e "DROP DATABASE $AGILDATA_TEST_DB"
 
 # Stop AgilData Zero
+echo
 echo "Stopping AgilData Zero: $AGILDATA_ZERO_PID"
 kill $AGILDATA_ZERO_PID
