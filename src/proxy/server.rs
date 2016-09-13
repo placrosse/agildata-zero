@@ -370,13 +370,13 @@ impl ZeroHandler {
             packet.extend_from_slice(slice);
 
             match plan {
-                None => Action::Forward,
+                None => {},
                 Some(p) => {
                     self.tt = Some(p.tt().clone()); //TODO: don't clone
-                    Action::Mutate(Packet { bytes: packet })
                 }
             }
 
+           Action::Mutate(Packet { bytes: packet })
         } else {
             Action::Forward
         };
