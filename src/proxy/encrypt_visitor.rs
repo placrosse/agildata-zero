@@ -317,7 +317,7 @@ mod tests {
 
 	struct DummyProvider {}
     impl SchemaProvider for DummyProvider {
-        fn get_table_meta(&self, schema: &String, table: &String) -> Result<Option<Rc<TableMeta>>, Box<Error>> {
+        fn get_table_meta(&self, schema: &String, table: &String) -> Result<Option<Rc<TableMeta>>, Box<ZeroError>> {
 
             let rc = match (schema as &str, table as &str) {
                 ("zero", "users") => {

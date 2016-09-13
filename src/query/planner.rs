@@ -7,7 +7,7 @@ use error::ZeroError;
 use std::rc::Rc;
 
 pub trait SchemaProvider {
-    fn get_table_meta(&self, schema: &String, table: &String) -> Result<Option<Rc<TableMeta>>, Box<Error>>;
+    fn get_table_meta(&self, schema: &String, table: &String) -> Result<Option<Rc<TableMeta>>, Box<ZeroError>>;
 }
 
 #[derive(Debug, Clone)]
@@ -22,7 +22,7 @@ pub struct ColumnMeta {
     pub encryption: EncryptionType,
     pub key: [u8; 32],
 }
->>>>>>> develop
+
 
 #[derive(Debug, Clone)]
 pub struct TupleType {
@@ -250,7 +250,7 @@ impl<'a> Planner<'a> {
                     // Neither relation we control
                     (None, None) => Ok(None),
                     // Mismatch
-                    (Some(_), None) | (None, Some(e)) => {
+                    (Some(_), None) | (None, Some(_)) => {
                         Err(ZeroError::ParseError {
                             message: format!("Unsupported: Mismatch join between encrypted and unencrypted relations").into(),
                             code: "1064".into()
@@ -311,7 +311,10 @@ impl<'a> Planner<'a> {
                         );
                         Ok(Some(Rel::TableScan { table: table_name.clone(), tt: tt }))
                     },
-                    None => Err(format!("Invalid table {}.{}", table_schema.unwrap(), table_name).into())
+                    None =>  Err(ZeroError::ParseError {
+                        message: format!("Invalid table {}.{}", table_schema.unwrap(), table_name).into(),
+                        code: "1064".into()
+                    }.into())
                 }
 
             },
@@ -358,7 +361,7 @@ mod tests {
     use encrypt::{NativeType, EncryptionType};
     use std::rc::Rc;
     use super::{Planner, SchemaProvider, TableMeta, ColumnMeta};
-
+    use error::ZeroError;
     #[test]
     fn plan_simple() {
         let provider = DummyProvider{};
@@ -439,7 +442,7 @@ mod tests {
 
     struct DummyProvider {}
     impl SchemaProvider for DummyProvider {
-        fn get_table_meta(&self, schema: &String, table: &String) -> Result<Option<Rc<TableMeta>>, Box<Error>> {
+        fn get_table_meta(&self, schema: &String, table: &String) -> Result<Option<Rc<TableMeta>>, Box<ZeroError>> {
 
             let rc = match (schema as &str, table as &str) {
                 ("zero", "users") => {

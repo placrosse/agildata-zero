@@ -122,7 +122,7 @@ pub fn hex_key(hex: &str) -> [u8; 32] {
 }
 
 
-pub fn encrypt(key: &[u8], buf: &[u8]) -> Result<Vec<u8>, Box<Error>> {
+pub fn encrypt(key: &[u8], buf: &[u8]) -> Result<Vec<u8>, Box<ZeroError>> {
     let nonce = [0_u8;12];
     let mut cipher = AesGcm::new(KeySize::KeySize256, key, &nonce, &[]);
 
