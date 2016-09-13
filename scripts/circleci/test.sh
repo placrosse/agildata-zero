@@ -41,6 +41,7 @@ mysql --host=127.0.0.1 --port=3306 -u$MYSQL_USER -p$MYSQL_PASS -e "CREATE DATABA
 
 # PS to make sure the process is running
 ps -aux | grep $AGILDATA_ZERO_PID | grep -v grep
+sleep 5
 
 # Clear out previous run results
 rm -f scripts/test/test*-output.sql
