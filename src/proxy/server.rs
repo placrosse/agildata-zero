@@ -95,7 +95,8 @@ impl Proxy {
             Ok(())
 
         });
-        l.run(done).unwrap();    }
+        l.run(done).unwrap();
+    }
 }
 
 #[derive(PartialEq, Debug)]
