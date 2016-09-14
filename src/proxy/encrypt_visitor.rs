@@ -39,6 +39,20 @@ impl RelVisitor for EncryptVisitor  {
 			},
 			&Rel::AliasedRel{box ref input, ..} => self.visit_rel(input)?,
 			&Rel::Dual{..} => {},
+			&Rel::Update{ref table, box ref set_stmts, ref selection, ref tt} => {
+				match set_stmts {
+					&Rex::RexExprList(ref list) => {
+						for e in list.iter() {
+							self.visit_rex(e, tt);
+						}
+					},
+					_ => {}
+				}
+				match selection {
+					&Some(box ref s) => self.visit_rex(s, tt)?,
+					&None => {}
+				}
+			},
 			&Rel::Insert{ref table, box ref columns, box ref values, ..} => {
 				match (columns, values) {
 					(&Rex::RexExprList(ref c_list), &Rex::RexExprList(ref v_list)) => {
@@ -211,6 +225,34 @@ mod tests {
 		assert_eq!(rewritten, String::from("SELECT id, first_name, last_name, ssn, age, sex FROM users WHERE first_name =X'00000000000000000000000088D52F592281137DB2A0D5F0B3BD40CF004D3AA9F7'"));
 	}
 
+	#[test]
+	fn test_relvis_update() {
+
+		let sql = String::from("UPDATE users SET id = id + 100, first_name = 'NewName' WHERE id = 1 AND first_name = 'Janis'");
+		let res = parse_and_plan(sql).unwrap();
+		let parsed = res.0;
+		let plan = res.1;
+
+        let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
+		let mut encrypt_vis = EncryptVisitor {
+			valuemap: value_map
+		};
+
+		encrypt_vis.visit_rel(&plan).unwrap();
+
+		let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
+		let ansi_writer = AnsiSQLWriter{};
+
+		let writer = SQLWriter::new(vec![&lit_writer, &ansi_writer]);
+
+		let rewritten = writer.write(&parsed).unwrap();
+
+		println!("Rewritten: {}", rewritten);
+
+		assert_eq!(rewritten, String::from("UPDATE users SET id = id + 100, first_name =X'00000000000000000000000080C237732C0D0E242F25422B940C09AA57634E05CD5C1D' WHERE id = 1 AND first_name =X'00000000000000000000000084C62E543E13A88D09B8993F104387DEBDCC1C41DB'"));
+
+	}
+	
 	#[test]
 	fn test_relvis_insert() {
 
