@@ -7,6 +7,8 @@ use error::ZeroError;
 use byteorder::{WriteBytesExt,ReadBytesExt,BigEndian};
 use std::io::Cursor;
 
+use decimal::d128;
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum EncryptionType {
 	AES,
@@ -90,6 +92,26 @@ impl Decrypt for f64 {
 			&EncryptionType::AES => {
 				let decrypted = decrypt(key, value)?;
 				Ok(Cursor::new(decrypted).read_f64::<BigEndian>().unwrap())
+			},
+			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
+		}
+	}
+}
+
+impl Decrypt for d128 {
+	type DecType = d128;
+
+	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<d128, Box<ZeroError>> {
+		match scheme {
+			&EncryptionType::AES => {
+				let decrypted = decrypt(key, value)?;
+
+				let hex_str = decrypted.iter().rev()
+					.map(|b| format!("{:02x}", b))
+					.collect::<Vec<String>>()
+					.connect("");
+
+				Ok(d128::from_hex(&hex_str))
 			},
 			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
 		}
@@ -181,6 +203,44 @@ impl Encrypt for f64 {
 	}
 }
 
+use std::str::from_utf8_unchecked;
+
+impl Encrypt for d128 {
+
+
+	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<ZeroError>> {
+		match scheme {
+			&EncryptionType::AES => {
+
+				// decimal does not expose underlying bytes.
+				// get hex string, convert to bytes and encrypt
+				let hex = format!("{:x}", self);
+
+				unsafe {
+					let mut bytes: Vec<u8> = Vec::new();
+					for (i, octet) in hex.as_bytes().chunks(2).rev().enumerate() {
+						bytes.push( match u8::from_str_radix(from_utf8_unchecked(octet), 16) {
+							Ok(b) => b,
+							Err(e) => return Err(
+								ZeroError::EncryptionError{
+									message: format!("Failed to encrypt {} due to : {}", self, e),
+									code: "123".into()
+								}.into()
+							)
+						})
+					}
+
+					encrypt(key, &bytes)
+				}
+
+			},
+			_ => Err(ZeroError::EncryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
+
+		}
+
+	}
+}
+
 impl Encrypt for String {
 	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<ZeroError>> {
 		match scheme {
@@ -261,6 +321,7 @@ mod test {
 	use super::*;
 	use chrono::*;
 
+	use decimal::*;
 	use std::str::FromStr;
 
 	#[test]
@@ -373,19 +434,17 @@ mod test {
 
 	#[test]
 	fn test_encrypt_decimal() {
-		// Simulate parse from string and return from string
-		// encrypt as f64
 		let src_string = String::from("10.2345");
-		let value = f64::from_str("10.2345").unwrap();
+		let value = d128::from_str(&src_string).unwrap();
 		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
 		let enc = EncryptionType::AES;
 
 		let encrypted = value.encrypt(&enc, &key).unwrap();
-		let decrypted = f64::decrypt(&encrypted, &enc, &key).unwrap();
-
+		let decrypted = d128::decrypt(&encrypted, &enc, &key).unwrap();
 
 		assert_eq!(decrypted, value);
-		assert_eq!(src_string, value.to_string());
+		assert_eq!(decrypted.to_string(), src_string);
+
 	}
 
 }
