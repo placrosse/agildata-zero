@@ -61,105 +61,6 @@ impl Decrypt for bool {
 	}
 }
 
-impl Decrypt for u64 {
-    type DecType = u64;
-
-	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<u64, Box<ZeroError>> {
-		match scheme {
-			&EncryptionType::AES => {
-				let decrypted = decrypt(key, value)?;
-                Ok(Cursor::new(decrypted).read_u64::<BigEndian>().unwrap())
-			},
-			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
-		}
-	}
-}
-
-impl Decrypt for i64 {
-	type DecType = i64;
-
-	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<i64, Box<ZeroError>> {
-		match scheme {
-			&EncryptionType::AES => {
-				let decrypted = decrypt(key, value)?;
-				Ok(Cursor::new(decrypted).read_i64::<BigEndian>().unwrap())
-			},
-			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
-		}
-	}
-}
-
-impl Decrypt for f64 {
-	type DecType = f64;
-
-	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<f64, Box<ZeroError>> {
-		match scheme {
-			&EncryptionType::AES => {
-				let decrypted = decrypt(key, value)?;
-				Ok(Cursor::new(decrypted).read_f64::<BigEndian>().unwrap())
-			},
-			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
-		}
-	}
-}
-
-impl Decrypt for d128 {
-	type DecType = d128;
-
-	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<d128, Box<ZeroError>> {
-		match scheme {
-			&EncryptionType::AES => {
-				let decrypted = decrypt(key, value)?;
-
-				let hex_str = decrypted.iter().rev()
-					.map(|b| format!("{:02x}", b))
-					.collect::<Vec<String>>()
-					.connect("");
-
-				Ok(d128::from_hex(&hex_str))
-			},
-			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
-		}
-	}
-}
-
-impl Decrypt for String {
-    type DecType = String;
-
-	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<String, Box<ZeroError>>{
-        match scheme {
-			&EncryptionType::AES => {
-				let decrypted = decrypt(key, value)?;
-				Ok(String::from_utf8(decrypted).expect("Invalid UTF-8"))
-
-			},
-			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
-		}
-	}
-}
-
-impl Decrypt for DateTime<UTC> {
-	type DecType = DateTime<UTC>;
-
-	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<DateTime<UTC>, Box<ZeroError>>{
-		match scheme {
-			&EncryptionType::AES => {
-
-				let decrypted = decrypt(key, value)?;
-				let mut curs = Cursor::new(decrypted);
-
-				let timestamp = curs.read_i64::<BigEndian>().unwrap();
-				let fsp = curs.read_u32::<BigEndian>().unwrap();
-
-//				let decrypted = i64::decrypt(value, scheme, key).unwrap();
-				Ok(UTC.timestamp(timestamp, fsp))
-
-			},
-			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
-		}
-	}
-}
-
 impl Encrypt for bool {
 
 	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<ZeroError>> {
@@ -177,6 +78,20 @@ impl Encrypt for bool {
 	}
 }
 
+impl Decrypt for u64 {
+    type DecType = u64;
+
+	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<u64, Box<ZeroError>> {
+		match scheme {
+			&EncryptionType::AES => {
+				let decrypted = decrypt(key, value)?;
+                Ok(Cursor::new(decrypted).read_u64::<BigEndian>().unwrap())
+			},
+			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
+		}
+	}
+}
+
 impl Encrypt for u64 {
 
 	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<ZeroError>> {
@@ -191,6 +106,20 @@ impl Encrypt for u64 {
 			_ => Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
 		}
 
+	}
+}
+
+impl Decrypt for i64 {
+	type DecType = i64;
+
+	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<i64, Box<ZeroError>> {
+		match scheme {
+			&EncryptionType::AES => {
+				let decrypted = decrypt(key, value)?;
+				Ok(Cursor::new(decrypted).read_i64::<BigEndian>().unwrap())
+			},
+			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
+		}
 	}
 }
 
@@ -213,6 +142,20 @@ impl Encrypt for i64 {
 	}
 }
 
+impl Decrypt for f64 {
+	type DecType = f64;
+
+	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<f64, Box<ZeroError>> {
+		match scheme {
+			&EncryptionType::AES => {
+				let decrypted = decrypt(key, value)?;
+				Ok(Cursor::new(decrypted).read_f64::<BigEndian>().unwrap())
+			},
+			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
+		}
+	}
+}
+
 impl Encrypt for f64 {
 
 	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<ZeroError>> {
@@ -231,24 +174,23 @@ impl Encrypt for f64 {
 	}
 }
 
-impl<Tz: TimeZone> Encrypt for DateTime<Tz> {
+impl Decrypt for d128 {
+	type DecType = d128;
 
-	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<ZeroError>> {
-
+	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<d128, Box<ZeroError>> {
 		match scheme {
 			&EncryptionType::AES => {
+				let decrypted = decrypt(key, value)?;
 
-				let mut buf: Vec<u8> = Vec::new();
-				buf.write_i64::<BigEndian>(self.timestamp()).unwrap();
-				buf.write_u32::<BigEndian>(self.timestamp_subsec_nanos()).unwrap();
+				let hex_str = decrypted.iter().rev()
+					.map(|b| format!("{:02x}", b))
+					.collect::<Vec<String>>()
+					.connect("");
 
-				encrypt(key, &buf)
-
+				Ok(d128::from_hex(&hex_str))
 			},
-			_ => Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
-
+			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
 		}
-
 	}
 }
 
@@ -288,6 +230,21 @@ impl Encrypt for d128 {
 	}
 }
 
+impl Decrypt for String {
+    type DecType = String;
+
+	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<String, Box<ZeroError>>{
+        match scheme {
+			&EncryptionType::AES => {
+				let decrypted = decrypt(key, value)?;
+				Ok(String::from_utf8(decrypted).expect("Invalid UTF-8"))
+
+			},
+			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
+		}
+	}
+}
+
 impl Encrypt for String {
 	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<ZeroError>> {
 		match scheme {
@@ -301,6 +258,51 @@ impl Encrypt for String {
 			_ => Err(ZeroError::EncryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
 
 		}
+	}
+}
+
+impl Decrypt for DateTime<UTC> {
+	type DecType = DateTime<UTC>;
+
+	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<DateTime<UTC>, Box<ZeroError>>{
+		match scheme {
+			&EncryptionType::AES => {
+
+				let decrypted = decrypt(key, value)?;
+				let mut curs = Cursor::new(decrypted);
+
+				let timestamp = curs.read_i64::<BigEndian>().unwrap();
+
+				// fractional seconds stored alongside timestamp
+				let fs = curs.read_u32::<BigEndian>().unwrap();
+
+				Ok(UTC.timestamp(timestamp, fs))
+
+			},
+			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
+		}
+	}
+}
+
+impl<Tz: TimeZone> Encrypt for DateTime<Tz> {
+
+	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<ZeroError>> {
+
+		match scheme {
+			&EncryptionType::AES => {
+
+				let mut buf: Vec<u8> = Vec::new();
+				// sgtore fractional seconds alongside timestamp
+				buf.write_i64::<BigEndian>(self.timestamp()).unwrap();
+				buf.write_u32::<BigEndian>(self.timestamp_subsec_nanos()).unwrap();
+
+				encrypt(key, &buf)
+
+			},
+			_ => Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
+
+		}
+
 	}
 }
 
