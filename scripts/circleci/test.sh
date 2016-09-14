@@ -7,7 +7,7 @@
 
 source /home/ubuntu/.cargo/env
 
-RUST_BUILD="nightly-2016-08-03"
+RUST_BUILD="nightly-2016-09-12"
 AGILDATA_TEST_DB="zero"
 MYSQL_USER="agiluser"
 MYSQL_PASS="password123"
