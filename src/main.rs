@@ -21,6 +21,11 @@ extern crate bytes;
 
 extern crate mysql;
 
+extern crate chrono;
+
+#[macro_use]
+extern crate decimal;
+
 use std::env;
 use std::str;
 use std::rc::Rc;
