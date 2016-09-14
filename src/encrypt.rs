@@ -33,6 +33,25 @@ pub trait Decrypt {
 	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<Self::DecType, Box<ZeroError>>;
 }
 
+impl Decrypt for bool {
+	type DecType = bool;
+
+	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<bool, Box<ZeroError>> {
+		match scheme {
+			&EncryptionType::AES => {
+				let decrypted = decrypt(key, value)?;
+				match Cursor::new(decrypted).read_u8().unwrap() {
+					0 => Ok(false),
+					1 => Ok(true),
+					e => Err(ZeroError::DecryptionError{message: format!("Cannot decrypt u8 {} to boolean", e), code: "123".into()}.into())
+				}
+			},
+			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
+			_ => panic!("Not implemented")
+		}
+	}
+}
+
 impl Decrypt for u64 {
     type DecType = u64;
 
@@ -91,6 +110,24 @@ impl Decrypt for String {
 			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
 			_ => panic!("Not implemented")
 		}
+	}
+}
+
+impl Encrypt for bool {
+
+	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<ZeroError>> {
+
+		match scheme {
+			&EncryptionType::AES => {
+				let mut buf: Vec<u8> = Vec::new();
+				buf.write_u8(self as u8).unwrap();
+
+				encrypt(key, &buf)
+			},
+			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
+			_ => panic!("Not implemented")
+		}
+
 	}
 }
 
@@ -242,6 +279,18 @@ mod test {
 	}
 
 	#[test]
+	fn test_encrypt_i64() {
+		let value = -12345_i64;
+		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
+		let enc = EncryptionType::AES;
+		let encrypted = value.encrypt(&enc, &key).unwrap();
+
+		let decrypted = i64::decrypt(&encrypted, &enc, &key).unwrap();
+
+		assert_eq!(decrypted, value);
+	}
+
+	#[test]
 	fn test_encrypt_string() {
 		let value = String::from("Ima a sensitive string...");
 		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
@@ -278,5 +327,15 @@ mod test {
 		assert_eq!(decrypted, unix);
 	}
 
+	#[test]
+	fn test_encrypt_bool() {
+		let value = true;
+		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
+		let enc = EncryptionType::AES;
+
+		let encrypted = value.encrypt(&enc, &key).unwrap();
+		let decrypted = bool::decrypt(&encrypted, &enc, &key).unwrap();
+		assert_eq!(decrypted as bool, value as bool);
+	}
 
 }
