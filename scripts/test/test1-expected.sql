@@ -12,4 +12,4 @@ id	first_name	last_name	ssn	age	sex
 id	first_name	last_name	ssn	age	sex
 5	Barry	Kripke	123452789	34	M
 id	first_name	last_name	ssn	age	sex
-101	Kurt	Cobain	123456789	27	M
+101	Janis	Cobain	123456789	27	M
