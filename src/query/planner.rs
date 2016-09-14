@@ -113,7 +113,7 @@ impl<'a> Planner<'a> {
         match sql {
             &ASTNode::SQLExprList(ref v) => Ok(Rex::RexExprList(v.iter()
                 .map(|x| self.sql_to_rex(&x, tt))
-                .collect()?)),
+                .collect::<Result<Vec<Rex>, Box<ZeroError>>>()?)),
             &ASTNode::SQLIdentifier { ref id, ref parts } => {
                 let (relation, name) = match parts.len() {
                     0 => return  Err(ZeroError::ParseError{
