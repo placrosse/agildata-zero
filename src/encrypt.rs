@@ -46,8 +46,7 @@ impl Decrypt for bool {
 					e => Err(ZeroError::DecryptionError{message: format!("Cannot decrypt u8 {} to boolean", e), code: "123".into()}.into())
 				}
 			},
-			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
-			_ => panic!("Not implemented")
+			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
 		}
 	}
 }
@@ -61,8 +60,7 @@ impl Decrypt for u64 {
 				let decrypted = decrypt(key, value)?;
                 Ok(Cursor::new(decrypted).read_u64::<BigEndian>().unwrap())
 			},
-			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
-			_ => panic!("Not implemented")
+			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
 		}
 	}
 }
@@ -76,8 +74,7 @@ impl Decrypt for i64 {
 				let decrypted = decrypt(key, value)?;
 				Ok(Cursor::new(decrypted).read_i64::<BigEndian>().unwrap())
 			},
-			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
-			_ => panic!("Not implemented")
+			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
 		}
 	}
 }
@@ -91,8 +88,7 @@ impl Decrypt for f64 {
 				let decrypted = decrypt(key, value)?;
 				Ok(Cursor::new(decrypted).read_f64::<BigEndian>().unwrap())
 			},
-			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
-			_ => panic!("Not implemented")
+			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
 		}
 	}
 }
@@ -107,8 +103,7 @@ impl Decrypt for String {
 				Ok(String::from_utf8(decrypted).expect("Invalid UTF-8"))
 
 			},
-			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
-			_ => panic!("Not implemented")
+			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
 		}
 	}
 }
@@ -124,8 +119,7 @@ impl Encrypt for bool {
 
 				encrypt(key, &buf)
 			},
-			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
-			_ => panic!("Not implemented")
+			_ => Err(ZeroError::EncryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
 		}
 
 	}
@@ -142,8 +136,7 @@ impl Encrypt for u64 {
 
 				encrypt(key, &buf)
 			},
-			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
-			_ => panic!("Not implemented")
+			_ => Err(ZeroError::EncryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
 		}
 
 	}
@@ -160,8 +153,8 @@ impl Encrypt for i64 {
 
 				encrypt(key, &buf)
 			},
-			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
-			_ => panic!("Not implemented")
+			_ => Err(ZeroError::EncryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
+
 		}
 
 	}
@@ -178,8 +171,8 @@ impl Encrypt for f64 {
 
 				encrypt(key, &buf)
 			},
-			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
-			_ => panic!("Not implemented")
+			_ => Err(ZeroError::EncryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
+
 		}
 
 	}
@@ -195,8 +188,8 @@ impl Encrypt for String {
 				println!("Encrypted length = {}", e.len());
 				Ok(e)
 			},
-			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
-			_ => panic!("Not implemented")
+			_ => Err(ZeroError::EncryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
+
 		}
 	}
 }
