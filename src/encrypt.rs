@@ -143,8 +143,15 @@ impl Decrypt for DateTime<UTC> {
 	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<DateTime<UTC>, Box<ZeroError>>{
 		match scheme {
 			&EncryptionType::AES => {
-				let decrypted = i64::decrypt(value, scheme, key).unwrap();
-				Ok(UTC.timestamp(decrypted, 0))
+
+				let decrypted = decrypt(key, value)?;
+				let mut curs = Cursor::new(decrypted);
+
+				let timestamp = curs.read_i64::<BigEndian>().unwrap();
+				let fsp = curs.read_u32::<BigEndian>().unwrap();
+
+//				let decrypted = i64::decrypt(value, scheme, key).unwrap();
+				Ok(UTC.timestamp(timestamp, fsp))
 
 			},
 			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
@@ -192,6 +199,7 @@ impl Encrypt for i64 {
 
 		match scheme {
 			&EncryptionType::AES => {
+
 				let mut buf: Vec<u8> = Vec::new();
 				buf.write_i64::<BigEndian>(self).unwrap();
 
@@ -229,14 +237,11 @@ impl<Tz: TimeZone> Encrypt for DateTime<Tz> {
 		match scheme {
 			&EncryptionType::AES => {
 
-				if self.timestamp_subsec_millis() > 0 {
-					return Err(ZeroError::EncryptionError{
-						message: "Fractional seconds not supported".into(),
-						code: "123".into()
-					}.into())
-				}
+				let mut buf: Vec<u8> = Vec::new();
+				buf.write_i64::<BigEndian>(self.timestamp()).unwrap();
+				buf.write_u32::<BigEndian>(self.timestamp_subsec_nanos()).unwrap();
 
-				self.timestamp().encrypt(scheme, key)
+				encrypt(key, &buf)
 
 			},
 			_ => Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
@@ -429,21 +434,21 @@ mod test {
 		assert_eq!(rewritten, value);
 	}
 
-//	#[test]
-//	fn test_encrypt_datetime_fsp() {
-//		let value = String::from("2014-11-28 21:00:09.778");
-//		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
-//		let enc = EncryptionType::AES;
-//		let unix = UTC.datetime_from_str(&value, "%Y-%m-%d %H:%M:%S%.f").unwrap().timestamp();
-//
-//		let encrypted = unix.encrypt(&enc, &key).unwrap();
-//		let decrypted = i64::decrypt(&encrypted, &enc, &key).unwrap();
-//		assert_eq!(decrypted, unix);
-//
-//		let rewritten = NaiveDateTime::from_timestamp(decrypted, 0).format("%Y-%m-%d %H:%M:%S%.f").to_string();
-//
-//		assert_eq!(rewritten, value);
-//	}
+	#[test]
+	fn test_encrypt_datetime_fsp() {
+		let value = String::from("2014-11-28 21:00:09.778");
+		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
+		let enc = EncryptionType::AES;
+		let datetime = UTC.datetime_from_str(&value, "%Y-%m-%d %H:%M:%S%.f").unwrap();
+
+		let encrypted = datetime.encrypt(&enc, &key).unwrap();
+		let decrypted = DateTime::decrypt(&encrypted, &enc, &key).unwrap();
+		assert_eq!(decrypted, datetime);
+
+		let rewritten = decrypted.format("%Y-%m-%d %H:%M:%S%.3f").to_string();
+
+		assert_eq!(rewritten, value);
+	}
 
 	#[test]
 	fn test_encrypt_date() {
