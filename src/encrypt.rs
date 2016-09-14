@@ -17,8 +17,11 @@ pub enum EncryptionType {
 #[derive(Debug, PartialEq, Clone)]
 pub enum NativeType {
 	U64,
+	I64,
 	Varchar(u32),
 	F64,
+	BOOL,
+	DATETIME,
 }
 
 pub trait Encrypt {
@@ -258,6 +261,7 @@ mod test {
 	use super::*;
 	use chrono::*;
 
+	use std::str::FromStr;
 
 	#[test]
 	fn test_encrypt_u64() {
@@ -313,11 +317,47 @@ mod test {
 		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
 		let enc = EncryptionType::AES;
 		let unix = UTC.datetime_from_str(&value, "%Y-%m-%d %H:%M:%S").unwrap().timestamp();
-//		let unix = DateTime::parse_from_str(&value, "%Y-%m-%d %H:%M:%S %z").unwrap();
 
 		let encrypted = unix.encrypt(&enc, &key).unwrap();
 		let decrypted = i64::decrypt(&encrypted, &enc, &key).unwrap();
 		assert_eq!(decrypted, unix);
+
+		let rewritten = NaiveDateTime::from_timestamp(decrypted, 0).format("%Y-%m-%d %H:%M:%S").to_string();
+
+		assert_eq!(rewritten, value);
+	}
+
+//	#[test]
+//	fn test_encrypt_datetime_fsp() {
+//		let value = String::from("2014-11-28 21:00:09.778");
+//		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
+//		let enc = EncryptionType::AES;
+//		let unix = UTC.datetime_from_str(&value, "%Y-%m-%d %H:%M:%S").unwrap().timestamp();
+//
+//		let encrypted = unix.encrypt(&enc, &key).unwrap();
+//		let decrypted = i64::decrypt(&encrypted, &enc, &key).unwrap();
+//		assert_eq!(decrypted, unix);
+//
+//		let rewritten = NaiveDateTime::from_timestamp(decrypted, 0).format("%Y-%m-%d %H:%M:%S").to_string();
+//
+//		assert_eq!(rewritten, value);
+//	}
+
+	#[test]
+	fn test_encrypt_date() {
+		let value = String::from("2014-11-28");
+		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
+		let enc = EncryptionType::AES;
+		let unix = UTC.datetime_from_str(&format!("{} 00:00:00",&value), "%Y-%m-%d %H:%M:%S").unwrap().timestamp();
+
+		let encrypted = unix.encrypt(&enc, &key).unwrap();
+		let decrypted = i64::decrypt(&encrypted, &enc, &key).unwrap();
+
+		assert_eq!(decrypted, unix);
+
+		let rewritten = NaiveDateTime::from_timestamp(decrypted, 0).date().format("%Y-%m-%d").to_string();
+
+		assert_eq!(rewritten, value);
 	}
 
 	#[test]
@@ -328,7 +368,24 @@ mod test {
 
 		let encrypted = value.encrypt(&enc, &key).unwrap();
 		let decrypted = bool::decrypt(&encrypted, &enc, &key).unwrap();
-		assert_eq!(decrypted as bool, value as bool);
+		assert_eq!(decrypted, value);
+	}
+
+	#[test]
+	fn test_encrypt_decimal() {
+		// Simulate parse from string and return from string
+		// encrypt as f64
+		let src_string = String::from("10.2345");
+		let value = f64::from_str("10.2345").unwrap();
+		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
+		let enc = EncryptionType::AES;
+
+		let encrypted = value.encrypt(&enc, &key).unwrap();
+		let decrypted = f64::decrypt(&encrypted, &enc, &key).unwrap();
+
+
+		assert_eq!(decrypted, value);
+		assert_eq!(src_string, value.to_string());
 	}
 
 }
