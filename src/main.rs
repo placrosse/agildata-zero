@@ -21,6 +21,8 @@ extern crate bytes;
 
 extern crate mysql;
 
+extern crate chrono;
+
 use std::env;
 use std::str;
 use std::rc::Rc;

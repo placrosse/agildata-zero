@@ -48,6 +48,21 @@ impl Decrypt for u64 {
 	}
 }
 
+impl Decrypt for i64 {
+	type DecType = i64;
+
+	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<i64, Box<ZeroError>> {
+		match scheme {
+			&EncryptionType::AES => {
+				let decrypted = decrypt(key, value)?;
+				Ok(Cursor::new(decrypted).read_i64::<BigEndian>().unwrap())
+			},
+			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
+			_ => panic!("Not implemented")
+		}
+	}
+}
+
 impl Decrypt for f64 {
 	type DecType = f64;
 
@@ -87,6 +102,24 @@ impl Encrypt for u64 {
 			&EncryptionType::AES => {
 				let mut buf: Vec<u8> = Vec::new();
 				buf.write_u64::<BigEndian>(self).unwrap();
+
+				encrypt(key, &buf)
+			},
+			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
+			_ => panic!("Not implemented")
+		}
+
+	}
+}
+
+impl Encrypt for i64 {
+
+	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<ZeroError>> {
+
+		match scheme {
+			&EncryptionType::AES => {
+				let mut buf: Vec<u8> = Vec::new();
+				buf.write_i64::<BigEndian>(self).unwrap();
 
 				encrypt(key, &buf)
 			},
@@ -193,6 +226,8 @@ pub fn decrypt(key: &[u8], buf: &[u8]) -> Result<Vec<u8>, Box<ZeroError>> {
 mod test {
 
 	use super::*;
+	use chrono::*;
+
 
 	#[test]
 	fn test_encrypt_u64() {
@@ -229,5 +264,19 @@ mod test {
 
 		assert_eq!(decrypted, value);
 	}
+
+	#[test]
+	fn test_encrypt_datetime() {
+		let value = String::from("2014-11-28 21:00:09");
+		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
+		let enc = EncryptionType::AES;
+		let unix = UTC.datetime_from_str(&value, "%Y-%m-%d %H:%M:%S").unwrap().timestamp();
+//		let unix = DateTime::parse_from_str(&value, "%Y-%m-%d %H:%M:%S %z").unwrap();
+
+		let encrypted = unix.encrypt(&enc, &key).unwrap();
+		let decrypted = i64::decrypt(&encrypted, &enc, &key).unwrap();
+		assert_eq!(decrypted, unix);
+	}
+
 
 }
