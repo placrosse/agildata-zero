@@ -7,7 +7,11 @@ use error::ZeroError;
 use byteorder::{WriteBytesExt,ReadBytesExt,BigEndian};
 use std::io::Cursor;
 
+use chrono::{DateTime, TimeZone, NaiveDateTime};
+use chrono::offset::utc::UTC;
+
 use decimal::d128;
+use std::str::from_utf8_unchecked;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum EncryptionType {
@@ -133,6 +137,21 @@ impl Decrypt for String {
 	}
 }
 
+impl Decrypt for DateTime<UTC> {
+	type DecType = DateTime<UTC>;
+
+	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<DateTime<UTC>, Box<ZeroError>>{
+		match scheme {
+			&EncryptionType::AES => {
+				let decrypted = i64::decrypt(value, scheme, key).unwrap();
+				Ok(UTC.timestamp(decrypted, 0))
+
+			},
+			_ => Err(ZeroError::DecryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
+		}
+	}
+}
+
 impl Encrypt for bool {
 
 	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<ZeroError>> {
@@ -144,7 +163,7 @@ impl Encrypt for bool {
 
 				encrypt(key, &buf)
 			},
-			_ => Err(ZeroError::EncryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
+			_ => Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
 		}
 
 	}
@@ -161,7 +180,7 @@ impl Encrypt for u64 {
 
 				encrypt(key, &buf)
 			},
-			_ => Err(ZeroError::EncryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
+			_ => Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
 		}
 
 	}
@@ -178,7 +197,7 @@ impl Encrypt for i64 {
 
 				encrypt(key, &buf)
 			},
-			_ => Err(ZeroError::EncryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
+			_ => Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
 
 		}
 
@@ -196,14 +215,36 @@ impl Encrypt for f64 {
 
 				encrypt(key, &buf)
 			},
-			_ => Err(ZeroError::EncryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
+			_ => Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
 
 		}
 
 	}
 }
 
-use std::str::from_utf8_unchecked;
+impl<Tz: TimeZone> Encrypt for DateTime<Tz> {
+
+	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<ZeroError>> {
+
+		match scheme {
+			&EncryptionType::AES => {
+
+				if self.timestamp_subsec_millis() > 0 {
+					return Err(ZeroError::EncryptionError{
+						message: "Fractional seconds not supported".into(),
+						code: "123".into()
+					}.into())
+				}
+
+				self.timestamp().encrypt(scheme, key)
+
+			},
+			_ => Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
+
+		}
+
+	}
+}
 
 impl Encrypt for d128 {
 
@@ -218,7 +259,7 @@ impl Encrypt for d128 {
 
 				unsafe {
 					let mut bytes: Vec<u8> = Vec::new();
-					for (i, octet) in hex.as_bytes().chunks(2).rev().enumerate() {
+					for octet in hex.as_bytes().chunks(2).rev() {
 						bytes.push( match u8::from_str_radix(from_utf8_unchecked(octet), 16) {
 							Ok(b) => b,
 							Err(e) => return Err(
@@ -377,13 +418,13 @@ mod test {
 		let value = String::from("2014-11-28 21:00:09");
 		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
 		let enc = EncryptionType::AES;
-		let unix = UTC.datetime_from_str(&value, "%Y-%m-%d %H:%M:%S").unwrap().timestamp();
+		let datetime = UTC.datetime_from_str(&value, "%Y-%m-%d %H:%M:%S").unwrap();
 
-		let encrypted = unix.encrypt(&enc, &key).unwrap();
-		let decrypted = i64::decrypt(&encrypted, &enc, &key).unwrap();
-		assert_eq!(decrypted, unix);
+		let encrypted = datetime.encrypt(&enc, &key).unwrap();
+		let decrypted = DateTime::decrypt(&encrypted, &enc, &key).unwrap();
+		assert_eq!(decrypted, datetime);
 
-		let rewritten = NaiveDateTime::from_timestamp(decrypted, 0).format("%Y-%m-%d %H:%M:%S").to_string();
+		let rewritten = decrypted.format("%Y-%m-%d %H:%M:%S").to_string();
 
 		assert_eq!(rewritten, value);
 	}
@@ -393,13 +434,13 @@ mod test {
 //		let value = String::from("2014-11-28 21:00:09.778");
 //		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
 //		let enc = EncryptionType::AES;
-//		let unix = UTC.datetime_from_str(&value, "%Y-%m-%d %H:%M:%S").unwrap().timestamp();
+//		let unix = UTC.datetime_from_str(&value, "%Y-%m-%d %H:%M:%S%.f").unwrap().timestamp();
 //
 //		let encrypted = unix.encrypt(&enc, &key).unwrap();
 //		let decrypted = i64::decrypt(&encrypted, &enc, &key).unwrap();
 //		assert_eq!(decrypted, unix);
 //
-//		let rewritten = NaiveDateTime::from_timestamp(decrypted, 0).format("%Y-%m-%d %H:%M:%S").to_string();
+//		let rewritten = NaiveDateTime::from_timestamp(decrypted, 0).format("%Y-%m-%d %H:%M:%S%.f").to_string();
 //
 //		assert_eq!(rewritten, value);
 //	}
@@ -409,14 +450,14 @@ mod test {
 		let value = String::from("2014-11-28");
 		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
 		let enc = EncryptionType::AES;
-		let unix = UTC.datetime_from_str(&format!("{} 00:00:00",&value), "%Y-%m-%d %H:%M:%S").unwrap().timestamp();
+		let datetime = UTC.datetime_from_str(&format!("{} 00:00:00",&value), "%Y-%m-%d %H:%M:%S").unwrap();
 
-		let encrypted = unix.encrypt(&enc, &key).unwrap();
-		let decrypted = i64::decrypt(&encrypted, &enc, &key).unwrap();
+		let encrypted = datetime.encrypt(&enc, &key).unwrap();
+		let decrypted = DateTime::decrypt(&encrypted, &enc, &key).unwrap();
 
-		assert_eq!(decrypted, unix);
+		assert_eq!(decrypted, datetime);
 
-		let rewritten = NaiveDateTime::from_timestamp(decrypted, 0).date().format("%Y-%m-%d").to_string();
+		let rewritten = decrypted.date().format("%Y-%m-%d").to_string();
 
 		assert_eq!(rewritten, value);
 	}
