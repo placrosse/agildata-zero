@@ -26,6 +26,7 @@ pub enum NativeType {
 	I64,
 	Varchar(u32),
 	F64,
+	D128,
 	BOOL,
 	DATETIME,
 }
