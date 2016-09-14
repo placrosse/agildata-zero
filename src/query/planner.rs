@@ -98,13 +98,13 @@ impl HasTupleType for Rel {
 
 pub struct Planner<'a> {
     default_schema: Option<&'a String>,
-    provider: &'a SchemaProvider
+    provider: Rc<SchemaProvider>
 }
 
 impl<'a> Planner<'a> {
 
     pub fn new(s: Option<&'a String>,
-               p: &'a SchemaProvider) -> Self {
+               p: Rc<SchemaProvider>) -> Self {
 
         Planner { default_schema: s, provider: p }
     }
@@ -383,7 +383,7 @@ mod tests {
 
         let s = String::from("zero");
         let default_schema = Some(&s);
-        let planner = Planner{default_schema: default_schema, provider: &provider};
+        let planner = Planner{default_schema: default_schema, provider: Rc::new(provider) };
 
         let plan = planner.sql_to_rel(&parsed).unwrap();
 
@@ -402,7 +402,7 @@ mod tests {
 
         let s = String::from("zero");
         let default_schema = Some(&s);
-        let planner = Planner::new(default_schema, &provider);
+        let planner = Planner::new(default_schema, Rc::new(provider));
 
         let plan = planner.sql_to_rel(&parsed).unwrap();
 
@@ -421,7 +421,7 @@ mod tests {
 
         let s = String::from("zero");
         let default_schema = Some(&s);
-        let planner = Planner{default_schema: default_schema, provider: &provider};
+        let planner = Planner{default_schema: default_schema, provider: Rc::new(provider) };
 
         let plan = planner.sql_to_rel(&parsed).unwrap();
 
@@ -442,7 +442,7 @@ mod tests {
 
         let s = String::from("zero");
         let default_schema = Some(&s);
-        let planner = Planner::new(default_schema, &provider);
+        let planner = Planner::new(default_schema, Rc::new(provider));
 
         let plan = planner.sql_to_rel(&parsed).unwrap();
 
