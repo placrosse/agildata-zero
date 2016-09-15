@@ -7,12 +7,14 @@ use self::xml::Xml;
 
 use encrypt::*;
 
+
+
 pub fn parse_config(path: &str) -> Config {
-	println!("parse_config() path: {}", path);
+	debug!("parse_config() path: {}", path);
 	let mut rdr = match File::open(path) {
         Ok(file) => file,
         Err(err) => {
-            println!("Couldn't open file: {}", err);
+            println!("Unable to open configuration file: {}", path);
             process::exit(1);
         }
     };
@@ -23,7 +25,7 @@ pub fn parse_config(path: &str) -> Config {
 
     let mut string = String::new();
     if let Err(err) = rdr.read_to_string(&mut string) {
-        println!("Reading failed: {}", err);
+        error!("Reading failed: {}", err);
         process::exit(1);
     };
 
@@ -38,7 +40,7 @@ pub fn parse_config(path: &str) -> Config {
 					}
 				}
 			},
-            Err(e) => println!("{}", e),
+            Err(e) => error!("{}", e),
         }
     }
 
@@ -402,7 +404,7 @@ mod tests {
     #[test]
 	fn config_test() {
 		let config = super::parse_config("zero-config.xml");
-		println!("CONFIG {:#?}", config);
-		println!("HERE {:#?}", config.get_column_config(&String::from("zero"), &String::from("users"), &String::from("age")))
+		debug!("CONFIG {:#?}", config);
+		debug!("HERE {:#?}", config.get_column_config(&String::from("zero"), &String::from("users"), &String::from("age")))
 	}
 }

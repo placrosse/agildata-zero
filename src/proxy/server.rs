@@ -51,7 +51,7 @@ impl Proxy {
         let conn_port = conn.props.get("port").unwrap_or(default_port);
         let conn_addr = format!("{}:{}",conn_host,conn_port);
         let bind_addr = conn_addr.parse::<SocketAddr>().unwrap();
-        println!("Binding to {}", bind_addr);
+        info!("Binding to {}", bind_addr);
 
         // determine address of the MySQL instance we are proxying for
         let conn = temp.get_connection_config();
@@ -60,7 +60,7 @@ impl Proxy {
         let conn_port = conn.props.get("port").unwrap_or(default_port);
         let conn_addr = format!("{}:{}",conn_host,conn_port);
         let mysql_addr = conn_addr.parse::<SocketAddr>().unwrap();
-        println!("MySQL server: {}", mysql_addr);
+        info!("MySQL server: {}", mysql_addr);
 
         // Create the tokio event loop that will drive this server
         let mut l = Core::new().unwrap();
@@ -70,7 +70,7 @@ impl Proxy {
 
         // Create a TCP listener which will listen for incoming connections
         let socket = TcpListener::bind(&bind_addr, &l.handle()).unwrap();
-        println!("Listening on: {}", bind_addr);
+        info!("Listening on: {}", bind_addr);
 
         // for each incoming connection
         let done = socket.incoming().for_each(move |(socket, _)| {
@@ -88,7 +88,7 @@ impl Proxy {
             // tell the tokio reactor to run the future
             handle.spawn(future.map_err(|err| {
 
-                println!("Failed to spawn future: {:?}", err);
+                error!("Failed to spawn future: {:?}", err);
             }));
 
             // everything is great!
@@ -180,12 +180,12 @@ impl PacketHandler for ZeroHandler {
             r.skip(1); // character set
             r.skip(23); // reserved
             let username = r.read_c_string().unwrap(); // username
-            println!("user: {}", username);
+            debug!("user: {}", username);
             let auth_response = r.read_bytes().unwrap(); // auth-response
-            println!("auth_response: {:?}", auth_response);
+            debug!("auth_response: {:?}", auth_response);
 
             if let Some(schema) = r.read_c_string() {
-                println!("HANDSHAKE: schema={}", schema);
+                debug!("HANDSHAKE: schema={}", schema);
                 self.schema = Some(schema);
             }
 
@@ -269,7 +269,7 @@ impl ZeroHandler {
 
     fn process_init_db(&mut self, p:&Packet) -> Action {
         let schema = parse_string(&p.bytes[5..]);
-        println!("COM_INIT_DB: {}", schema);
+        debug!("COM_INIT_DB: {}", schema);
         self.schema = Some(schema);
         self.state = HandlerState::Reading;
         Action::Forward
@@ -277,7 +277,7 @@ impl ZeroHandler {
 
     fn process_query(&mut self, p:&Packet) -> Action {
         let query = parse_string(&p.bytes[5..]);
-        println!("COM_QUERY : {}", query);
+        debug!("COM_QUERY : {}", query);
 
         // parse query
         let ansi = AnsiSQLDialect::new();
@@ -297,13 +297,13 @@ impl ZeroHandler {
                         Some(parsed)
                     },
                     Err(e) => {
-                        println!("Failed to parse with: {}", e);
+                        debug!("Failed to parse with: {}", e);
                         match self.parsing_mode{
                             ParsingMode::Strict =>{
                                 return create_error(e.to_string());
                             },
                             ParsingMode::Passive =>{
-                                println!("In Passive mode, falling through to MySQL");
+                                debug!("In Passive mode, falling through to MySQL");
                                 None
                             }
                         }
@@ -311,7 +311,7 @@ impl ZeroHandler {
                 }
             },
             Err(e) => {
-                println!("Failed to tokenize with: {}", e);
+                debug!("Failed to tokenize with: {}", e);
                 None
             }
         };
@@ -359,7 +359,7 @@ impl ZeroHandler {
 
             let rewritten = writer.write(&parsed.unwrap()).unwrap();
 
-            println!("REWRITTEN {}", rewritten);
+            debug!("REWRITTEN {}", rewritten);
 
             // write packed with new query
             let slice: &[u8] = rewritten.as_bytes();
@@ -389,7 +389,7 @@ impl ZeroHandler {
                           p: &Packet,
                           ) -> Result<Action, Box<ZeroError>> {
 
-        println!("Received row");
+        debug!("Received row");
 
         match self.tt {
             Some(ref tt) => {
@@ -482,7 +482,7 @@ impl<'a> MySQLPacketParser<'a> {
             //NOTE: depending on context, 0xfb could mean null and 0xff could mean error
             0xfc | 0xfd | 0xfe => panic!("no support yet for length >= 251"),
             _ => {
-                //println!("read_len() returning {}", n);
+                //debug!("read_len() returning {}", n);
                 n
             }
         }

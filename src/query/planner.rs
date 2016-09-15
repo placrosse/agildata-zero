@@ -110,9 +110,12 @@ impl<'a> Planner<'a> {
 
     fn sql_to_rex(&self, sql: &ASTNode, tt: &TupleType) -> Result<Rex, Box<ZeroError>> {
         match sql {
+//            &ASTNode::SQLExprList(ref v) => Ok(Rex::RexExprList(v.iter()
+//                .map(|x| self.sql_to_rex(&x, tt))
+//                .collect()?)),
             &ASTNode::SQLExprList(ref v) => Ok(Rex::RexExprList(v.iter()
                 .map(|x| self.sql_to_rex(&x, tt))
-                .collect()?)),
+                .collect::<Result<Vec<Rex>, Box<ZeroError>>>()?)),
             &ASTNode::SQLIdentifier { ref id, ref parts } => {
                 let (relation, name) = match parts.len() {
                     0 => return  Err(ZeroError::ParseError{
@@ -378,7 +381,7 @@ mod tests {
 
         let plan = planner.sql_to_rel(&parsed).unwrap();
 
-        println!("Plan {:#?}", plan);
+        debug!("Plan {:#?}", plan);
     }
 
     #[test]
@@ -397,7 +400,7 @@ mod tests {
 
         let plan = planner.sql_to_rel(&parsed).unwrap();
 
-        println!("Plan {:#?}", plan);
+        debug!("Plan {:#?}", plan);
     }
 
     #[test]
@@ -416,7 +419,7 @@ mod tests {
 
         let plan = planner.sql_to_rel(&parsed).unwrap();
 
-        println!("Plan {:#?}", plan);
+        debug!("Plan {:#?}", plan);
     }
 
     #[test]
@@ -437,7 +440,7 @@ mod tests {
 
         let plan = planner.sql_to_rel(&parsed).unwrap();
 
-        println!("Plan {:#?}", plan);
+        debug!("Plan {:#?}", plan);
     }
 
     struct DummyProvider {}

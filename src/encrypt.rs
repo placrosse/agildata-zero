@@ -87,9 +87,9 @@ impl Encrypt for String {
 		match scheme {
 			&EncryptionType::AES => {
 				let buf = self.as_bytes();
-				println!("Buf length = {}", buf.len());
+				debug!("Buf length = {}", buf.len());
 				let e = encrypt(key, &buf).unwrap();
-				println!("Encrypted length = {}", e.len());
+				debug!("Encrypted length = {}", e.len());
 				Ok(e)
 			},
 			&EncryptionType::NA => panic!("This should be handled outside this method for now..."),
@@ -129,7 +129,7 @@ pub fn encrypt(key: &[u8], buf: &[u8]) -> Result<Vec<u8>, Box<ZeroError>> {
     let mut tag = [0u8; 16];
     let mut out: Vec<u8> = repeat(0).take(buf.len()).collect();
     cipher.encrypt(&buf, &mut out, &mut tag);
-    println!("encrypt: inp={:?} out={:?} tag={:?}", buf, out, tag);
+    debug!("encrypt: inp={:?} out={:?} tag={:?}", buf, out, tag);
 
     let mut bs = Vec::with_capacity(12 + out.len() + 16);
     for b in nonce.iter() { bs.push(*b); }
@@ -140,7 +140,7 @@ pub fn encrypt(key: &[u8], buf: &[u8]) -> Result<Vec<u8>, Box<ZeroError>> {
 
 pub fn decrypt(key: &[u8], buf: &[u8]) -> Result<Vec<u8>, Box<ZeroError>> {
     if buf.len() < 12 {
-        println!("ERROR: Buffer Length too short, are you trying to decrypt non-encrypted data?");
+        error!("ERROR: Buffer Length too short, are you trying to decrypt non-encrypted data?");
         return Err(ZeroError::DecryptionError{message: "Failed decrypting data".into(), code: "123".into()}.into())
     }
     let iv: &[u8] = &buf[0..12];
@@ -149,7 +149,7 @@ pub fn decrypt(key: &[u8], buf: &[u8]) -> Result<Vec<u8>, Box<ZeroError>> {
     let tag = &buf[buf.len() - 16..];
     let mut out: Vec<u8> = repeat(0).take(buf.len() - 28).collect();
     if decipher.decrypt(&inp, &mut out, &tag){
-        println!("decrypt: inp={:?} out={:?}", inp, out);
+        debug!("decrypt: inp={:?} out={:?}", inp, out);
         Ok(out)
     } else{
         Err(ZeroError::DecryptionError{ message: "Failed decrypting data".into(), code: "123".into()}.into())

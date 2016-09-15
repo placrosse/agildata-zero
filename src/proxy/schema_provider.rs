@@ -127,7 +127,7 @@ impl MySQLBackedSchemaProvider {
 impl SchemaProvider for MySQLBackedSchemaProvider {
 	fn get_table_meta(&self, schema: &String, table: &String) -> Result<Option<Rc<TableMeta>>, Box<ZeroError>> {
 		// Lock and do work
-		println!("get_table_meta()");
+		debug!("get_table_meta()");
 		let mut c = self.cache.lock().unwrap();
 
 		let key = format!("{}.{}", schema.to_lowercase(), table.to_lowercase());
