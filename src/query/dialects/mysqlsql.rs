@@ -183,7 +183,7 @@ impl<'d> MySQLDialect<'d> {
 	fn parse_key_def<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode, Box<ZeroError>>
 		 {
 
-		println!("parse_key_def()");
+		debug!("parse_key_def()");
 
 		let symbol = if tokens.consume_keyword("CONSTRAINT") {
 			Some(Box::new(self.ansi.parse_identifier(tokens)?))
@@ -321,7 +321,7 @@ impl<'d> MySQLDialect<'d> {
 	fn parse_column_qualifier<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) ->  Result<Option<ASTNode>,  Box<ZeroError>>
 		 {
 
-		println!("parse_column_qualifier() {:?}", tokens.peek());
+		debug!("parse_column_qualifier() {:?}", tokens.peek());
 		match tokens.peek() {
 			Some(&Token::Keyword(ref v)) | Some(&Token::Identifier(ref v)) => match &v.to_uppercase() as &str {
 				"NOT" => {
