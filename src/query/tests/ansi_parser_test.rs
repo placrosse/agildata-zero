@@ -411,6 +411,7 @@ fn insert_invalid() {
 #[test]
 fn update() {
 
+{
 	let dialect = AnsiSQLDialect::new();
 	let sql = String::from("UPDATE foo SET a = 'hello', b = 12345 WHERE c > 10");
 	let tokens = sql.tokenize(&dialect).unwrap();
@@ -450,5 +451,49 @@ fn update() {
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
 	println!("Rewritten: {:?}", rewritten);
+}
+{
+	let dialect = AnsiSQLDialect::new();
+	let sql = String::from("UPDATE warehouse SET w_ytd = w_ytd + 2117.1 WHERE w_id = 1");
+	let tokens = sql.tokenize(&dialect).unwrap();
+	let parsed = tokens.parse().unwrap();
+	
+	let upd = SQLUpdate{
+		table: Box::new(SQLIdentifier{id: String::from("warehouse"), parts: vec![String::from("warehouse")] }),
+			assignments: Box::new(
+				SQLExprList(vec![
+					SQLBinary {
+						left: Box::new(SQLIdentifier{id: String::from("w_ytd"), parts: vec![String::from("w_ytd")]}),
+						op:EQ,
+						right: Box::new(
+							SQLBinary {
+								left: Box::new(SQLIdentifier{id: String::from("w_ytd"), 
+										parts: vec![String::from("w_ytd")]}),
+								op: ADD,
+								right: Box::new(SQLLiteral(LiteralDouble(0, 2117.1_f64)))})}]
+		)
+	),
+	selection: Some(Box::new(
+			SQLBinary {
+				left: Box::new(SQLIdentifier{id: String::from("w_id"), parts: vec![String::from("w_id")]}),
+				op: EQ,
+				right: Box::new(SQLLiteral(LiteralLong(1,1_u64)))
+			})
+	)
+	};
+	
+	println!("{:#?}", parsed);
+	assert_eq!(upd, parsed);
+
+	let ansi_writer = AnsiSQLWriter{};
+	let writer = SQLWriter::new(vec![&ansi_writer]);
+	let rewritten = writer.write(&parsed).unwrap();
+
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+    println!("Rewritten: {:?}", rewritten);
+}
 
 }
+
+

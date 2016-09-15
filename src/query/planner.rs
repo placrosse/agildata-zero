@@ -1,7 +1,7 @@
 use std::error::Error;
 use super::{ASTNode, Operator, LiteralExpr, JoinType};
 use encrypt::EncryptionType;
-use config::*;
+//use config::*;
 use encrypt::NativeType;
 use error::ZeroError;
 use std::rc::Rc;
@@ -52,7 +52,7 @@ pub enum Rex {
     Identifier { id: Vec<String>, el: Element },
     Literal(LiteralExpr),
     BinaryExpr{left: Box<Rex>, op: Operator, right: Box<Rex>},
-    RelationalExpr(Rel),
+    //RelationalExpr(Rel),
     RexExprList(Vec<Rex>),
 }
 
@@ -73,8 +73,8 @@ pub enum Rel {
     AliasedRel{alias: String, input: Box<Rel>, tt: TupleType},
     Join{left: Box<Rel>, join_type: JoinType, right: Box<Rel>, on_expr: Option<Box<Rex>>, tt: TupleType},
     Dual { tt: TupleType },
-    Insert {table: String, columns: Box<Rex>, values: Box<Rex>, tt: TupleType}
-
+    Insert {table: String, columns: Box<Rex>, values: Box<Rex>, tt: TupleType},
+	Update {table: String, set_stmts: Box<Rex>, selection: Option<Box<Rex>>, tt: TupleType}    
 }
 
 pub trait HasTupleType {
@@ -90,7 +90,8 @@ impl HasTupleType for Rel {
             &Rel::Dual { ref tt, .. } => tt,
             &Rel::Insert {ref tt, ..} => tt,
             &Rel::AliasedRel{ref tt, ..} => tt,
-            &Rel::Join{ref tt, ..} => tt
+            &Rel::Join{ref tt, ..} => tt,
+            &Rel::Update{ref tt, ..} => tt
         }
     }
 }
@@ -186,7 +187,6 @@ impl<'a> Planner<'a> {
                     return Ok(None)
                 };
 
-
                 match selection {
                     &Some(box ref expr) => {
                         let filter = self.sql_to_rex(expr, input.tt())?;
@@ -202,7 +202,6 @@ impl<'a> Planner<'a> {
                     input: Box::new(input),
                     tt: project_tt
                 }))
-
             },
             &ASTNode::SQLInsert {box ref table, box ref column_list, box ref values_list} => {
                 match self.sql_to_rel(table)? {
@@ -220,10 +219,7 @@ impl<'a> Planner<'a> {
                     }.into()),
                     None => return Ok(None)
                 }
-
             },
-            //     SQLJoin{left: Box<ASTNode>, join_type: JoinType, right: Box<ASTNode>, on_expr: Option<Box<ASTNode>>},
-
             &ASTNode::SQLJoin{box ref left, ref join_type, box ref right, ref on_expr} => {
                 let left_rel = self.sql_to_rel(left)?;
                 let right_rel = self.sql_to_rel(right)?;
@@ -258,12 +254,8 @@ impl<'a> Planner<'a> {
                             message: format!("Unsupported: Mismatch join between encrypted and unencrypted relations").into(),
                             code: "1064".into()
                         }.into())
-
                     }
-
                 }
-
-
             },
             &ASTNode::SQLAlias{box ref expr, box ref alias} => {
 
@@ -288,9 +280,6 @@ impl<'a> Planner<'a> {
                     },
                     None => Ok(None) // TODO expected behaviour?
                 }
-
-
-
             },
             &ASTNode::SQLIdentifier { ref id, ref parts } => {
 
@@ -299,7 +288,6 @@ impl<'a> Planner<'a> {
                 } else {
                     (self.default_schema, id.clone())
                 };
-
 
                 match self.provider.get_table_meta(&table_schema.unwrap(), &table_name)? {
                     Some(meta) => {
@@ -319,14 +307,35 @@ impl<'a> Planner<'a> {
                         code: "1064".into()
                     }.into())
                 }
-
             },
             &ASTNode::MySQLCreateTable{..} => Ok(None), // Dont need to plan this yet...
-            //ASTNode::SQLInsert => {},
+
+            &ASTNode::SQLUpdate{ box ref table, box ref assignments, ref selection } => {
+
+				match self.sql_to_rel(table)? {
+                    Some(Rel::TableScan {table, tt}) => {
+
+                        Ok(Some(Rel::Update{ 
+                        			table: table, 
+                        			set_stmts: Box::new(self.sql_to_rex(assignments, &tt)?), 
+                        			selection: match selection {
+				                            &Some(box ref expr) => Some(Box::new(self.sql_to_rex(expr, &tt)?)),
+				                            &None => None
+				                        }, 
+                        			tt: tt}))
+                    },
+                    Some(other) => return Err(ZeroError::ParseError{
+                        message: format!("Unsupported table relation for UPDATE {:?}", other).into(),
+                        code: "1064".into()
+                    }.into()),
+                    None => Ok(None)
+                }
+            }
             _ => Err(ZeroError::ParseError {
                     message: format!("Unsupported expr for planning {:?}", sql).into(),
                     code: "1064".into()
                 }.into())
+
         }
     }
 }
