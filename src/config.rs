@@ -236,6 +236,23 @@ fn determine_native_type(native_type: &String) -> NativeType {
 						&Some(l) => l,
 						&None => panic!("CHARACTER VARYING datatype requires length") // TODO parser shouldn't allow this
 					}),
+					&Date => NativeType::DATE,
+					&DateTime{ref fsp} => NativeType::DATETIME(match fsp {
+						&Some(f) => f,
+						&None => 0
+					}),
+					&Time{ref fsp} => NativeType::TIME(match fsp {
+						&Some(f) => f,
+						&None => 0
+					}),
+					&Timestamp{ref fsp} => NativeType::TIMESTAMP(match fsp {
+						&Some(f) => f,
+						&None => 0
+					}),
+					&Year{ref display} => NativeType::YEAR(match display {
+						&Some(d) => d,
+						&None => 4
+					}),
 
 					_ => panic!("Unsupported data type {:?}", dt)
 				},
@@ -521,6 +538,19 @@ mod tests {
 		assert_eq!(config.column_map.get("j").unwrap().native_type,Varchar(50));
 		assert_eq!(config.column_map.get("k").unwrap().native_type,Varchar(50));
 		assert_eq!(config.column_map.get("l").unwrap().native_type,Varchar(50));
+		
+
+		config = s_config.get_table_config(&"config_test".into(), &"temporal".into()).unwrap();
+		assert_eq!(config.column_map.get("a").unwrap().native_type,DATE);
+		assert_eq!(config.column_map.get("b").unwrap().native_type,DATETIME(0));
+		assert_eq!(config.column_map.get("c").unwrap().native_type,DATETIME(6));
+		assert_eq!(config.column_map.get("d").unwrap().native_type,TIME(0));
+		assert_eq!(config.column_map.get("e").unwrap().native_type,TIME(6));
+		assert_eq!(config.column_map.get("f").unwrap().native_type,TIMESTAMP(0));
+		assert_eq!(config.column_map.get("g").unwrap().native_type,TIMESTAMP(6));
+		assert_eq!(config.column_map.get("h").unwrap().native_type,YEAR(4));
+		assert_eq!(config.column_map.get("i").unwrap().native_type,YEAR(4));
+
 
 	}
 

@@ -29,7 +29,13 @@ pub enum NativeType {
 	F64,
 	D128,
 	BOOL,
-	DATETIME,
+	DATETIME(u32), // fsp
+	DATE,
+	TIME(u32),
+
+	// These are representative native types, but not supported as encrypted columns
+	TIMESTAMP(u32),
+	YEAR(u32)
 }
 
 pub trait Encrypt {

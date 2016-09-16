@@ -91,5 +91,21 @@
             <column name="k" type="NVARCHAR(50)" encryption="AES" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
             <column name="l" type="CHARACTER VARYING(50)" encryption="AES" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
         </table>
+
+        <table name="temporal">
+            <column name="a" type="DATE" encryption="AES" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+            <column name="b" type="DATETIME" encryption="AES" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+            <column name="c" type="DATETIME(6)" encryption="AES" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+            <column name="d" type="TIME" encryption="AES" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+            <column name="e" type="TIME(6)" encryption="AES" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+
+            <!-- Unsupported for encryption-->
+            <column name="f" type="TIMESTAMP" encryption="NONE" />
+            <column name="g" type="TIMESTAMP(6)" encryption="NONE" />
+            <column name="h" type="YEAR" encryption="NONE" />
+            <column name="i" type="YEAR(4)" encryption="NONE" />
+
+        </table>
+
     </schema>
 </client-config>
