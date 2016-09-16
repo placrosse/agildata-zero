@@ -406,7 +406,7 @@ impl<'d> MySQLDialect<'d> {
 		}
 	}
 
-	fn parse_data_type<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) ->  Result<ASTNode,  Box<ZeroError>>
+	pub fn parse_data_type<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) ->  Result<ASTNode,  Box<ZeroError>>
 		 {
 
 		let data_token = tokens.next();

@@ -7,6 +7,11 @@ use self::xml::Xml;
 
 use encrypt::*;
 
+use query::{Tokenizer, ASTNode};
+use query::MySQLDataType::*;
+use query::dialects::ansisql::*;
+use query::dialects::mysqlsql::*;
+
 
 
 pub fn parse_config(path: &str) -> Config {
@@ -172,14 +177,63 @@ fn get_attr_or_fail(name: &str, element: &xml::Element) -> String {
 }
 
 fn determine_native_type(native_type: &String) -> NativeType {
-	if native_type.contains("VARCHAR") {
-		NativeType::Varchar(50) // TODO hard coded display..
-	} else {
-		match native_type as &str {
-			"INTEGER" => NativeType::U64,
-			"DOUBLE" => NativeType::F64,
-			_ => panic!("Unsupported native type {}", native_type)
-		}
+	let ansi = AnsiSQLDialect::new();
+	let dialect = MySQLDialect::new(&ansi);
+	let tokens = native_type.tokenize(&dialect).unwrap();
+
+	match dialect.parse_data_type(&tokens) {
+		Ok(p) => {
+//			#[derive(Debug, PartialEq)]
+//			pub enum MySQLDataType {
+//				Bit{display: Option<u32>},
+//				TinyInt{display: Option<u32>},
+//				SmallInt{display: Option<u32>},
+//				MediumInt{display: Option<u32>},
+//				Int{display: Option<u32>},
+//				BigInt{display: Option<u32>},
+//				Decimal{precision: Option<u32>, scale: Option<u32>},
+//				Float{precision: Option<u32>, scale: Option<u32>},
+//				Double{precision: Option<u32>, scale: Option<u32>},
+//				Bool,
+//				Date,
+//				DateTime{fsp: Option<u32>},
+//				Timestamp{fsp: Option<u32>},
+//				Time{fsp: Option<u32>},
+//				Year{display: Option<u32>},
+//				Char{length: Option<u32>},
+//				NChar{length: Option<u32>},
+//				CharByte{length: Option<u32>},
+//				Varchar{length: Option<u32>},
+//				NVarchar{length: Option<u32>},
+//				Binary{length: Option<u32>},
+//				VarBinary{length: Option<u32>},
+//				TinyBlob,
+//				TinyText,
+//				Blob{length: Option<u32>},
+//				Text{length: Option<u32>},
+//				MediumBlob,
+//				MediumText,
+//				LongBlob,
+//				LongText,
+//				Enum{values: Box<ASTNode>},
+//				Set{values: Box<ASTNode>}
+//			}
+			match p {
+				ASTNode::MySQLDataType(ref dt) => match dt {
+					&Bit{..} | &TinyInt{..} |
+						&SmallInt{..} | &MediumInt{..} |
+						&Int{..} | &BigInt{..}
+						=> NativeType::U64,
+					&Double{..} | &Float{..} => NativeType::F64,
+					&Decimal{..} => NativeType::D128,
+					&Bool => NativeType::BOOL,
+					&Varchar{ref length} => NativeType::Varchar(50),
+					_ => panic!("Unsupported data type {:?}", dt)
+				},
+				_ => panic!("Unexpected native type expression {:?}", p)
+			}
+		},
+		Err(e) => panic!("Failed to parse data type {} due to : {}", native_type, e)
 	}
 }
 
@@ -198,7 +252,7 @@ fn determine_key(key: &str) -> [u8; 32] {
     hex_key(key)
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct ColumnConfig {
 	pub name: String,
 	pub encryption: EncryptionType,
@@ -206,7 +260,7 @@ pub struct ColumnConfig {
 	pub native_type: NativeType
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct TableConfig {
 	pub name: String,
 	pub column_map: HashMap<String, ColumnConfig>
@@ -400,6 +454,7 @@ impl TTableConfig for TableConfig {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use encrypt::NativeType::*;
 
     #[test]
 	fn config_test() {
@@ -407,4 +462,46 @@ mod tests {
 		debug!("CONFIG {:#?}", config);
 		debug!("HERE {:#?}", config.get_column_config(&String::from("zero"), &String::from("users"), &String::from("age")))
 	}
+
+	#[test]
+	fn test_config() {
+		let config = super::parse_config("src/test/test-zero-config.xml");
+		let table_config = config.get_table_config(&"config_test".into(), &"numerics".into()).unwrap();
+		assert_eq!(table_config.column_map.get("a").unwrap().native_type,U64);
+		assert_eq!(table_config.column_map.get("b").unwrap().native_type,U64);
+		assert_eq!(table_config.column_map.get("c").unwrap().native_type,U64);
+		assert_eq!(table_config.column_map.get("d").unwrap().native_type,U64);
+		assert_eq!(table_config.column_map.get("e").unwrap().native_type,BOOL);
+		assert_eq!(table_config.column_map.get("f").unwrap().native_type,BOOL);
+		assert_eq!(table_config.column_map.get("g").unwrap().native_type,U64);
+		assert_eq!(table_config.column_map.get("h").unwrap().native_type,U64);
+		assert_eq!(table_config.column_map.get("i").unwrap().native_type,U64);
+		assert_eq!(table_config.column_map.get("j").unwrap().native_type,U64);
+		assert_eq!(table_config.column_map.get("k").unwrap().native_type,U64);
+		assert_eq!(table_config.column_map.get("l").unwrap().native_type,U64);
+		assert_eq!(table_config.column_map.get("m").unwrap().native_type,U64);
+		assert_eq!(table_config.column_map.get("n").unwrap().native_type,U64);
+		assert_eq!(table_config.column_map.get("o").unwrap().native_type,D128);
+		assert_eq!(table_config.column_map.get("p").unwrap().native_type,D128);
+		assert_eq!(table_config.column_map.get("q").unwrap().native_type,D128);
+		assert_eq!(table_config.column_map.get("r").unwrap().native_type,D128);
+		assert_eq!(table_config.column_map.get("s").unwrap().native_type,D128);
+		assert_eq!(table_config.column_map.get("t").unwrap().native_type,D128);
+		assert_eq!(table_config.column_map.get("u").unwrap().native_type,F64);
+		assert_eq!(table_config.column_map.get("v").unwrap().native_type,F64);
+		assert_eq!(table_config.column_map.get("w").unwrap().native_type,F64);
+		assert_eq!(table_config.column_map.get("x").unwrap().native_type,F64);
+		assert_eq!(table_config.column_map.get("y").unwrap().native_type,F64);
+		assert_eq!(table_config.column_map.get("z").unwrap().native_type,F64);
+		assert_eq!(table_config.column_map.get("aa").unwrap().native_type,F64);
+		assert_eq!(table_config.column_map.get("ab").unwrap().native_type,F64);
+		assert_eq!(table_config.column_map.get("ac").unwrap().native_type,F64);
+
+
+
+
+
+
+	}
+
 }
