@@ -29,6 +29,8 @@ use query::dialects::mysqlsql::*;
 use query::dialects::ansisql::*;
 use query::planner::{Planner, TupleType, HasTupleType, RelVisitor, Rel};
 
+use decimal::*;
+
 pub struct Proxy {
 //    server: TcpListener,
 //    config: &'a Config,
@@ -397,6 +399,7 @@ impl ZeroHandler {
                 let mut wtr: Vec<u8> = vec![];
 
                 for i in 0..tt.elements.len() {
+                    debug!("decrypt element {:?}", &tt.elements[i]);
 
                     let value = match &tt.elements[i].encryption {
                         &EncryptionType::NA => r.read_lenenc_string(),
@@ -408,6 +411,20 @@ impl ZeroHandler {
                             &NativeType::Varchar(_) => {
                                 let res = try!(String::decrypt(&r.read_bytes().unwrap(), &encryption, &tt.elements[i].key));
                                 Some(res)
+                            },
+                            &NativeType::BOOL => {
+                                debug!("try decrypt bool");
+                                let res = bool::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt.elements[i].key)?;
+                                debug!("FINISH decrypt bool");
+                                Some(format!("{}", res))
+                            },
+                            &NativeType::D128 => {
+                                let res = d128::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt.elements[i].key)?;
+                                Some(format!("{}", res))
+                            },
+                            &NativeType::F64 => {
+                                let res = f64::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt.elements[i].key)?;
+                                Some(format!("{}", res))
                             },
                             native_type @ _ => panic!("Native type {:?} not implemented", native_type)
                         }

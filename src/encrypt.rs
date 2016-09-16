@@ -93,6 +93,7 @@ impl Encrypt for bool {
 				let mut buf: Vec<u8> = Vec::new();
 				buf.write_u8(self as u8).unwrap();
 
+				println!("HERE {}", buf.len());
 				encrypt(key, &buf)
 			},
 			_ => Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
@@ -500,6 +501,8 @@ mod test {
 		let enc = EncryptionType::AES;
 
 		let encrypted = value.encrypt(&enc, &key).unwrap();
+
+		println!("THERE {}", encrypted.len());
 		let decrypted = bool::decrypt(&encrypted, &enc, &key).unwrap();
 		assert_eq!(decrypted, value);
 	}

@@ -1,6 +1,7 @@
 // use super::super::parser::sql_writer::*;
 // use super::super::parser::sql_parser::{SQLExpr, LiteralExpr, DataType};
-use query::{Writer, ExprWriter, ASTNode, LiteralExpr, MySQLDataType};
+use query::{Writer, ExprWriter, ASTNode, LiteralExpr};
+use query::MySQLDataType::*;
 use std::collections::HashMap;
 use std::fmt::Write;
 use config::*;
@@ -144,14 +145,19 @@ impl<'a> CreateTranslatingWriter<'a> {
 	fn translate_type(&self, data_type: &ASTNode, encryption: &EncryptionType) -> Result<ASTNode, Box<ZeroError>> {
 		match (data_type, encryption) {
 			(&ASTNode::MySQLDataType(ref dt), &EncryptionType::AES) => match dt {
-				&MySQLDataType::Int{..} => {
+                &Bit{..} | &TinyInt{..} |
+                &SmallInt{..} | &MediumInt{..} |
+                &Int{..} | &BigInt{..}  => {
 					// TODO currently all are stored as 8 bytes, delegate to encrypt
-					Ok(ASTNode::MySQLDataType(MySQLDataType::VarBinary{length: Some(8 + 28)}))
+					Ok(ASTNode::MySQLDataType(Binary{length: Some(8 + 28)}))
 				},
-				&MySQLDataType::Varchar{ref length} | &MySQLDataType::Char{ref length} |
-				&MySQLDataType::Blob{ref length} | &MySQLDataType::Text{ref length} |
-				&MySQLDataType::Binary{ref length} | &MySQLDataType::VarBinary{ref length} => {
-					Ok(ASTNode::MySQLDataType(MySQLDataType::VarBinary{length: Some(self.get_encrypted_string_length(length))}))
+                &Bool => Ok(ASTNode::MySQLDataType(Binary{length: Some(1 + 28)})),
+                &Decimal{..} => Ok(ASTNode::MySQLDataType(Binary{length: Some(16 + 28)})),
+                &Float{..} | &Double{..} => Ok(ASTNode::MySQLDataType(Binary{length: Some(8 + 28)})),
+				&Varchar{ref length} | &Char{ref length} |
+				&Blob{ref length} | &Text{ref length} |
+				&Binary{ref length} | &VarBinary{ref length} => {
+					Ok(ASTNode::MySQLDataType(VarBinary{length: Some(self.get_encrypted_string_length(length))}))
 				},
 				_ => Err(ZeroError::EncryptionError{
                         message: format!("Unsupported data type for AES translation {:?}", dt).into(),
@@ -217,7 +223,7 @@ mod tests {
 			first_name VARBINARY(78),
 			last_name VARBINARY(78),
 			ssn VARBINARY(78),
-			age VARBINARY(36),
+			age BINARY(36),
 			sex VARBINARY(78)
 		)";
 

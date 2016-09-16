@@ -1,8 +1,10 @@
-use query::planner::{Rel, Rex, RelVisitor, TupleType, HasTupleType};
+use query::planner::{Rel, Rex, RelVisitor, TupleType, HasTupleType, Element};
 use query::{Operator, LiteralExpr};
 use std::collections::HashMap;
 use encrypt::*;
 use error::ZeroError;
+use decimal::*;
+use std::str::FromStr;
 
 #[derive(Debug)]
 pub struct EncryptVisitor {
@@ -14,6 +16,40 @@ impl EncryptVisitor {
 	pub fn get_value_map(&self) -> &HashMap<u32, Vec<u8>> {
 		&self.valuemap
 	}
+
+    pub fn encrypt_literal(&mut self, lit: &LiteralExpr, el: &Element) -> Result<(), Box<ZeroError>> {
+        match lit {
+            &LiteralExpr::LiteralLong(ref i, ref val) => {
+                self.valuemap.insert(i.clone(), val.encrypt(&el.encryption, &el.key)?);
+            },
+            &LiteralExpr::LiteralString(ref i, ref val) => {
+                self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption, &el.key)?);
+            },
+            &LiteralExpr::LiteralBool(ref i, ref val) => {
+                self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption, &el.key)?);
+            },
+            &LiteralExpr::LiteralDouble(ref i, ref val) => {
+                // TODO precision loss?
+                let enc = match el.data_type {
+                    NativeType::D128 => {
+                        match d128::from_str(&val.to_string()) {
+                            Ok(d) => d.encrypt(&el.encryption, &el.key)?,
+                            Err(e) => panic!("")
+                        }
+                    },
+                    NativeType::F64 => val.clone().encrypt(&el.encryption, &el.key)?,
+                    _ => panic!("")
+                };
+                self.valuemap.insert(i.clone(), enc);
+            },
+//            _ => return Err(ZeroError::EncryptionError{
+//                message: format!("Unsupported value type {:?} for encryption", lit).into(),
+//                code: "1064".into()
+//            }.into())
+        }
+
+        Ok(())
+    }
 }
 
 
@@ -61,18 +97,7 @@ impl RelVisitor for EncryptVisitor  {
 								&Rex::Literal(ref lit) => {
 									if let Rex::Identifier{ref id, ref el} = c_list[index] {
 										if el.encryption != EncryptionType::NA {
-											match lit {
-												&LiteralExpr::LiteralLong(ref i, ref val) => {
-													self.valuemap.insert(i.clone(), val.encrypt(&el.encryption, &el.key)?);
-												},
-												&LiteralExpr::LiteralString(ref i, ref val) => {
-													self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption, &el.key)?);
-												}
-												_ => return Err(ZeroError::EncryptionError{
-                                                    message: format!("Unsupported value type {:?} for encryption", lit).into(),
-                                                    code: "1064".into()
-                                                }.into())
-											}
+                                            self.encrypt_literal(lit, el)?;
 										}
 
 									} else {
@@ -123,18 +148,7 @@ impl RelVisitor for EncryptVisitor  {
 								_ => {
 									match op {
 										&Operator::EQ => {
-											match literal {
-												&LiteralExpr::LiteralLong(ref i, ref val) => {
-													self.valuemap.insert(i.clone(), val.encrypt(&element.encryption, &element.key)?);
-												},
-												&LiteralExpr::LiteralString(ref i, ref val) => {
-													self.valuemap.insert(i.clone(), val.clone().encrypt(&element.encryption, &element.key)?);
-												}
-												_ => return  Err(ZeroError::EncryptionError{
-                                                    message: format!("Unsupported value type {:?} for encryption", literal).into(),
-                                                    code: "1064".into()
-                                                }.into())
-											}
+                                            self.encrypt_literal(literal, element)?;
 										},
 										_ => return  Err(ZeroError::EncryptionError{
                                             message: format!("Operator {:?} not supported for encrypted column {}", op, element.name).into(),
