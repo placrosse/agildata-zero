@@ -34,7 +34,7 @@ mod tests {
                 ((bytes[2] as u32) << 16) |
                 ((bytes[1] as u32) << 8) |
                 bytes[0] as u32;
-            print!("packet_len = {}", packet_len);
+            debug!("packet_len = {}", packet_len);
 
             // next byte is sequence_id
             let _sequence_id = bytes[3];
@@ -75,7 +75,7 @@ mod tests {
 
         let packet = handler.parse(packet).unwrap();
 
-        print!("Packet = {:?}", packet);
+        debug!("Packet = {:?}", packet);
     }
 
 }

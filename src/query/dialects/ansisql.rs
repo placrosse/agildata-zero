@@ -219,7 +219,7 @@ impl Dialect for AnsiSQLDialect {
     }
 
     fn get_precedence<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>)-> Result<u8, Box<ZeroError>> {
-        println!("get_precedence() token={:?}", tokens.peek());
+        debug!("get_precedence() token={:?}", tokens.peek());
         let prec = match tokens.peek() {
             Some(token) => match token {
                 &Token::Operator(ref t) => match &t as &str {
@@ -250,7 +250,7 @@ impl Dialect for AnsiSQLDialect {
     }
 
     fn parse_infix<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>, left: ASTNode, precedence: u8)-> Result<Option<ASTNode>, Box<ZeroError>> {
-        println!("parse_infix() {}", precedence);
+        debug!("parse_infix() {}", precedence);
 		match tokens.peek() {
 			Some(token) => match token {
 				&Token::Operator(_) => Ok(Some(try!(self.parse_binary(left, tokens)))),
@@ -259,12 +259,12 @@ impl Dialect for AnsiSQLDialect {
 					"JOIN" | "INNER" | "RIGHT" | "LEFT" | "CROSS" | "FULL" => Ok(Some(try!(self.parse_join(left, tokens)))),
 					"AS" => Ok(Some(try!(self.parse_alias(left, tokens)))),
 					_ => {
-						println!("Returning no infix for keyword {:?}", t);
+						debug!("Returning no infix for keyword {:?}", t);
 						Ok(None)
 					}
 				},
 				_ => {
-					println!("Returning no infix for token {:?}", token);
+					debug!("Returning no infix for token {:?}", token);
 					Ok(None)
 				}
 
@@ -279,7 +279,7 @@ impl AnsiSQLDialect {
     fn parse_insert<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  Box<ZeroError>>
 		 {
 
-		println!("parse_insert()");
+		debug!("parse_insert()");
 
 		// TODO validation
 		tokens.consume_keyword("INSERT");
@@ -313,7 +313,7 @@ impl AnsiSQLDialect {
 
 	fn parse_select<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,   Box<ZeroError>> {
 
-		println!("parse_select()");
+		debug!("parse_select()");
 		// consume the SELECT
 		tokens.next();
 		let proj = Box::new(try!(self.parse_expr_list(tokens)));
@@ -393,7 +393,7 @@ impl AnsiSQLDialect {
 	pub fn parse_expr_list<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,   Box<ZeroError>>
 		 {
 
-		println!("parse_expr_list()");
+		debug!("parse_expr_list()");
 		let first = tokens.parse_expr(0)?;
 		let mut v: Vec<ASTNode> = Vec::new();
 		v.push(first);
@@ -411,7 +411,7 @@ impl AnsiSQLDialect {
 	fn parse_order_by_list<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,   Box<ZeroError>>
 		 {
 
-		println!("parse_order_by_list()");
+		debug!("parse_order_by_list()");
 		let mut v: Vec<ASTNode> = Vec::new();
 		v.push(try!(self.parse_order_by_expr(tokens)));
 		while let Some(&Token::Punctuator(ref p)) = tokens.peek() {
@@ -446,7 +446,7 @@ impl AnsiSQLDialect {
 	fn parse_binary<'a, D: Dialect>(&self, left: ASTNode, tokens: &Tokens<'a, D>) -> Result<ASTNode,  Box<ZeroError>>
 		 {
 
-		println!("parse_binary()");
+		debug!("parse_binary()");
 		let precedence = self.get_precedence(tokens)?;
 		// determine operator
 		let operator = match tokens.next().unwrap() {
@@ -478,7 +478,7 @@ impl AnsiSQLDialect {
 	pub fn parse_identifier<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  Box<ZeroError>>
 		 {
 
-		println!("parse_identifier()");
+		debug!("parse_identifier()");
 		match tokens.next().unwrap() {
 			&Token::Identifier(ref v) => Ok(ASTNode::SQLIdentifier{id: v.clone(), parts: self.get_identifier_parts(v)?}),
 			&Token::Operator(ref o) => match &o as &str {
