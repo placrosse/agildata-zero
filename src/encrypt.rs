@@ -42,6 +42,18 @@ pub enum NativeType {
 	LONGTEXT(u64)
 }
 
+impl NativeType {
+	pub fn is_supported(&self) -> bool {
+		match *self {
+			NativeType::U64 | NativeType::I64 | NativeType::Char(_) |
+			NativeType::Varchar(_) | NativeType::F64 | NativeType::D128 |
+			NativeType::BOOL | NativeType::DATETIME(_) |
+			NativeType::DATE => true,
+			_ => false
+		}
+	}
+}
+
 pub trait Encrypt {
 
 	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<ZeroError>>;

@@ -167,10 +167,18 @@ fn parse_table_config(builder: &mut TableConfigBuilder, children: Vec<Xml>) {
 						Ok(t) => t,
 						Err(e) => panic!("Failed to determine data type for {}.{} : {}", tbl_name, name, e)
 					};
+
+					let encrypt_type = determine_encryption(&encryption);
+					if encrypt_type != EncryptionType::NA && !dt.is_supported() {
+						panic!("Column: {}.{} Native Type {:?} is not supported for encryption {:?}",
+							tbl_name, name, native_type, encrypt_type
+						)
+					}
+
 					builder.add_column(ColumnConfig{
 						name: name,
                         native_type: dt,
-                        encryption: determine_encryption(&encryption),
+                        encryption: encrypt_type,
                         key: key,
 					});
 				},
@@ -198,6 +206,7 @@ fn determine_native_type(native_type: &String) -> Result<NativeType, Box<ZeroErr
 	let parsed_qs = dialect.parse_column_qualifiers(&tokens)?.unwrap_or(vec![]);
 
 	// Iterate over qualifiers and propagate error on unsupported
+	// potential support could be DEFAULT, [NOT] NULL, etc
 	let qualifiers = parsed_qs
 		.iter().map(|o| {
 			match o {
