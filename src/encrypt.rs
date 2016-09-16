@@ -24,7 +24,8 @@ pub enum EncryptionType {
 pub enum NativeType {
 	U64,
 	I64,
-	Varchar(u32),
+	Char(u32), // fixed
+	Varchar(u32), // variable
 	F64,
 	D128,
 	BOOL,

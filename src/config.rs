@@ -224,10 +224,19 @@ fn determine_native_type(native_type: &String) -> NativeType {
 						&SmallInt{..} | &MediumInt{..} |
 						&Int{..} | &BigInt{..}
 						=> NativeType::U64,
+
 					&Double{..} | &Float{..} => NativeType::F64,
 					&Decimal{..} => NativeType::D128,
 					&Bool => NativeType::BOOL,
-					&Varchar{ref length} => NativeType::Varchar(50),
+					&Char{ref length} | &NChar{ref length}  => NativeType::Char(match length {
+						&Some(l) => l,
+						&None => 1 // MySQL's default
+					}),
+					&Varchar{ref length} | &NVarchar{ref length} => NativeType::Varchar(match length {
+						&Some(l) => l,
+						&None => panic!("CHARACTER VARYING datatype requires length") // TODO parser shouldn't allow this
+					}),
+
 					_ => panic!("Unsupported data type {:?}", dt)
 				},
 				_ => panic!("Unexpected native type expression {:?}", p)
@@ -464,43 +473,54 @@ mod tests {
 	}
 
 	#[test]
-	fn test_config() {
-		let config = super::parse_config("src/test/test-zero-config.xml");
-		let table_config = config.get_table_config(&"config_test".into(), &"numerics".into()).unwrap();
-		assert_eq!(table_config.column_map.get("a").unwrap().native_type,U64);
-		assert_eq!(table_config.column_map.get("b").unwrap().native_type,U64);
-		assert_eq!(table_config.column_map.get("c").unwrap().native_type,U64);
-		assert_eq!(table_config.column_map.get("d").unwrap().native_type,U64);
-		assert_eq!(table_config.column_map.get("e").unwrap().native_type,BOOL);
-		assert_eq!(table_config.column_map.get("f").unwrap().native_type,BOOL);
-		assert_eq!(table_config.column_map.get("g").unwrap().native_type,U64);
-		assert_eq!(table_config.column_map.get("h").unwrap().native_type,U64);
-		assert_eq!(table_config.column_map.get("i").unwrap().native_type,U64);
-		assert_eq!(table_config.column_map.get("j").unwrap().native_type,U64);
-		assert_eq!(table_config.column_map.get("k").unwrap().native_type,U64);
-		assert_eq!(table_config.column_map.get("l").unwrap().native_type,U64);
-		assert_eq!(table_config.column_map.get("m").unwrap().native_type,U64);
-		assert_eq!(table_config.column_map.get("n").unwrap().native_type,U64);
-		assert_eq!(table_config.column_map.get("o").unwrap().native_type,D128);
-		assert_eq!(table_config.column_map.get("p").unwrap().native_type,D128);
-		assert_eq!(table_config.column_map.get("q").unwrap().native_type,D128);
-		assert_eq!(table_config.column_map.get("r").unwrap().native_type,D128);
-		assert_eq!(table_config.column_map.get("s").unwrap().native_type,D128);
-		assert_eq!(table_config.column_map.get("t").unwrap().native_type,D128);
-		assert_eq!(table_config.column_map.get("u").unwrap().native_type,F64);
-		assert_eq!(table_config.column_map.get("v").unwrap().native_type,F64);
-		assert_eq!(table_config.column_map.get("w").unwrap().native_type,F64);
-		assert_eq!(table_config.column_map.get("x").unwrap().native_type,F64);
-		assert_eq!(table_config.column_map.get("y").unwrap().native_type,F64);
-		assert_eq!(table_config.column_map.get("z").unwrap().native_type,F64);
-		assert_eq!(table_config.column_map.get("aa").unwrap().native_type,F64);
-		assert_eq!(table_config.column_map.get("ab").unwrap().native_type,F64);
-		assert_eq!(table_config.column_map.get("ac").unwrap().native_type,F64);
+	fn test_config_data_types() {
+		let s_config = super::parse_config("src/test/test-zero-config.xml");
+		// Numerics
 
+		let mut config = s_config.get_table_config(&"config_test".into(), &"numerics".into()).unwrap();
+		assert_eq!(config.column_map.get("a").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("b").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("c").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("d").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("e").unwrap().native_type,BOOL);
+		assert_eq!(config.column_map.get("f").unwrap().native_type,BOOL);
+		assert_eq!(config.column_map.get("g").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("h").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("i").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("j").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("k").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("l").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("m").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("n").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("o").unwrap().native_type,D128);
+		assert_eq!(config.column_map.get("p").unwrap().native_type,D128);
+		assert_eq!(config.column_map.get("q").unwrap().native_type,D128);
+		assert_eq!(config.column_map.get("r").unwrap().native_type,D128);
+		assert_eq!(config.column_map.get("s").unwrap().native_type,D128);
+		assert_eq!(config.column_map.get("t").unwrap().native_type,D128);
+		assert_eq!(config.column_map.get("u").unwrap().native_type,F64);
+		assert_eq!(config.column_map.get("v").unwrap().native_type,F64);
+		assert_eq!(config.column_map.get("w").unwrap().native_type,F64);
+		assert_eq!(config.column_map.get("x").unwrap().native_type,F64);
+		assert_eq!(config.column_map.get("y").unwrap().native_type,F64);
+		assert_eq!(config.column_map.get("z").unwrap().native_type,F64);
+		assert_eq!(config.column_map.get("aa").unwrap().native_type,F64);
+		assert_eq!(config.column_map.get("ab").unwrap().native_type,F64);
+		assert_eq!(config.column_map.get("ac").unwrap().native_type,F64);
 
-
-
-
+		config = s_config.get_table_config(&"config_test".into(), &"character".into()).unwrap();
+		assert_eq!(config.column_map.get("a").unwrap().native_type,Char(1));
+		assert_eq!(config.column_map.get("b").unwrap().native_type,Char(1));
+		assert_eq!(config.column_map.get("c").unwrap().native_type,Char(255));
+		assert_eq!(config.column_map.get("d").unwrap().native_type,Char(1));
+		assert_eq!(config.column_map.get("e").unwrap().native_type,Char(255));
+		assert_eq!(config.column_map.get("f").unwrap().native_type,Char(1));
+		assert_eq!(config.column_map.get("g").unwrap().native_type,Char(1));
+		assert_eq!(config.column_map.get("h").unwrap().native_type,Char(255));
+		assert_eq!(config.column_map.get("i").unwrap().native_type,Char(50));
+		assert_eq!(config.column_map.get("j").unwrap().native_type,Varchar(50));
+		assert_eq!(config.column_map.get("k").unwrap().native_type,Varchar(50));
+		assert_eq!(config.column_map.get("l").unwrap().native_type,Varchar(50));
 
 	}
 
