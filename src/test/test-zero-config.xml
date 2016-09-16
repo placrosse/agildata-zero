@@ -96,16 +96,49 @@
             <column name="a" type="DATE" encryption="AES" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
             <column name="b" type="DATETIME" encryption="AES" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
             <column name="c" type="DATETIME(6)" encryption="AES" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
-            <column name="d" type="TIME" encryption="AES" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
-            <column name="e" type="TIME(6)" encryption="AES" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
 
             <!-- Unsupported for encryption-->
+            <column name="d" type="TIME" encryption="NONE" />
+            <column name="e" type="TIME(6)" encryption="NONE" />
             <column name="f" type="TIMESTAMP" encryption="NONE" />
             <column name="g" type="TIMESTAMP(6)" encryption="NONE" />
             <column name="h" type="YEAR" encryption="NONE" />
             <column name="i" type="YEAR(4)" encryption="NONE" />
 
         </table>
+
+
+        <!-- currently all unsupported for encryption, see PT #130245447 -->
+        <table name="binary">
+            <column name="a" type="BINARY" encryption="NONE" />
+            <column name="b" type="BINARY(50)" encryption="NONE" />
+            <column name="c" type="VARBINARY(50)" encryption="NONE" />
+            <column name="d" type="TINYBLOB" encryption="NONE" />
+            <column name="e" type="TINYTEXT" encryption="NONE" />
+            <column name="f" type="BLOB" encryption="NONE" />
+            <column name="g" type="BLOB(50)" encryption="NONE" />
+            <column name="h" type="TEXT" encryption="NONE" />
+            <column name="i" type="TEXT(100)" encryption="NONE" />
+            <column name="j" type="MEDIUMBLOB" encryption="NONE" />
+            <column name="k" type="MEDIUMTEXT" encryption="NONE" />
+            <column name="l" type="LONGBLOB" encryption="NONE" />
+            <column name="m" type="LONGTEXT" encryption="NONE" />
+            <column name="n" type="CHAR BYTE" encryption="NONE" />
+            <column name="o" type="CHAR(50) BYTE" encryption="NONE" />
+        </table>
+
+        <!--<table name="numerics_signed">-->
+            <!--<column name="a" type="TINYINT SIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>-->
+            <!--<column name="b" type="TINYINT(10) UNSIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>-->
+            <!--<column name="c" type="SMALLINT UNSIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>-->
+            <!--<column name="d" type="SMALLINT(100) SIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>-->
+            <!--<column name="e" type="INT SIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>-->
+            <!--<column name="f" type="INT(64) UNSIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>-->
+            <!--<column name="g" type="INTEGER UNSIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>-->
+            <!--<column name="h" type="INTEGER(64) SIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>-->
+            <!--<column name="i" type="BIGINT SIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>-->
+            <!--<column name="j" type="BIGINT(100) UNSIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>-->
+        <!--</table>-->
 
     </schema>
 </client-config>

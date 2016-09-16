@@ -31,11 +31,15 @@ pub enum NativeType {
 	BOOL,
 	DATETIME(u32), // fsp
 	DATE,
-	TIME(u32),
 
 	// These are representative native types, but not supported as encrypted columns
 	TIMESTAMP(u32),
-	YEAR(u32)
+	TIME(u32),
+	YEAR(u32),
+	FIXEDBINARY(u32),
+	VARBINARY(u32), // Max of 65535
+	LONGBLOB(u64),
+	LONGTEXT(u64)
 }
 
 pub trait Encrypt {
