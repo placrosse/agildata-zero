@@ -44,7 +44,7 @@
         </table>
     </schema>
 
-    <schema name="config_test">
+    <schema name="data_types">
         <table name="numerics">
             <column name="a" type="BIT" encryption="AES" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
             <column name="b" type="BIT(2)" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>

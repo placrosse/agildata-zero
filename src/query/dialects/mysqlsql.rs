@@ -318,7 +318,7 @@ impl<'d> MySQLDialect<'d> {
 		}
 	}
 
-	fn parse_column_qualifier<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) ->  Result<Option<ASTNode>,  Box<ZeroError>>
+	pub fn parse_column_qualifier<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) ->  Result<Option<ASTNode>,  Box<ZeroError>>
 		 {
 
 		debug!("parse_column_qualifier() {:?}", tokens.peek());

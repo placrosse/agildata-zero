@@ -11,6 +11,7 @@ use query::{Tokenizer, ASTNode};
 use query::MySQLDataType::*;
 use query::dialects::ansisql::*;
 use query::dialects::mysqlsql::*;
+use error::ZeroError;
 
 
 
@@ -155,9 +156,13 @@ fn parse_table_config(builder: &mut TableConfigBuilder, children: Vec<Xml>) {
                               } else {
                                   [0u8; 32]
                               };
+					let dt = match determine_native_type(&native_type) {
+						Ok(t) => t,
+						Err(e) => panic!("Failed to determine data type for {}.{} : {}", tbl_name, name, e)
+					};
 					builder.add_column(ColumnConfig{
 						name: name,
-                        native_type: determine_native_type(&native_type),
+                        native_type: dt,
                         encryption: determine_encryption(&encryption),
                         key: key,
 					});
@@ -176,55 +181,53 @@ fn get_attr_or_fail(name: &str, element: &xml::Element) -> String {
 	}
 }
 
-fn determine_native_type(native_type: &String) -> NativeType {
+fn determine_native_type(native_type: &String) -> Result<NativeType, Box<ZeroError>> {
 	let ansi = AnsiSQLDialect::new();
 	let dialect = MySQLDialect::new(&ansi);
 	let tokens = native_type.tokenize(&dialect).unwrap();
 
-	match dialect.parse_data_type(&tokens) {
-		Ok(p) => {
-			match p {
-				ASTNode::MySQLDataType(ref dt) => match dt {
-					&Bit{..} | &TinyInt{..} |
-						&SmallInt{..} | &MediumInt{..} |
-						&Int{..} | &BigInt{..}
-						=> NativeType::U64,
+	let data_type = dialect.parse_data_type(&tokens)?;
 
-					&Double{..} | &Float{..} => NativeType::F64,
-					&Decimal{..} => NativeType::D128,
-					&Bool => NativeType::BOOL,
-					&Char{ref length} | &NChar{ref length}  => NativeType::Char(length.unwrap_or(1)),
-					&Varchar{ref length} | &NVarchar{ref length} => NativeType::Varchar(match length {
-						&Some(l) => l,
-						&None => panic!("CHARACTER VARYING datatype requires length") // TODO parser shouldn't allow this
-					}),
-					&Date => NativeType::DATE,
-					&DateTime{ref fsp} => NativeType::DATETIME(fsp.unwrap_or(0)),
-					&Time{ref fsp} => NativeType::TIME(fsp.unwrap_or(0)),
-					&Timestamp{ref fsp} => NativeType::TIMESTAMP(fsp.unwrap_or(0)),
-					&Year{ref display} => NativeType::YEAR(display.unwrap_or(4)),
-					// TODO there's some length spillover here if encrypted, handle here or during translate?
-					&Binary{ref length} | &CharByte{ref length} => NativeType::FIXEDBINARY(length.unwrap_or(1)),
-					&VarBinary{ref length} => NativeType::VARBINARY(match length {
-						&Some(l) => l,
-						&None => panic!("VARBINARY requires length argument") // TODO parser shouldn't allow this
-					}),
-					&Blob{ref length} => NativeType::VARBINARY(length.unwrap_or(2_u32.pow(16))),
-					&TinyBlob => NativeType::VARBINARY(2_u32.pow(8)),
-					&MediumBlob => NativeType::LONGBLOB(2_u64.pow(24)),
-					&LongBlob => NativeType::LONGBLOB(2_u64.pow(32)),
-					&Text{ref length} => NativeType::Varchar(length.unwrap_or(2_u32.pow(16))),
-					&TinyText => NativeType::Varchar(2_u32.pow(8)),
-					&MediumText => NativeType::LONGTEXT(2_u64.pow(24)),
-					&LongText => NativeType::LONGTEXT(2_u64.pow(32)),
+	Ok(match data_type {
+		ASTNode::MySQLDataType(ref dt) => match dt {
+			&Bit{..} | &TinyInt{..} |
+				&SmallInt{..} | &MediumInt{..} |
+				&Int{..} | &BigInt{..}
+				=> NativeType::U64,
 
-					_ => panic!("Unsupported data type {:?}", dt)
-				},
-				_ => panic!("Unexpected native type expression {:?}", p)
-			}
+			&Double{..} | &Float{..} => NativeType::F64,
+			&Decimal{..} => NativeType::D128,
+			&Bool => NativeType::BOOL,
+			&Char{ref length} | &NChar{ref length}  => NativeType::Char(length.unwrap_or(1)),
+			&Varchar{ref length} | &NVarchar{ref length} => NativeType::Varchar(match length {
+				&Some(l) => l,
+				&None => return Err(ZeroError::SchemaError{message: "CHARACTER VARYING datatype requires length".into(), code: "123".into()}.into())
+			}),
+			&Date => NativeType::DATE,
+			&DateTime{ref fsp} => NativeType::DATETIME(fsp.unwrap_or(0)),
+			&Time{ref fsp} => NativeType::TIME(fsp.unwrap_or(0)),
+			&Timestamp{ref fsp} => NativeType::TIMESTAMP(fsp.unwrap_or(0)),
+			&Year{ref display} => NativeType::YEAR(display.unwrap_or(4)),
+			// TODO there's some length spillover here if encrypted, handle here or during translate?
+			&Binary{ref length} | &CharByte{ref length} => NativeType::FIXEDBINARY(length.unwrap_or(1)),
+			&VarBinary{ref length} => NativeType::VARBINARY(match length {
+				&Some(l) => l,
+				&None => return Err(ZeroError::SchemaError{message: "VARBINARY requires length argument".into(), code: "123".into()}.into()) // TODO parser shouldn't allow this
+			}),
+			&Blob{ref length} => NativeType::VARBINARY(length.unwrap_or(2_u32.pow(16))),
+			&TinyBlob => NativeType::VARBINARY(2_u32.pow(8)),
+			&MediumBlob => NativeType::LONGBLOB(2_u64.pow(24)),
+			&LongBlob => NativeType::LONGBLOB(2_u64.pow(32)),
+			&Text{ref length} => NativeType::Varchar(length.unwrap_or(2_u32.pow(16))),
+			&TinyText => NativeType::Varchar(2_u32.pow(8)),
+			&MediumText => NativeType::LONGTEXT(2_u64.pow(24)),
+			&LongText => NativeType::LONGTEXT(2_u64.pow(32)),
+
+			_ => return Err(ZeroError::SchemaError{message: format!("Unsupported data type {:?}", dt), code: "123".into()}.into())
 		},
-		Err(e) => panic!("Failed to parse data type {} due to : {}", native_type, e)
-	}
+		_ => return Err(ZeroError::SchemaError{message: format!("Unexpected native type expression {:?}", data_type), code: "123".into()}.into())
+
+	})
 }
 
 fn determine_encryption(encryption: &String) -> EncryptionType {
@@ -456,9 +459,10 @@ mod tests {
 	#[test]
 	fn test_config_data_types() {
 		let s_config = super::parse_config("src/test/test-zero-config.xml");
+		let test_schema = "data_types".into();
 		// Numerics
 
-		let mut config = s_config.get_table_config(&"config_test".into(), &"numerics".into()).unwrap();
+		let mut config = s_config.get_table_config(&test_schema, &"numerics".into()).unwrap();
 		assert_eq!(config.column_map.get("a").unwrap().native_type,U64);
 		assert_eq!(config.column_map.get("b").unwrap().native_type,U64);
 		assert_eq!(config.column_map.get("c").unwrap().native_type,U64);
@@ -489,7 +493,7 @@ mod tests {
 		assert_eq!(config.column_map.get("ab").unwrap().native_type,F64);
 		assert_eq!(config.column_map.get("ac").unwrap().native_type,F64);
 
-		config = s_config.get_table_config(&"config_test".into(), &"character".into()).unwrap();
+		config = s_config.get_table_config(&test_schema, &"character".into()).unwrap();
 		assert_eq!(config.column_map.get("a").unwrap().native_type,Char(1));
 		assert_eq!(config.column_map.get("b").unwrap().native_type,Char(1));
 		assert_eq!(config.column_map.get("c").unwrap().native_type,Char(255));
@@ -504,7 +508,7 @@ mod tests {
 		assert_eq!(config.column_map.get("l").unwrap().native_type,Varchar(50));
 
 
-		config = s_config.get_table_config(&"config_test".into(), &"temporal".into()).unwrap();
+		config = s_config.get_table_config(&test_schema, &"temporal".into()).unwrap();
 		assert_eq!(config.column_map.get("a").unwrap().native_type,DATE);
 		assert_eq!(config.column_map.get("b").unwrap().native_type,DATETIME(0));
 		assert_eq!(config.column_map.get("c").unwrap().native_type,DATETIME(6));
@@ -515,7 +519,7 @@ mod tests {
 		assert_eq!(config.column_map.get("h").unwrap().native_type,YEAR(4));
 		assert_eq!(config.column_map.get("i").unwrap().native_type,YEAR(4));
 
-		config = s_config.get_table_config(&"config_test".into(), &"binary".into()).unwrap();
+		config = s_config.get_table_config(&test_schema, &"binary".into()).unwrap();
 		assert_eq!(config.column_map.get("a").unwrap().native_type,FIXEDBINARY(1));
 		assert_eq!(config.column_map.get("b").unwrap().native_type,FIXEDBINARY(50));
 		assert_eq!(config.column_map.get("c").unwrap().native_type,VARBINARY(50));
@@ -531,6 +535,18 @@ mod tests {
 		assert_eq!(config.column_map.get("m").unwrap().native_type,LONGTEXT(2_u64.pow(32)));
 		assert_eq!(config.column_map.get("n").unwrap().native_type,FIXEDBINARY(1));
 		assert_eq!(config.column_map.get("o").unwrap().native_type,FIXEDBINARY(50));
+
+//		config = s_config.get_table_config(&test_schema, &"numerics_signed".into()).unwrap();
+//		assert_eq!(config.column_map.get("a").unwrap().native_type,I64);
+//		assert_eq!(config.column_map.get("b").unwrap().native_type,U64);
+//		assert_eq!(config.column_map.get("c").unwrap().native_type,U64);
+//		assert_eq!(config.column_map.get("d").unwrap().native_type,I64);
+//		assert_eq!(config.column_map.get("e").unwrap().native_type,I64);
+//		assert_eq!(config.column_map.get("f").unwrap().native_type,U64);
+//		assert_eq!(config.column_map.get("g").unwrap().native_type,U64);
+//		assert_eq!(config.column_map.get("h").unwrap().native_type,I64);
+//		assert_eq!(config.column_map.get("i").unwrap().native_type,I64);
+//		assert_eq!(config.column_map.get("j").unwrap().native_type,U64);
 
 	}
 
