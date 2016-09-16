@@ -111,9 +111,6 @@ impl<'a> Planner<'a> {
 
     fn sql_to_rex(&self, sql: &ASTNode, tt: &TupleType) -> Result<Rex, Box<ZeroError>> {
         match sql {
-//            &ASTNode::SQLExprList(ref v) => Ok(Rex::RexExprList(v.iter()
-//                .map(|x| self.sql_to_rex(&x, tt))
-//                .collect()?)),
             &ASTNode::SQLExprList(ref v) => Ok(Rex::RexExprList(v.iter()
                 .map(|x| self.sql_to_rex(&x, tt))
                 .collect::<Result<Vec<Rex>, Box<ZeroError>>>()?)),

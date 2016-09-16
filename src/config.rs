@@ -7,11 +7,18 @@ use self::xml::Xml;
 
 use encrypt::*;
 
-use query::{Tokenizer, ASTNode};
+use query::{Tokenizer, ASTNode, MySQLColumnQualifier};
 use query::MySQLDataType::*;
 use query::dialects::ansisql::*;
 use query::dialects::mysqlsql::*;
 use error::ZeroError;
+
+// Supported qualifiers
+#[derive(Debug, PartialEq)]
+enum NativeTypeQualifier {
+	SIGNED,
+	UNSIGNED
+}
 
 
 
@@ -188,12 +195,32 @@ fn determine_native_type(native_type: &String) -> Result<NativeType, Box<ZeroErr
 
 	let data_type = dialect.parse_data_type(&tokens)?;
 
+	let parsed_qs = dialect.parse_column_qualifiers(&tokens)?.unwrap_or(vec![]);
+
+	// Iterate over qualifiers and propagate error on unsupported
+	let qualifiers = parsed_qs
+		.iter().map(|o| {
+			match o {
+				&ASTNode::MySQLColumnQualifier(ref q) => match q {
+					&MySQLColumnQualifier::Signed => Ok(NativeTypeQualifier::SIGNED),
+					&MySQLColumnQualifier::Unsigned => Ok(NativeTypeQualifier::UNSIGNED),
+					_ => Err(ZeroError::SchemaError{message: format!("Unsupported data type qualifier {:?}", q), code: "123".into()}.into())
+				},
+				_ => Err(ZeroError::SchemaError{message: format!("Unsupported option {:?}", o), code: "123".into()}.into())
+			}
+		}).collect::<Result<Vec<NativeTypeQualifier>, Box<ZeroError>>>()?;
+
 	Ok(match data_type {
 		ASTNode::MySQLDataType(ref dt) => match dt {
 			&Bit{..} | &TinyInt{..} |
-				&SmallInt{..} | &MediumInt{..} |
-				&Int{..} | &BigInt{..}
-				=> NativeType::U64,
+			&SmallInt{..} | &MediumInt{..} |
+			&Int{..} | &BigInt{..} => {
+				if qualifiers.contains(&NativeTypeQualifier::SIGNED) {
+					NativeType::I64
+				} else {
+					NativeType::U64
+				}
+			},
 
 			&Double{..} | &Float{..} => NativeType::F64,
 			&Decimal{..} => NativeType::D128,
@@ -536,17 +563,17 @@ mod tests {
 		assert_eq!(config.column_map.get("n").unwrap().native_type,FIXEDBINARY(1));
 		assert_eq!(config.column_map.get("o").unwrap().native_type,FIXEDBINARY(50));
 
-//		config = s_config.get_table_config(&test_schema, &"numerics_signed".into()).unwrap();
-//		assert_eq!(config.column_map.get("a").unwrap().native_type,I64);
-//		assert_eq!(config.column_map.get("b").unwrap().native_type,U64);
-//		assert_eq!(config.column_map.get("c").unwrap().native_type,U64);
-//		assert_eq!(config.column_map.get("d").unwrap().native_type,I64);
-//		assert_eq!(config.column_map.get("e").unwrap().native_type,I64);
-//		assert_eq!(config.column_map.get("f").unwrap().native_type,U64);
-//		assert_eq!(config.column_map.get("g").unwrap().native_type,U64);
-//		assert_eq!(config.column_map.get("h").unwrap().native_type,I64);
-//		assert_eq!(config.column_map.get("i").unwrap().native_type,I64);
-//		assert_eq!(config.column_map.get("j").unwrap().native_type,U64);
+		config = s_config.get_table_config(&test_schema, &"numerics_signed".into()).unwrap();
+		assert_eq!(config.column_map.get("a").unwrap().native_type,I64);
+		assert_eq!(config.column_map.get("b").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("c").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("d").unwrap().native_type,I64);
+		assert_eq!(config.column_map.get("e").unwrap().native_type,I64);
+		assert_eq!(config.column_map.get("f").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("g").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("h").unwrap().native_type,I64);
+		assert_eq!(config.column_map.get("i").unwrap().native_type,I64);
+		assert_eq!(config.column_map.get("j").unwrap().native_type,U64);
 
 	}
 

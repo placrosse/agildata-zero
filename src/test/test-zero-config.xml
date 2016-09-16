@@ -127,18 +127,18 @@
             <column name="o" type="CHAR(50) BYTE" encryption="NONE" />
         </table>
 
-        <!--<table name="numerics_signed">-->
-            <!--<column name="a" type="TINYINT SIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>-->
-            <!--<column name="b" type="TINYINT(10) UNSIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>-->
-            <!--<column name="c" type="SMALLINT UNSIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>-->
-            <!--<column name="d" type="SMALLINT(100) SIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>-->
-            <!--<column name="e" type="INT SIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>-->
-            <!--<column name="f" type="INT(64) UNSIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>-->
-            <!--<column name="g" type="INTEGER UNSIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>-->
-            <!--<column name="h" type="INTEGER(64) SIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>-->
-            <!--<column name="i" type="BIGINT SIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>-->
-            <!--<column name="j" type="BIGINT(100) UNSIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>-->
-        <!--</table>-->
+        <table name="numerics_signed">
+            <column name="a" type="TINYINT SIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+            <column name="b" type="TINYINT(10) UNSIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+            <column name="c" type="SMALLINT UNSIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+            <column name="d" type="SMALLINT(100) SIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+            <column name="e" type="INT SIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+            <column name="f" type="INT(64) UNSIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+            <column name="g" type="INTEGER UNSIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+            <column name="h" type="INTEGER(64) SIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+            <column name="i" type="BIGINT SIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+            <column name="j" type="BIGINT(100) UNSIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+        </table>
 
     </schema>
 </client-config>
