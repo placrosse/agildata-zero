@@ -157,6 +157,7 @@ impl Encrypt for i64 {
 				let mut buf: Vec<u8> = Vec::new();
 				buf.write_i64::<BigEndian>(self).unwrap();
 
+				println!("HERE {}", buf.len());
 				encrypt(key, &buf)
 			},
 			_ => Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())

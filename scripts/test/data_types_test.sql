@@ -1,3 +1,5 @@
+USE data_types;
+
 CREATE TABLE numerics (
     a BIT,
     b BIT(2),
@@ -34,6 +36,13 @@ INSERT INTO numerics (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t
 
 SELECT a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, aa FROM numerics;
 
+SELECT a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, aa FROM numerics
+    WHERE a = 1 AND b = 2 AND c = 10 AND d = 123 AND e = true AND f = false AND g = 1234 AND h = 1234
+     AND i = 12345 AND j = 12345 AND k = 12345 AND l = 12345 AND m = 123456 AND n = 123456
+      AND o = 10.12345 AND p = 10000.12 AND q = 10000.12 AND r = 10.12345 AND s = 10000.12
+       AND t = 10000.12 AND u = 123.456 AND v = 123.456 AND w = 123.45 AND x = 12345.6789
+        AND y = 12345.67 AND z = 12345.6789 AND aa = 12345.67
+
 CREATE TABLE characters (
     a NATIONAL CHAR,
     b CHAR,
@@ -54,3 +63,30 @@ INSERT INTO characters (a, b, c, d, e, f, g, h, i, j, k, l)
         'nvariableness', 'varying characters');
 
 SELECT a, b, c, d, e, f, g, h, i, j, k, l FROM characters;
+
+SELECT a, b, c, d, e, f, g, h, i, j, k, l FROM characters
+    WHERE a = 'a' AND b = 'a' AND c = 'chars' AND d = 'b' AND e = 'nchars' AND f = 'b' AND g = 'b'
+     AND h = 'characters' AND i = 'ineedtwentyfivecharacters' AND j = 'variableness'
+     AND k = 'nvariableness' AND l = 'varying characters';
+
+CREATE TABLE numerics_signed (
+    a TINYINT SIGNED,
+    b TINYINT(10) UNSIGNED,
+    c SMALLINT UNSIGNED,
+    d SMALLINT(100) SIGNED,
+    e INT SIGNED,
+    f INT(64) UNSIGNED,
+    g INTEGER UNSIGNED,
+    h INTEGER(64) SIGNED,
+    i BIGINT SIGNED,
+    j BIGINT(100) UNSIGNED
+);
+
+INSERT INTO numerics_signed (a, b, c, d, e, f, g, h, i, j)
+    VALUES(-1, +1, +10, -10, -100, +100, +100, -100, -1000, +1000);
+
+SELECT a, b, c, d, e, f, g, h, i, j FROM numerics_signed;
+
+SELECT a, b, c, d, e, f, g, h, i, j FROM numerics_signed
+    WHERE a = -1 AND b = +1 AND c = +10 AND d = -10 AND e = -100
+     AND f = +100 AND g = +100 AND h = -100 AND i = -1000 AND j = +1000;

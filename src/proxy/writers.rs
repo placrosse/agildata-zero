@@ -1,6 +1,6 @@
 // use super::super::parser::sql_writer::*;
 // use super::super::parser::sql_parser::{SQLExpr, LiteralExpr, DataType};
-use query::{Writer, ExprWriter, ASTNode, LiteralExpr};
+use query::{Writer, ExprWriter, ASTNode, LiteralExpr, MySQLColumnQualifier};
 use query::MySQLDataType::*;
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -29,6 +29,17 @@ impl<'a> ExprWriter for LiteralReplacingWriter<'a> {
     			&LiteralExpr::LiteralDouble(ref i, _) => self.optionally_write_literal(i, builder),
     			&LiteralExpr::LiteralString(ref i, _) => self.optionally_write_literal(i, builder)
 			},
+            &ASTNode::SQLUnary{ref operator, expr: box ASTNode::SQLLiteral(ref e)} => match e {
+              &LiteralExpr::LiteralLong(ref i, ref val) => {
+                  // This value was encrypted as a signed value, so do not write the unary...
+                  if self.literals.contains_key(i) {
+                      self.optionally_write_literal(i, builder)
+                  } else {
+                      Ok(false)
+                  }
+              },
+              _ => Ok(false)
+            },
 			_ => Ok(false)
 		}
 	}
@@ -98,10 +109,20 @@ impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
 										_ => writer._write(builder, &self.translate_type(data_type, &config.encryption)?)?
 									}
 
+
 									match qualifiers {
 										&Some(ref list) => {
 											for q in list.iter() {
-												writer._write(builder, q)?;
+                                                if let &ASTNode::MySQLColumnQualifier(ref qual) = q {
+                                                    match qual {
+                                                        &MySQLColumnQualifier::Signed | &MySQLColumnQualifier::Unsigned => {
+                                                            if encryption_type == &EncryptionType::NA {
+                                                                writer._write(builder, q)?
+                                                            }
+                                                        },
+                                                        _ => writer._write(builder, q)?
+                                                    }
+                                                }
 											}
 										},
 										_=> {}
@@ -148,7 +169,7 @@ impl<'a> CreateTranslatingWriter<'a> {
                 &Bit{..} | &TinyInt{..} |
                 &SmallInt{..} | &MediumInt{..} |
                 &Int{..} | &BigInt{..}  => {
-					// TODO currently all are stored as 8 bytes, delegate to encrypt
+					// TODO currently all are stored as 8 bytes
 					Ok(ASTNode::MySQLDataType(Binary{length: Some(8 + 28)}))
 				},
                 &Bool => Ok(ASTNode::MySQLDataType(Binary{length: Some(1 + 28)})),

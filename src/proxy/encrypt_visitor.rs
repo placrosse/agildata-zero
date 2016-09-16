@@ -5,6 +5,8 @@ use encrypt::*;
 use error::ZeroError;
 use decimal::*;
 use std::str::FromStr;
+// TODO error: use of unstable library feature 'try_from' (see issue #33417)
+//use std::convert::TryFrom;
 
 #[derive(Debug)]
 pub struct EncryptVisitor {
@@ -17,10 +19,24 @@ impl EncryptVisitor {
 		&self.valuemap
 	}
 
-    pub fn encrypt_literal(&mut self, lit: &LiteralExpr, el: &Element) -> Result<(), Box<ZeroError>> {
+    pub fn encrypt_literal(&mut self, lit: &LiteralExpr, el: &Element, sign: Option<&Operator>) -> Result<(), Box<ZeroError>> {
         match lit {
             &LiteralExpr::LiteralLong(ref i, ref val) => {
-                self.valuemap.insert(i.clone(), val.encrypt(&el.encryption, &el.key)?);
+                let encrypted = match (&el.data_type, sign) {
+                    // TODO error: use of unstable library feature 'try_from' (see issue #33417)
+//                    (&NativeType::I64, Some(&Operator::SUB)) => match i64::try_from(val.clone()) {
+//                        Ok(v) => v.encrypt(&el.encryption, &el.key)?,
+//                        Err(e) => panic!("e")
+//                    },
+
+                    // hack, due to unstable TryFrom noted above
+                    (&NativeType::I64, Some(&Operator::SUB)) => match i64::from_str(&format!("{}", val)) {
+                        Ok(v) => (-v).encrypt(&el.encryption, &el.key)?,
+                        Err(e) => panic!("e")
+                    },
+                    _ => val.encrypt(&el.encryption, &el.key)?
+                };
+                self.valuemap.insert(i.clone(), encrypted);
             },
             &LiteralExpr::LiteralString(ref i, ref val) => {
                 self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption, &el.key)?);
@@ -97,7 +113,7 @@ impl RelVisitor for EncryptVisitor  {
 								&Rex::Literal(ref lit) => {
 									if let Rex::Identifier{ref id, ref el} = c_list[index] {
 										if el.encryption != EncryptionType::NA {
-                                            self.encrypt_literal(lit, el)?;
+                                            self.encrypt_literal(lit, el, None)?;
 										}
 
 									} else {
@@ -107,6 +123,20 @@ impl RelVisitor for EncryptVisitor  {
                                         }.into())
                                     }
 								},
+                                // TODO swap this logic out with some evaluate()
+                                &Rex::RexUnary{ref operator, rex: box Rex::Literal(ref lit)} => {
+                                    if let Rex::Identifier{ref id, ref el} = c_list[index] {
+                                        if el.encryption != EncryptionType::NA {
+                                            self.encrypt_literal(lit, el, Some(operator))?;
+                                        }
+
+                                    } else {
+                                        return Err(ZeroError::EncryptionError{
+                                            message: format!("Expected identifier at column list index {}, received {:?}", index, c_list[index]).into(),
+                                            code: "1064".into()
+                                        }.into())
+                                    }
+                                },
 								_ => {}
 							}
 						}
@@ -143,21 +173,48 @@ impl RelVisitor for EncryptVisitor  {
 							},
 							_ => None
 						} {
-							match element.encryption {
-								EncryptionType::NA => {},
-								_ => {
-									match op {
-										&Operator::EQ => {
-                                            self.encrypt_literal(literal, element)?;
-										},
-										_ => return  Err(ZeroError::EncryptionError{
+                            match element.encryption {
+                                EncryptionType::NA => {},
+                                _ => {
+                                    match op {
+                                        &Operator::EQ => {
+                                            self.encrypt_literal(literal, element, None)?;
+                                        },
+                                        _ => return Err(ZeroError::EncryptionError {
                                             message: format!("Operator {:?} not supported for encrypted column {}", op, element.name).into(),
                                             code: "1064".into()
                                         }.into())
-									}
-								}
-							}
+                                    }
+                                }
+                            }
 
+                        // a binary between and encrypted column and unary operated literal
+                        } else if let Some((element, literal, sign)) = match (left, right) {
+                            (&Rex::Identifier{ref el, ..}, &Rex::RexUnary{ref operator, rex: box Rex::Literal(ref l)})
+                            | (&Rex::RexUnary{ref operator, rex: box Rex::Literal(ref l)}, &Rex::Identifier{ref el, ..}, )=> {
+                                match el.encryption {
+                                    EncryptionType::NA => None,
+                                    _ => Some((el, l, Some(operator)))
+                                }
+                            },
+                            _ => None
+                        } {
+                            match element.encryption {
+                                EncryptionType::NA => {},
+                                _ => {
+                                    match op {
+                                        &Operator::EQ => {
+                                            self.encrypt_literal(literal, element, sign)?;
+                                        },
+                                        _ => return Err(ZeroError::EncryptionError {
+                                            message: format!("Operator {:?} not supported for encrypted column {}", op, element.name).into(),
+                                            code: "1064".into()
+                                        }.into())
+                                    }
+                                }
+                            }
+
+                        // a binary between two encrypted columns
 						} else if let Some((left_element, right_element)) = match (left, right) {
 							(&Rex::Identifier{el: ref l, ..}, &Rex::Identifier{el: ref r, .. }) => Some((l, r)),
 							_ => None

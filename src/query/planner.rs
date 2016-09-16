@@ -54,6 +54,7 @@ pub enum Rex {
     BinaryExpr{left: Box<Rex>, op: Operator, right: Box<Rex>},
     //RelationalExpr(Rel),
     RexExprList(Vec<Rex>),
+    RexUnary{operator: Operator, rex: Box<Rex>}
 }
 
 impl Rex {
@@ -162,6 +163,9 @@ impl<'a> Planner<'a> {
                 })
             },
             &ASTNode::SQLLiteral(ref literal) => Ok(Rex::Literal(literal.clone())),
+            &ASTNode::SQLUnary{ref operator, box ref expr} => {
+                Ok(Rex::RexUnary{operator: operator.clone(), rex: Box::new(self.sql_to_rex(expr, tt)?)})
+            },
             _ => Err(ZeroError::ParseError{
                 message: format!("Unsupported expr {:?}", sql).into(),
                 code: "1064".into()
