@@ -33,3 +33,24 @@ INSERT INTO numerics (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t
        10.12345, 10000.12, 10000.12, 123.456, 123.456, 123.45, 12345.6789, 12345.67, 12345.6789, 12345.67);
 
 SELECT a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, aa FROM numerics;
+
+CREATE TABLE characters (
+    a NATIONAL CHAR,
+    b CHAR,
+    c CHAR(255),
+    d NCHAR,
+    e NCHAR(255),
+    f NATIONAL CHARACTER,
+    g CHARACTER,
+    h CHARACTER(255),
+    i NATIONAL CHARACTER(50),
+    j VARCHAR(50),
+    k NVARCHAR(50),
+    l CHARACTER VARYING(50)
+);
+
+INSERT INTO characters (a, b, c, d, e, f, g, h, i, j, k, l)
+    VALUES('a', 'a', 'chars', 'b', 'nchars', 'b', 'b', 'characters', 'ineedtwentyfivecharacters', 'variableness',
+        'nvariableness', 'varying characters');
+
+SELECT a, b, c, d, e, f, g, h, i, j, k, l FROM characters;

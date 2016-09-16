@@ -529,7 +529,7 @@ mod tests {
 		assert_eq!(config.column_map.get("ab").unwrap().native_type,F64);
 		assert_eq!(config.column_map.get("ac").unwrap().native_type,F64);
 
-		config = s_config.get_table_config(&test_schema, &"character".into()).unwrap();
+		config = s_config.get_table_config(&test_schema, &"characters".into()).unwrap();
 		assert_eq!(config.column_map.get("a").unwrap().native_type,Char(1));
 		assert_eq!(config.column_map.get("b").unwrap().native_type,Char(1));
 		assert_eq!(config.column_map.get("c").unwrap().native_type,Char(255));

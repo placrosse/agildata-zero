@@ -154,9 +154,11 @@ impl<'a> CreateTranslatingWriter<'a> {
                 &Bool => Ok(ASTNode::MySQLDataType(Binary{length: Some(1 + 28)})),
                 &Decimal{..} => Ok(ASTNode::MySQLDataType(Binary{length: Some(16 + 28)})),
                 &Float{..} | &Double{..} => Ok(ASTNode::MySQLDataType(Binary{length: Some(8 + 28)})),
-				&Varchar{ref length} | &Char{ref length} |
-				&Blob{ref length} | &Text{ref length} |
-				&Binary{ref length} | &VarBinary{ref length} => {
+                &Char{ref length} | &NChar{ref length} => {
+                    let l = length.unwrap_or(1) + 28;
+                    Ok(ASTNode::MySQLDataType(VarBinary{length: Some(l)}))
+                },
+				&Varchar{ref length} | &NVarchar{ref length} => {
 					Ok(ASTNode::MySQLDataType(VarBinary{length: Some(self.get_encrypted_string_length(length))}))
 				},
 				_ => Err(ZeroError::EncryptionError{

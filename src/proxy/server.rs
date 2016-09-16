@@ -408,7 +408,7 @@ impl ZeroHandler {
                                 let res = try!(u64::decrypt(&r.read_bytes().unwrap(), &encryption, &tt.elements[i].key));
                                 Some(format!("{}", res))
                             },
-                            &NativeType::Varchar(_) => {
+                            &NativeType::Varchar(_) | &NativeType::Char(_) => { // TODO enforce length
                                 let res = try!(String::decrypt(&r.read_bytes().unwrap(), &encryption, &tt.elements[i].key));
                                 Some(res)
                             },

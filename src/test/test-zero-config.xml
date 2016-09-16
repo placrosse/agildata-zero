@@ -77,7 +77,7 @@
             <column name="ac" type="DOUBLE PRECISION (10,2)" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
         </table>
 
-        <table name="character">
+        <table name="characters">
             <column name="a" type="NATIONAL CHAR" encryption="AES" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
             <column name="b" type="CHAR" encryption="AES" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
             <column name="c" type="CHAR(255)" encryption="AES" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
