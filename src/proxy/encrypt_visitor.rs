@@ -360,7 +360,11 @@ impl RelVisitor for EncryptVisitor  {
                     self.visit_rex(a, tt)?
                 }
             }
-			_ => {} // TODO
+//			_ => return Err(ZeroError::EncryptionError{
+//                message: format!("Unsupported Expr for encryption and validation {:?}", rex).into(),
+//                code: "1064".into()
+//            }.into())
+            _ => {}
 		}
 		Ok(())
 	}
@@ -547,6 +551,22 @@ mod tests {
 		 JOIN user_purchases AS r ON l.age > r.item_code");
 		plan = parse_and_plan(sql).unwrap().1;
 		assert_eq!(encrypt_vis.visit_rel(&plan).err().unwrap().to_string(), String::from("Unsupported operation:  l.age [AES, U64] GT r.item_code [AES, U64]"));
+
+    }
+
+    #[test]
+    fn test_relvis_rel_as_rex() {
+
+        let sql = String::from("SELECT id FROM users WHERE id = (SELECT id FROM users)");
+        let res = parse_and_plan(sql).unwrap();
+        let plan = res.1;
+
+        let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
+        let mut encrypt_vis = EncryptVisitor {
+            valuemap: value_map
+        };
+
+        encrypt_vis.visit_rel(&plan).unwrap();
 
     }
 

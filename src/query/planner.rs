@@ -52,10 +52,11 @@ pub enum Rex {
     Identifier { id: Vec<String>, el: Element },
     Literal(LiteralExpr),
     BinaryExpr{left: Box<Rex>, op: Operator, right: Box<Rex>},
-    //RelationalExpr(Rel),
+    RelationalExpr(Rel),
     RexExprList(Vec<Rex>),
     RexUnary{operator: Operator, rex: Box<Rex>},
-    RexFunctionCall{name: String, args: Vec<Rex>}
+    RexFunctionCall{name: String, args: Vec<Rex>},
+    RexNested(Box<Rex>)
 }
 
 impl Rex {
@@ -244,6 +245,16 @@ impl<'a> Planner<'a> {
                     }.into())
                 }
 
+            },
+            &ASTNode::SQLNested(box ref expr) => Ok(Rex::RexNested(Box::new(self.sql_to_rex(expr, tt)?))),
+            &ASTNode::SQLSelect{..} | &ASTNode::SQLUnion{..} => {
+                match self.sql_to_rel(sql)? {
+                    Some(rel) => Ok(Rex::RelationalExpr(rel)),
+                    None => Err(ZeroError::ParseError{
+                        message: format!("Illegal state, relational expresssion cannot be null: {:?}", sql).into(),
+                        code: "1064".into()
+                    }.into())
+                }
             },
             _ => Err(ZeroError::ParseError{
                 message: format!("Unsupported expr {:?}", sql).into(),
@@ -437,6 +448,7 @@ pub trait RelVisitor {
     fn visit_rex(&mut self, rex: &Rex, tt: &TupleType) -> Result<(), Box<ZeroError>>;
 }
 
+// TODO these tests need real assertions
 #[cfg(test)]
 mod tests {
 
@@ -546,6 +558,16 @@ mod tests {
 
         let plan = planner.sql_to_rel(&parsed).unwrap();
 
+        warn!("Plan {:#?}", plan);
+    }
+
+    #[test]
+    fn plan_rel_as_rex() {
+
+        let sql = String::from("SELECT id FROM users WHERE id = (SELECT id FROM users)");
+        let res = parse_and_plan(sql).unwrap();
+        let plan = res.1;
+
         debug!("Plan {:#?}", plan);
     }
 
@@ -563,11 +585,6 @@ mod tests {
 
     }
 
-//    fn expect_error<R>(result: Result<R, Box<ZeroError>>, message: String) -> {
-//        match result {
-//            Err(box ZeroError::)
-//        }
-//    }
     fn parse_and_plan(sql: String) -> Result<(ASTNode, Rel), Box<ZeroError>> {
         let provider = DummyProvider{};
 
