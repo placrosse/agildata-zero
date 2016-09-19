@@ -30,7 +30,7 @@ impl<'a> ExprWriter for LiteralReplacingWriter<'a> {
     			&LiteralExpr::LiteralString(ref i, _) => self.optionally_write_literal(i, builder)
 			},
             &ASTNode::SQLUnary{ref operator, expr: box ASTNode::SQLLiteral(ref e)} => match e {
-              &LiteralExpr::LiteralLong(ref i, ref val) => {
+              &LiteralExpr::LiteralLong(ref i, _) | &LiteralExpr::LiteralDouble(ref i, _) => {
                   // This value was encrypted as a signed value, so do not write the unary...
                   if self.literals.contains_key(i) {
                       self.optionally_write_literal(i, builder)
