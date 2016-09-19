@@ -12,7 +12,7 @@ AGILDATA_TEST_DB="zero"
 MYSQL_USER="agiluser"
 MYSQL_PASS="password123"
 
-TESTS=(test1 test_data_types)
+TESTS=(test1 test_data_types test_uncontrolled)
 
 # Set up the Rust version to be overridden to the required build.
 rustup override set $RUST_BUILD

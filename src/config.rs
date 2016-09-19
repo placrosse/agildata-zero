@@ -223,7 +223,6 @@ pub fn reconcile_native_type(data_type: &ASTNode, qualifiers: &Vec<NativeTypeQua
 			&Time{ref fsp} => NativeType::TIME(fsp.unwrap_or(0)),
 			&Timestamp{ref fsp} => NativeType::TIMESTAMP(fsp.unwrap_or(0)),
 			&Year{ref display} => NativeType::YEAR(display.unwrap_or(4)),
-			// TODO there's some length spillover here if encrypted, handle here or during translate?
 			&Binary{ref length} | &CharByte{ref length} => NativeType::FIXEDBINARY(length.unwrap_or(1)),
 			&VarBinary{ref length} => NativeType::VARBINARY(match length {
 				&Some(l) => l,
@@ -245,7 +244,8 @@ pub fn reconcile_native_type(data_type: &ASTNode, qualifiers: &Vec<NativeTypeQua
 	})
 }
 
-pub fn reconcile_column_qualifiers(qualifiers: &Vec<ASTNode>) -> Result<Vec<NativeTypeQualifier>, Box<ZeroError>> {
+// Should fail in config parse, but not as part of get table meta
+pub fn reconcile_column_qualifiers(qualifiers: &Vec<ASTNode>, fail: bool) -> Result<Vec<NativeTypeQualifier>, Box<ZeroError>> {
 	// Iterate over qualifiers and propagate error on unsupported
 	// potential support could be DEFAULT, [NOT] NULL, etc
 	qualifiers
@@ -254,7 +254,11 @@ pub fn reconcile_column_qualifiers(qualifiers: &Vec<ASTNode>) -> Result<Vec<Nati
 			&ASTNode::MySQLColumnQualifier(ref q) => match q {
 				&MySQLColumnQualifier::Signed => Ok(NativeTypeQualifier::SIGNED),
 				&MySQLColumnQualifier::Unsigned => Ok(NativeTypeQualifier::UNSIGNED),
-				_ => Ok(NativeTypeQualifier::OTHER) // TODO how to handle unsupported qualifiers? Ignore or error
+				_ => if fail {
+					Err(ZeroError::SchemaError{message: format!("Unsupported data type qualifier {:?}", q), code: "123".into()}.into())
+				} else {
+					Ok(NativeTypeQualifier::OTHER)
+				}
 			},
 			_ => Err(ZeroError::SchemaError{message: format!("Unsupported option {:?}", o), code: "123".into()}.into())
 		}
@@ -271,7 +275,7 @@ fn determine_native_type(native_type: &String) -> Result<NativeType, Box<ZeroErr
 	let parsed_qs = dialect.parse_column_qualifiers(&tokens)?.unwrap_or(vec![]);
 
 
-	let qualifiers = reconcile_column_qualifiers(&parsed_qs)?;
+	let qualifiers = reconcile_column_qualifiers(&parsed_qs, true)?;
 
 	reconcile_native_type(&data_type, &qualifiers)
 }

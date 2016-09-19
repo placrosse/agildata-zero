@@ -92,7 +92,7 @@ impl MySQLBackedSchemaProvider {
 								//qualifiers: Option<Vec<ASTNode>>
 								Ok(ColumnMeta {
 									name: id.clone(),
-									native_type: reconcile_native_type(dt, &reconcile_column_qualifiers(&qs)?)?,
+									native_type: reconcile_native_type(dt, &reconcile_column_qualifiers(&qs, false)?)?,
 									encryption: EncryptionType::NA,
                                     key: [0u8; 32],
 								})
