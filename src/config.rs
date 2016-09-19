@@ -7,7 +7,7 @@ use self::xml::Xml;
 
 use encrypt::*;
 
-use query::{Tokenizer, ASTNode, MySQLColumnQualifier};
+use query::{Tokenizer, ASTNode, MySQLColumnQualifier, MySQLDataType};
 use query::MySQLDataType::*;
 use query::dialects::ansisql::*;
 use query::dialects::mysqlsql::*;
@@ -15,9 +15,10 @@ use error::ZeroError;
 
 // Supported qualifiers
 #[derive(Debug, PartialEq)]
-enum NativeTypeQualifier {
+pub enum NativeTypeQualifier {
 	SIGNED,
-	UNSIGNED
+	UNSIGNED,
+	OTHER
 }
 
 
@@ -196,31 +197,9 @@ fn get_attr_or_fail(name: &str, element: &xml::Element) -> String {
 	}
 }
 
-fn determine_native_type(native_type: &String) -> Result<NativeType, Box<ZeroError>> {
-	let ansi = AnsiSQLDialect::new();
-	let dialect = MySQLDialect::new(&ansi);
-	let tokens = native_type.tokenize(&dialect).unwrap();
-
-	let data_type = dialect.parse_data_type(&tokens)?;
-
-	let parsed_qs = dialect.parse_column_qualifiers(&tokens)?.unwrap_or(vec![]);
-
-	// Iterate over qualifiers and propagate error on unsupported
-	// potential support could be DEFAULT, [NOT] NULL, etc
-	let qualifiers = parsed_qs
-		.iter().map(|o| {
-			match o {
-				&ASTNode::MySQLColumnQualifier(ref q) => match q {
-					&MySQLColumnQualifier::Signed => Ok(NativeTypeQualifier::SIGNED),
-					&MySQLColumnQualifier::Unsigned => Ok(NativeTypeQualifier::UNSIGNED),
-					_ => Err(ZeroError::SchemaError{message: format!("Unsupported data type qualifier {:?}", q), code: "123".into()}.into())
-				},
-				_ => Err(ZeroError::SchemaError{message: format!("Unsupported option {:?}", o), code: "123".into()}.into())
-			}
-		}).collect::<Result<Vec<NativeTypeQualifier>, Box<ZeroError>>>()?;
-
+pub fn reconcile_native_type(data_type: &ASTNode, qualifiers: &Vec<NativeTypeQualifier>) -> Result<NativeType, Box<ZeroError>> {
 	Ok(match data_type {
-		ASTNode::MySQLDataType(ref dt) => match dt {
+		&ASTNode::MySQLDataType(ref dt) => match dt {
 			&Bit{..} | &TinyInt{..} |
 			&SmallInt{..} | &MediumInt{..} |
 			&Int{..} | &BigInt{..} => {
@@ -264,6 +243,37 @@ fn determine_native_type(native_type: &String) -> Result<NativeType, Box<ZeroErr
 		_ => return Err(ZeroError::SchemaError{message: format!("Unexpected native type expression {:?}", data_type), code: "123".into()}.into())
 
 	})
+}
+
+pub fn reconcile_column_qualifiers(qualifiers: &Vec<ASTNode>) -> Result<Vec<NativeTypeQualifier>, Box<ZeroError>> {
+	// Iterate over qualifiers and propagate error on unsupported
+	// potential support could be DEFAULT, [NOT] NULL, etc
+	qualifiers
+		.iter().map(|o| {
+		match o {
+			&ASTNode::MySQLColumnQualifier(ref q) => match q {
+				&MySQLColumnQualifier::Signed => Ok(NativeTypeQualifier::SIGNED),
+				&MySQLColumnQualifier::Unsigned => Ok(NativeTypeQualifier::UNSIGNED),
+				_ => Ok(NativeTypeQualifier::OTHER) // TODO how to handle unsupported qualifiers? Ignore or error
+			},
+			_ => Err(ZeroError::SchemaError{message: format!("Unsupported option {:?}", o), code: "123".into()}.into())
+		}
+	}).collect::<Result<Vec<NativeTypeQualifier>, Box<ZeroError>>>()
+}
+
+fn determine_native_type(native_type: &String) -> Result<NativeType, Box<ZeroError>> {
+	let ansi = AnsiSQLDialect::new();
+	let dialect = MySQLDialect::new(&ansi);
+	let tokens = native_type.tokenize(&dialect).unwrap();
+
+	let data_type = dialect.parse_data_type(&tokens)?;
+
+	let parsed_qs = dialect.parse_column_qualifiers(&tokens)?.unwrap_or(vec![]);
+
+
+	let qualifiers = reconcile_column_qualifiers(&parsed_qs)?;
+
+	reconcile_native_type(&data_type, &qualifiers)
 }
 
 fn determine_encryption(encryption: &String) -> EncryptionType {
