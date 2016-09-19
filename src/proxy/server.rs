@@ -314,6 +314,7 @@ impl ZeroHandler {
                                     debug!("In Strict mode, allowing use of SET and SHOW");
                                     None
                                 } else {
+                                    error!("FAILED TO PARSE QUERY {}", query);
                                     return create_error(e.to_string());
                                 }
                             },
