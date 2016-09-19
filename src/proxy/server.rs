@@ -539,7 +539,13 @@ impl<'a> MySQLPacketParser<'a> {
 
         match n {
             //NOTE: depending on context, 0xfb could mean null and 0xff could mean error
-            0xfc | 0xfd | 0xfe => panic!("no support yet for length >= 251"),
+            0xfc => {
+                let len = Cursor::new(&self.payload[self.pos..]).read_u16::<LittleEndian>().unwrap() as usize;
+                self.pos += 2;
+                len
+            },
+            0xfd => panic!("no support yet for length >= 2^16"),
+            0xfe => panic!("no support yet for length >= 2^24"),
             _ => {
                 //debug!("read_len() returning {}", n);
                 n
