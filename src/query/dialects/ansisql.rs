@@ -11,7 +11,7 @@ use std::fmt::Write;
 // TODO need some way of unifying keywords between dialects
 static KEYWORDS: &'static [&'static str] = &["SELECT", "FROM", "WHERE", "AND", "OR", "UNION", "FROM", "AS",
     "WHERE", "ORDER", "BY", "HAVING", "GROUP", "ASC", "DESC", "JOIN", "INNER", "LEFT", "RIGHT", "CROSS",
-    "FULL", "ON", "INSERT", "UPDATE", "SET", "VALUES", "INTO"];
+    "FULL", "ON", "INSERT", "UPDATE", "SET", "VALUES", "INTO", "DELETE"];
 
 pub struct AnsiSQLDialect {
 	lit_index: AtomicU32
