@@ -781,8 +781,11 @@ impl ExprWriter for AnsiSQLWriter {
             &ASTNode::SQLFunctionCall{box ref identifier, ref args} => {
                 writer._write(builder, identifier)?;
                 builder.push_str("(");
+                let mut sep = "";
                 for a in args {
+                    builder.push_str(&sep);
                     writer._write(builder, a)?;
+                    sep = ", ";
                 }
                 builder.push_str(")");
             }
