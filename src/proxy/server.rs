@@ -109,7 +109,8 @@ enum HandlerState {
     Reading,
     ExpectFieldPacket(usize),
     ExpectResultRow,
-    IgnoreFurtherResults
+    IgnoreFurtherResults,
+    ForwardAll
 }
 
 struct ZeroHandler {
@@ -224,7 +225,7 @@ impl PacketHandler for ZeroHandler {
                                 (HandlerState::ExpectFieldPacket(tt.elements.len()),Action::Forward)
                             },
                             None => {
-                                panic!("Illegal!") // TODO
+                                (HandlerState::ForwardAll, Action::Forward)
                             }
                         }
                     },
@@ -256,6 +257,10 @@ impl PacketHandler for ZeroHandler {
             HandlerState::IgnoreFurtherResults => match p.bytes[4] {
                 0x00 | 0xfe | 0xff => (HandlerState::Writing, Action::Drop),
                 _ => (HandlerState::IgnoreFurtherResults, Action::Drop)
+            },
+            HandlerState::ForwardAll => match p.bytes[4] {
+                0x00 | 0xfe | 0xff => (HandlerState::Writing, Action::Forward),
+                _ => (HandlerState::ForwardAll, Action::Forward)
             },
             _ => panic!("Unsupported state {:?}", self.state)
 
@@ -303,7 +308,12 @@ impl ZeroHandler {
                         debug!("Failed to parse with: {}", e);
                         match self.parsing_mode{
                             ParsingMode::Strict =>{
-                                return create_error(e.to_string());
+                                if query.to_uppercase().starts_with("SET") || query.to_uppercase().starts_with("SHOW") {
+                                    debug!("In Strict mode, allowing use of SET and SHOW");
+                                    None
+                                } else {
+                                    return create_error(e.to_string());
+                                }
                             },
                             ParsingMode::Passive =>{
                                 debug!("In Passive mode, falling through to MySQL");
