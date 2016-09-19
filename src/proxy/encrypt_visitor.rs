@@ -514,7 +514,7 @@ mod tests {
 
         debug!("Rewritten: {}", rewritten);
 
-        assert_eq!(rewritten, String::from("SELECT COUNT ( id) FROM users"));
+        assert_eq!(rewritten, String::from("SELECT COUNT( id) FROM users"));
     }
 
 	#[test]
