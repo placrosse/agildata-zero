@@ -38,8 +38,8 @@ SELECT a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y
     WHERE a = 1 AND b = 2 AND c = 10 AND d = 123 AND e = true AND f = false AND g = 1234 AND h = 1234
      AND i = 12345 AND j = 12345 AND k = 12345 AND l = 12345 AND m = 123456 AND n = 123456
       AND o = 10.12345 AND p = 10000.12 AND q = 10000.12 AND r = 10.12345 AND s = 10000.12
-       AND t = 10000.12 AND u = 123.456 AND v = 123.456 AND w = 123.45 AND x = 12345.6789
-        AND y = 12345.67 AND z = 12345.6789 AND aa = 12345.67;
+       AND t = -10000.12 AND u = 123.456 AND v = 123.456 AND w = 123.45 AND x = 12345.6789
+        AND y = 12345.67 AND z = 12345.6789 AND aa = -12345.67;
 
 CREATE TABLE characters (
     a NATIONAL CHAR,
@@ -106,3 +106,8 @@ INSERT INTO temporal (a, b, c, d, e, f, g, h, i)
         '15:22:06.002347', '2015-01-24 15:22:06', '2015-01-24 15:22:06.002347', '1993', '2006');
 
 SELECT a, b, c, d, e, f, g, h, i FROM temporal;
+
+SELECT a, b, c, d, e, f, g, h, i FROM temporal
+    WHERE a = '2016-09-15' AND b = '2015-01-24 15:22:06' AND c = '2015-01-24 15:22:06.002347'
+    AND d = '15:22:06.002347' AND e = '15:22:06.002347' AND f = '2015-01-24 15:22:06'
+    AND g = '2015-01-24 15:22:06.002347' AND h = '1993' AND i = '2006';
