@@ -308,7 +308,9 @@ impl ZeroHandler {
                         debug!("Failed to parse with: {}", e);
                         match self.parsing_mode{
                             ParsingMode::Strict =>{
-                                if query.to_uppercase().starts_with("SET") || query.to_uppercase().starts_with("SHOW") {
+                                let q = query.to_uppercase();
+                                if q.starts_with("SET") || q.starts_with("SHOW") || q.starts_with("BEGIN")
+                                    || q.starts_with("COMMIT") || q.starts_with("ROLLBACK") {
                                     debug!("In Strict mode, allowing use of SET and SHOW");
                                     None
                                 } else {
