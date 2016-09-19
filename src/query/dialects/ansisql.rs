@@ -191,7 +191,14 @@ impl Dialect for AnsiSQLDialect {
 					}
 					//_ => panic!("Unsupported literal {:?}", v)
 				},
-				&Token::Identifier(_) => Ok(Some(try!(self.parse_identifier(tokens)))),//Some(self.parse_identifier(tokens)),
+				&Token::Identifier(_) => {
+                    let id = self.parse_identifier(tokens)?;
+                    if tokens.consume_punctuator(&"(") {
+                        Ok(Some(self.parse_function_call(id, tokens)?))
+                    } else {
+                        Ok(Some(id))
+                    }
+				},
 				&Token::Punctuator(ref v) => match &v as &str {
 					"(" => {
 						Ok(Some(try!(self.parse_nested(tokens))))
@@ -504,6 +511,19 @@ impl AnsiSQLDialect {
 		Ok(id.split(".").map(|s| s.to_string()).collect())
 	}
 
+    fn parse_function_call<'a, D: Dialect>(&self, identifier: ASTNode, tokens: &Tokens<'a, D>) -> Result<ASTNode,  Box<ZeroError>> {
+        let mut args: Vec<ASTNode> = Vec::new();
+        args.push(tokens.parse_expr(0)?);
+
+        while tokens.consume_punctuator(",") {
+            args.push(tokens.parse_expr(0)?);
+        }
+
+        tokens.consume_punctuator(")");
+
+        Ok(ASTNode::SQLFunctionCall{identifier: Box::new(identifier), args: args})
+    }
+
 	fn parse_nested<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode, Box<ZeroError>>
 		 {
 
@@ -757,7 +777,15 @@ impl ExprWriter for AnsiSQLWriter {
 				writer._write(builder, left)?;
 				self._write_union_type(builder, union_type);
 				writer._write(builder, right)?;
-			}
+			},
+            &ASTNode::SQLFunctionCall{box ref identifier, ref args} => {
+                writer._write(builder, identifier)?;
+                builder.push_str(" (");
+                for a in args {
+                    writer._write(builder, a)?;
+                }
+                builder.push_str(")");
+            }
 			_ => return Ok(false)
 		}
 

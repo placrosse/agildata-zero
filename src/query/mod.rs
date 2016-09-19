@@ -211,6 +211,7 @@ pub enum ASTNode {
     },
     SQLUnion{left: Box<ASTNode>, union_type: UnionType, right: Box<ASTNode>},
     SQLJoin{left: Box<ASTNode>, join_type: JoinType, right: Box<ASTNode>, on_expr: Option<Box<ASTNode>>},
+	SQLFunctionCall{identifier: Box<ASTNode>, args: Vec<ASTNode>},
 
 	// MySQL
     MySQLCreateTable{

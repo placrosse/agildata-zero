@@ -575,4 +575,48 @@ fn update() {
 
 }
 
+#[test]
+fn select_function_calls() {
+    let dialect = AnsiSQLDialect::new();
+    let sql = String::from("SELECT COUNT(id) FROM foo WHERE LOWER(b) = 'lowercase'");
+    let tokens = sql.tokenize(&dialect).unwrap();
+    let parsed = tokens.parse().unwrap();
+
+    assert_eq!(
+		SQLSelect {
+			expr_list: Box::new(SQLExprList(vec![
+			    SQLFunctionCall{
+			        identifier: Box::new(SQLIdentifier{id: String::from("COUNT"), parts: vec![String::from("COUNT")]}),
+			        args: vec![SQLIdentifier{id: String::from("id"), parts: vec![String::from("id")]}]
+                }
+			])),
+			relation: Some(Box::new(SQLIdentifier{id: String::from("foo"), parts: vec![String::from("foo")]})),
+			selection: Some(Box::new(
+                    SQLBinary {
+                        left: Box::new(
+                            SQLFunctionCall{
+                                identifier: Box::new(SQLIdentifier{id: String::from("LOWER"), parts: vec![String::from("LOWER")]}),
+                                args: vec![SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]}]
+                            }
+                        ),
+                        op: EQ,
+                        right: Box::new(SQLLiteral(LiteralString(0,String::from("lowercase"))))
+                    })
+            ),
+			order: None
+		},
+		parsed
+	);
+
+    println!("{:#?}", parsed);
+
+    let ansi_writer = AnsiSQLWriter{};
+    let writer = SQLWriter::new(vec![&ansi_writer]);
+    let rewritten = writer.write(&parsed).unwrap();
+    assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+    println!("Rewritten: {:?}", rewritten);
+
+}
+
 
