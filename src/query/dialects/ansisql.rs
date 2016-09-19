@@ -458,6 +458,10 @@ impl AnsiSQLDialect {
 				"%" => Operator::MOD,
 				">" => Operator::GT,
 				"<" => Operator::LT,
+				">=" => Operator::GTEQ,
+				"<=" => Operator::LTEQ,
+				"<>" => Operator::NEQ,
+				"!=" => Operator::NEQ,
 				"=" => Operator::EQ,
 				"AND" => Operator::AND,
 				"OR" => Operator::OR,
@@ -763,20 +767,20 @@ impl ExprWriter for AnsiSQLWriter {
 
 impl AnsiSQLWriter {
 	fn _write_operator(&self, builder: &mut String, op: &Operator) {
-        let op_text = match op {
-            &Operator::ADD => "+",
-            &Operator::SUB => "-",
-            &Operator::MULT => "*",
-            &Operator::DIV => "/",
-            &Operator::MOD => "%",
-            &Operator::GT => ">",
-            &Operator::LT => "<",
-            // Operator::GTEQ => ">=",
-            // Operator::LTEQ => "<=",
-            &Operator::EQ => "=",
-            // Operator::NEQ => "!=",
-            &Operator::OR => "OR",
-            &Operator::AND  => "AND"
+        let op_text = match *op {
+            Operator::ADD => "+",
+            Operator::SUB => "-",
+            Operator::MULT => "*",
+            Operator::DIV => "/",
+            Operator::MOD => "%",
+            Operator::GT => ">",
+            Operator::LT => "<",
+            Operator::GTEQ => ">=",
+            Operator::LTEQ => "<=",
+            Operator::EQ => "=",
+			Operator::NEQ => "!=",
+            Operator::OR => "OR",
+            Operator::AND  => "AND"
         };
         write!(builder, " {}", op_text).unwrap();
     }
