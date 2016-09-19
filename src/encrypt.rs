@@ -93,7 +93,6 @@ impl Encrypt for bool {
 				let mut buf: Vec<u8> = Vec::new();
 				buf.write_u8(self as u8).unwrap();
 
-				println!("HERE {}", buf.len());
 				encrypt(key, &buf)
 			},
 			_ => Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
@@ -157,7 +156,6 @@ impl Encrypt for i64 {
 				let mut buf: Vec<u8> = Vec::new();
 				buf.write_i64::<BigEndian>(self).unwrap();
 
-				println!("HERE {}", buf.len());
 				encrypt(key, &buf)
 			},
 			_ => Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
@@ -455,7 +453,6 @@ mod test {
 
 		let encrypted = datetime.encrypt(&enc, &key).unwrap();
 		let decrypted = DateTime::decrypt(&encrypted, &enc, &key).unwrap();
-		println!("HERERE {}", encrypted.len());
 		assert_eq!(decrypted, datetime);
 
 		let rewritten = decrypted.format("%Y-%m-%d %H:%M:%S").to_string();
@@ -471,7 +468,6 @@ mod test {
 		let datetime = UTC.datetime_from_str(&value, "%Y-%m-%d %H:%M:%S%.f").unwrap();
 
 		let encrypted = datetime.encrypt(&enc, &key).unwrap();
-		println!("HERERE {}", encrypted.len());
 		let decrypted = DateTime::decrypt(&encrypted, &enc, &key).unwrap();
 		assert_eq!(decrypted, datetime);
 
@@ -505,7 +501,6 @@ mod test {
 
 		let encrypted = value.encrypt(&enc, &key).unwrap();
 
-		println!("THERE {}", encrypted.len());
 		let decrypted = bool::decrypt(&encrypted, &enc, &key).unwrap();
 		assert_eq!(decrypted, value);
 	}
