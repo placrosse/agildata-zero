@@ -334,7 +334,10 @@ impl ZeroHandler {
 
         let plan = match self.plan(&parsed) {
             Ok(p) => p,
-            Err(e) => return create_error_from_err(e)
+            Err(e) => {
+                error!("FAILED TO PLAN QUERY {}", query);
+                return create_error_from_err(e)
+            }
         };
 
         // reqwrite query
