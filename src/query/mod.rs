@@ -244,10 +244,10 @@ pub enum Operator {
 	MOD,
 	GT,
 	LT,
-	// GTEQ,
-	// LTEQ,
+	GTEQ,
+	LTEQ,
 	EQ,
-	// NEQ,
+    NEQ,
 	OR,
 	AND
 }
