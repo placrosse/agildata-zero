@@ -448,13 +448,14 @@ mod test {
 
 	#[test]
 	fn test_encrypt_datetime() {
-		let value = String::from("2014-11-28 21:00:09");
+		let value = String::from("2015-01-24 15:22:06");
 		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
 		let enc = EncryptionType::AES;
 		let datetime = UTC.datetime_from_str(&value, "%Y-%m-%d %H:%M:%S").unwrap();
 
 		let encrypted = datetime.encrypt(&enc, &key).unwrap();
 		let decrypted = DateTime::decrypt(&encrypted, &enc, &key).unwrap();
+		println!("HERERE {}", encrypted.len());
 		assert_eq!(decrypted, datetime);
 
 		let rewritten = decrypted.format("%Y-%m-%d %H:%M:%S").to_string();
@@ -470,6 +471,7 @@ mod test {
 		let datetime = UTC.datetime_from_str(&value, "%Y-%m-%d %H:%M:%S%.f").unwrap();
 
 		let encrypted = datetime.encrypt(&enc, &key).unwrap();
+		println!("HERERE {}", encrypted.len());
 		let decrypted = DateTime::decrypt(&encrypted, &enc, &key).unwrap();
 		assert_eq!(decrypted, datetime);
 
@@ -480,7 +482,7 @@ mod test {
 
 	#[test]
 	fn test_encrypt_date() {
-		let value = String::from("2014-11-28");
+		let value = String::from("2016-09-15");
 		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
 		let enc = EncryptionType::AES;
 		let datetime = UTC.datetime_from_str(&format!("{} 00:00:00",&value), "%Y-%m-%d %H:%M:%S").unwrap();

@@ -88,3 +88,21 @@ SELECT a, b, c, d, e, f, g, h, i, j FROM numerics_signed;
 SELECT a, b, c, d, e, f, g, h, i, j FROM numerics_signed
     WHERE a = -1 AND b = +1 AND c = +10 AND d = -10 AND e = -100
      AND f = +100 AND g = +100 AND h = -100 AND i = -1000 AND j = +1000;
+
+CREATE TABLE temporal (
+    a DATE,
+    b DATETIME,
+    c DATETIME(6),
+    d TIME,
+    e TIME(6),
+    f TIMESTAMP,
+    g TIMESTAMP(6) DEFAULT '1970-01-01 00:00:01.000000',
+    h YEAR,
+    i YEAR(4)
+);
+
+INSERT INTO temporal (a, b, c, d, e, f, g, h, i)
+    VALUES('2016-09-15', '2015-01-24 15:22:06', '2015-01-24 15:22:06.002347', '15:22:06.002347',
+        '15:22:06.002347', '2015-01-24 15:22:06', '2015-01-24 15:22:06.002347', '1993', '2006');
+
+SELECT a, b, c, d, e, f, g, h, i FROM temporal;

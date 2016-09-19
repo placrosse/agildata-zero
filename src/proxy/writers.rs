@@ -182,7 +182,7 @@ impl<'a> CreateTranslatingWriter<'a> {
 				&Varchar{ref length} | &NVarchar{ref length} => {
 					Ok(ASTNode::MySQLDataType(VarBinary{length: Some(self.get_encrypted_string_length(length))}))
 				},
-                &Date | &DateTime{..} => Ok(ASTNode::MySQLDataType(Binary{length: Some(8 + 28)})),
+                &Date | &DateTime{..} => Ok(ASTNode::MySQLDataType(Binary{length: Some(12 + 28)})),
 				_ => Err(ZeroError::EncryptionError{
                         message: format!("Unsupported data type for AES translation {:?}", dt).into(),
                         code: "1064".into()

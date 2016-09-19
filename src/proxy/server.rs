@@ -30,6 +30,7 @@ use query::dialects::ansisql::*;
 use query::planner::{Planner, TupleType, HasTupleType, RelVisitor, Rel};
 
 use decimal::*;
+use chrono::{DateTime, TimeZone, NaiveDateTime};
 
 pub struct Proxy {
 //    server: TcpListener,
@@ -430,6 +431,30 @@ impl ZeroHandler {
                                 let res = f64::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt.elements[i].key)?;
                                 Some(format!("{}", res))
                             },
+                            &NativeType::DATE => {
+
+                                let res = DateTime::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt.elements[i].key)?;
+                                Some(res.date().format("%Y-%m-%d").to_string())
+                            },
+                            &NativeType::DATETIME(ref fsp) => {
+                                let res = DateTime::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt.elements[i].key)?;
+                                let fmt = match fsp {
+                                    &0 => "%Y-%m-%d %H:%M:%S",
+                                    &1 => "%Y-%m-%d %H:%M:%S%.1f",
+                                    &2 => "%Y-%m-%d %H:%M:%S%.2f",
+                                    &3 => "%Y-%m-%d %H:%M:%S%.3f",
+                                    &4 => "%Y-%m-%d %H:%M:%S%.4f",
+                                    &5 => "%Y-%m-%d %H:%M:%S%.5f",
+                                    &6 => "%Y-%m-%d %H:%M:%S%.6f",
+                                    _ => return Err(ZeroError::EncryptionError {
+                                        message: format!("Invalid fractional second precision {}, column: {}.{}",
+                                                         fsp, &tt.elements[i].relation, &tt.elements[i].name).into(),
+                                        code: "1064".into()
+                                    }.into())
+                                };
+                                Some(res.format(fmt).to_string())
+
+                            }
                             native_type @ _ => panic!("Native type {:?} not implemented", native_type)
                         }
                     };

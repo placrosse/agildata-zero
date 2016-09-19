@@ -5,6 +5,7 @@ use encrypt::*;
 use error::ZeroError;
 use decimal::*;
 use std::str::FromStr;
+use chrono::*;
 // TODO error: use of unstable library feature 'try_from' (see issue #33417)
 //use std::convert::TryFrom;
 
@@ -57,7 +58,7 @@ impl EncryptVisitor {
                         self.valuemap.insert(i.clone(), encrypted);
                     },
                     _ => return Err(ZeroError::EncryptionError {
-                        message: format!("Invalid value {:?} for column {}.{}", lit, el.name, el.relation).into(),
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
                         code: "1064".into()
                     }.into())
                 }
@@ -72,7 +73,7 @@ impl EncryptVisitor {
                         self.valuemap.insert(i.clone(), encrypted);
                     },
                     _ => return Err(ZeroError::EncryptionError {
-                        message: format!("Invalid value {:?} for column {}.{}", lit, el.name, el.relation).into(),
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
                         code: "1064".into()
                     }.into())
                 }
@@ -97,7 +98,7 @@ impl EncryptVisitor {
                         self.valuemap.insert(i.clone(), encrypted);
                     },
                     _ => return Err(ZeroError::EncryptionError {
-                        message: format!("Invalid value {:?} for column {}.{}", lit, el.name, el.relation).into(),
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
                         code: "1064".into()
                     }.into())
                 }
@@ -108,7 +109,7 @@ impl EncryptVisitor {
                         self.valuemap.insert(i.clone(), val.encrypt(&el.encryption, &el.key)?);
                     },
                     _ => return Err(ZeroError::EncryptionError {
-                        message: format!("Invalid value {:?} for column {}.{}", lit, el.name, el.relation).into(),
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
                         code: "1064".into()
                     }.into())
                 }
@@ -119,60 +120,55 @@ impl EncryptVisitor {
                         self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption, &el.key)?);
                     },
                     _ => return Err(ZeroError::EncryptionError {
-                        message: format!("Invalid value {:?} for column {}.{}", lit, el.name, el.relation).into(),
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
+                        code: "1064".into()
+                    }.into())
+                }
+            },
+            NativeType::DATE => {
+                match lit {
+                    &LiteralExpr::LiteralString(ref i, ref val) => {
+                        let v = match UTC.datetime_from_str(&format!("{} 00:00:00",val), "%Y-%m-%d %H:%M:%S") {
+                            Ok(v) => v,
+                            Err(e) => return Err(ZeroError::EncryptionError {
+                                message: format!("Failed to coerce {} to date due to {}", val, e).into(),
+                                code: "1064".into()
+                            }.into())
+                        };
+
+                        self.valuemap.insert(i.clone(), v.encrypt(&el.encryption, &el.key)?);
+                    },
+                    _ => return Err(ZeroError::EncryptionError {
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
+                        code: "1064".into()
+                    }.into())
+                }
+            },
+            NativeType::DATETIME(..) => {
+                match lit {
+                    &LiteralExpr::LiteralString(ref i, ref val) => {
+                        let v = match UTC.datetime_from_str(val, "%Y-%m-%d %H:%M:%S%.f") {
+                            Ok(v) => v,
+                            Err(e) => return Err(ZeroError::EncryptionError {
+                                message: format!("Failed to coerce {} to DATETIME due to {}", val, e).into(),
+                                code: "1064".into()
+                            }.into())
+                        };
+
+                        self.valuemap.insert(i.clone(), v.clone().encrypt(&el.encryption, &el.key)?);
+                    },
+                    _ => return Err(ZeroError::EncryptionError {
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
                         code: "1064".into()
                     }.into())
                 }
             },
             _ => return Err(ZeroError::EncryptionError {
-                message: format!("Unsupported data type {:?} for encryption {:?}. Column: {}.{}", el.data_type, el.encryption, el.name, el.relation).into(),
+                message: format!("Unsupported data type {:?} for encryption {:?}. Column: {}.{}", el.data_type, el.encryption, el.relation, el.name).into(),
                 code: "1064".into()
             }.into())
 
         }
-//        match lit {
-//            &LiteralExpr::LiteralLong(ref i, ref val) => {
-//                let encrypted = match (&el.data_type, sign) {
-//                    // TODO error: use of unstable library feature 'try_from' (see issue #33417)
-////                    (&NativeType::I64, Some(&Operator::SUB)) => match i64::try_from(val.clone()) {
-////                        Ok(v) => v.encrypt(&el.encryption, &el.key)?,
-////                        Err(e) => panic!("e")
-////                    },
-//
-//                    // hack, due to unstable TryFrom noted above
-//                    (&NativeType::I64, Some(&Operator::SUB)) => match i64::from_str(&format!("{}", val)) {
-//                        Ok(v) => (-v).encrypt(&el.encryption, &el.key)?,
-//                        Err(e) => panic!("e")
-//                    },
-//                    _ => val.encrypt(&el.encryption, &el.key)?
-//                };
-//                self.valuemap.insert(i.clone(), encrypted);
-//            },
-//            &LiteralExpr::LiteralString(ref i, ref val) => {
-//                self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption, &el.key)?);
-//            },
-//            &LiteralExpr::LiteralBool(ref i, ref val) => {
-//                self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption, &el.key)?);
-//            },
-//            &LiteralExpr::LiteralDouble(ref i, ref val) => {
-//                // TODO precision loss?
-//                let enc = match el.data_type {
-//                    NativeType::D128 => {
-//                        match d128::from_str(&val.to_string()) {
-//                            Ok(d) => d.encrypt(&el.encryption, &el.key)?,
-//                            Err(e) => panic!("")
-//                        }
-//                    },
-//                    NativeType::F64 => val.clone().encrypt(&el.encryption, &el.key)?,
-//                    _ => panic!("")
-//                };
-//                self.valuemap.insert(i.clone(), enc);
-//            },
-////            _ => return Err(ZeroError::EncryptionError{
-////                message: format!("Unsupported value type {:?} for encryption", lit).into(),
-////                code: "1064".into()
-////            }.into())
-//        }
 
         Ok(())
     }
