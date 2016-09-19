@@ -126,9 +126,6 @@ impl Rex {
             }.into())
         }
     }
-
-
-
 }
 
 #[derive(Debug, Clone)]
@@ -443,15 +440,17 @@ pub trait RelVisitor {
 #[cfg(test)]
 mod tests {
 
-    use query::{Tokenizer, Parser};
+    use query::{Tokenizer, Parser, ASTNode};
     use config;
     use query::dialects::ansisql::*;
     use query::dialects::mysqlsql::*;
     use std::error::Error;
     use encrypt::{NativeType, EncryptionType};
     use std::rc::Rc;
-    use super::{Planner, SchemaProvider, TableMeta, ColumnMeta};
+    use super::{Planner, SchemaProvider, TableMeta, ColumnMeta, Rel};
     use error::ZeroError;
+
+
     #[test]
     fn plan_simple() {
         let provider = DummyProvider{};
@@ -548,6 +547,41 @@ mod tests {
         let plan = planner.sql_to_rel(&parsed).unwrap();
 
         debug!("Plan {:#?}", plan);
+    }
+
+    #[test]
+    fn plan_unsupported() {
+        let mut sql = String::from("SELECT COALESCE(id, first_name, 'foo') FROM users ");
+        let mut plan = parse_and_plan(sql);
+
+
+        match plan {
+            Err(box ZeroError::EncryptionError{message, ..}) => assert_eq!(message, String::from("Function COALESCE does not support operation on encrypted element users.first_name")),
+            _ => panic!("This should fail")
+        }
+
+
+    }
+
+//    fn expect_error<R>(result: Result<R, Box<ZeroError>>, message: String) -> {
+//        match result {
+//            Err(box ZeroError::)
+//        }
+//    }
+    fn parse_and_plan(sql: String) -> Result<(ASTNode, Rel), Box<ZeroError>> {
+        let provider = DummyProvider{};
+
+        let ansi = AnsiSQLDialect::new();
+        let dialect = MySQLDialect::new(&ansi);
+
+        let parsed = sql.tokenize(&dialect)?.parse()?;
+
+        let s = String::from("zero");
+        let default_schema = Some(&s);
+        let planner = Planner::new(default_schema, Rc::new(provider));
+        let plan = planner.sql_to_rel(&parsed)?.unwrap();
+        Ok((parsed, plan))
+
     }
 
     struct DummyProvider {}
