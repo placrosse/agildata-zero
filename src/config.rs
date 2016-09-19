@@ -226,7 +226,7 @@ pub fn reconcile_native_type(data_type: &ASTNode, qualifiers: &Vec<NativeTypeQua
 			&Binary{ref length} | &CharByte{ref length} => NativeType::FIXEDBINARY(length.unwrap_or(1)),
 			&VarBinary{ref length} => NativeType::VARBINARY(match length {
 				&Some(l) => l,
-				&None => return Err(ZeroError::SchemaError{message: "VARBINARY requires length argument".into(), code: "123".into()}.into()) // TODO parser shouldn't allow this
+				&None => return Err(ZeroError::SchemaError{message: "VARBINARY requires length argument".into(), code: "123".into()}.into())
 			}),
 			&Blob{ref length} => NativeType::VARBINARY(length.unwrap_or(2_u32.pow(16))),
 			&TinyBlob => NativeType::VARBINARY(2_u32.pow(8)),
