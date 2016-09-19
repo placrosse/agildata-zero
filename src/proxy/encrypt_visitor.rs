@@ -355,6 +355,11 @@ impl RelVisitor for EncryptVisitor  {
 					}
 				}
 			},
+            &Rex::RexFunctionCall{ref name, ref args} => {
+                for a in args {
+                    self.visit_rex(a, tt)?
+                }
+            }
 			_ => {} // TODO
 		}
 		Ok(())
@@ -486,6 +491,32 @@ mod tests {
 		assert_eq!(rewritten, String::from("SELECT l.id, r.id, l.first_name, r.user_id FROM users AS l INNER JOIN user_purchases AS r ON l.id = r.user_id"));
 	}
 
+    #[test]
+    fn test_relvis_func_calls() {
+        let sql = String::from("SELECT COUNT(id) FROM users");
+        let res = parse_and_plan(sql).unwrap();
+        let parsed = res.0;
+        let plan = res.1;
+
+        let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
+        let mut encrypt_vis = EncryptVisitor {
+            valuemap: value_map
+        };
+
+        encrypt_vis.visit_rel(&plan).unwrap();
+
+        let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
+        let ansi_writer = AnsiSQLWriter{};
+
+        let writer = SQLWriter::new(vec![&lit_writer, &ansi_writer]);
+
+        let rewritten = writer.write(&parsed).unwrap();
+
+        debug!("Rewritten: {}", rewritten);
+
+        assert_eq!(rewritten, String::from("SELECT COUNT ( id) FROM users"));
+    }
+
 	#[test]
 	fn test_relvis_join_unsupported() {
 
@@ -517,8 +548,7 @@ mod tests {
 		plan = parse_and_plan(sql).unwrap().1;
 		assert_eq!(encrypt_vis.visit_rel(&plan).err().unwrap().to_string(), String::from("Unsupported operation:  l.age [AES, U64] GT r.item_code [AES, U64]"));
 
-
-	}
+    }
 
 	fn parse_and_plan(sql: String) -> Result<(ASTNode, Rel), Box<ZeroError>> {
 		let provider = DummyProvider{};

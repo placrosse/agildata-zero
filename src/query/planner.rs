@@ -54,7 +54,8 @@ pub enum Rex {
     BinaryExpr{left: Box<Rex>, op: Operator, right: Box<Rex>},
     //RelationalExpr(Rel),
     RexExprList(Vec<Rex>),
-    RexUnary{operator: Operator, rex: Box<Rex>}
+    RexUnary{operator: Operator, rex: Box<Rex>},
+    RexFunctionCall{name: String, args: Vec<Rex>}
 }
 
 impl Rex {
@@ -62,6 +63,67 @@ impl Rex {
         match self {
             &Rex::Identifier { ref el, .. } => el.name.clone(),
             _ => panic!("")
+        }
+    }
+
+    fn get_element(&self) -> Result<Element, Box<ZeroError>> {
+        match self {
+            &Rex::Identifier{ref el, ..} => Ok(el.clone()),
+            &Rex::Literal(ref l) => {
+                let (dt, name) = match l {
+                    &LiteralExpr::LiteralLong(_, ref val) => (NativeType::U64, format!("{}", val)),
+                    &LiteralExpr::LiteralBool(_, ref val) => (NativeType::BOOL, format!("{}", val)),
+                    &LiteralExpr::LiteralDouble(_, ref val)=> (NativeType::F64, format!("{}", val)),
+                    &LiteralExpr::LiteralString(_, ref val) => (NativeType::Varchar(val.len() as u32), format!("{}", val)),
+                };
+                Ok(Element {
+                    name : format!("{}", name),
+                    encryption: EncryptionType::NA,
+                    key: [0_u8; 32],
+                    data_type: dt,
+                    relation: String::from("SYS"),
+                    p_name: None,
+                    p_relation: None
+                })
+            },
+            &Rex::RexFunctionCall{ref name, ref args} => {
+                match &name as &str {
+                    "MAX" | "SUM" | "MIN" | "COALESCE" => {
+                        let elements = args.iter().map(|a| {
+                            let el = a.get_element()?;
+                            if el.encryption != EncryptionType::NA {
+                                Err(ZeroError::EncryptionError {
+                                    message: format!("Function {} does not support operation on encrypted element {}.{}",
+                                                     name, el.relation, el.name).into(),
+                                    code: "1064".into()
+                                }.into())
+                            } else {
+                                Ok(el)
+                            }
+
+                        }).collect::<Result<Vec<Element>,Box<ZeroError>>>()?;
+
+                        Ok(elements[0].clone())
+                    },
+                    "COUNT" => Ok(Element {
+                        name : name.clone(),
+                        encryption: EncryptionType::NA,
+                        key: [0_u8; 32],
+                        data_type: NativeType::U64,
+                        relation: String::from("SYS"),
+                        p_name: None,
+                        p_relation: None
+                    }),
+                    _ => Err(ZeroError::EncryptionError {
+                        message: format!("Unsupported SQL Function {}", name,).into(),
+                        code: "1064".into()
+                    }.into())
+                }
+            },
+            _ => Err(ZeroError::EncryptionError {
+                message: format!("Unsupported Rex to Element : {:?}", self).into(),
+                code: "1064".into()
+            }.into())
         }
     }
 }
@@ -166,6 +228,23 @@ impl<'a> Planner<'a> {
             &ASTNode::SQLUnary{ref operator, box ref expr} => {
                 Ok(Rex::RexUnary{operator: operator.clone(), rex: Box::new(self.sql_to_rex(expr, tt)?)})
             },
+            &ASTNode::SQLFunctionCall{box ref identifier, ref args} => {
+                if let &ASTNode::SQLIdentifier{ref id, ..} = identifier {
+
+                    let arguments = args.iter()
+                      .map(|a| self.sql_to_rex(a, tt))
+                      .collect::<Result<Vec<Rex>, Box<ZeroError>>>()?;
+
+                    Ok(Rex::RexFunctionCall{name: id.clone().to_uppercase(), args: arguments})
+
+                } else {
+                    Err(ZeroError::ParseError{
+                      message: format!("Illegal state, function name should be an identifier {:?}", identifier).into(),
+                      code: "1064".into()
+                    }.into())
+                }
+
+            },
             _ => Err(ZeroError::ParseError{
                 message: format!("Unsupported expr {:?}", sql).into(),
                 code: "1064".into()
@@ -197,7 +276,7 @@ impl<'a> Planner<'a> {
                 }
 
                 let project_list = self.sql_to_rex(expr_list, &input.tt() )?;
-                let project_tt = reconcile_tt(&project_list);
+                let project_tt = reconcile_tt(&project_list)?;
                 Ok(Some(Rel::Projection {
                     project: Box::new(project_list),
                     input: Box::new(input),
@@ -341,22 +420,17 @@ impl<'a> Planner<'a> {
     }
 }
 
-fn reconcile_tt(expr: &Rex) -> TupleType {
+fn reconcile_tt(expr: &Rex) -> Result<TupleType, Box<ZeroError>> {
     match expr {
         &Rex::RexExprList(ref list) => {
-            let elements = list.iter().map(|e| get_element(e)).collect();
-            TupleType{elements: elements}
+            let elements = list.iter().map(|e| e.get_element())
+                .collect::<Result<Vec<Element>, Box<ZeroError>>>()?;
+            Ok(TupleType{elements: elements})
         },
         _ => panic!("Unsupported")
     }
 }
 
-fn get_element(expr: &Rex) -> Element {
-    match expr {
-        &Rex::Identifier{ref el, ..} => el.clone(),
-        _ => panic!("Unsupported")
-    }
-}
 
 pub trait RelVisitor {
     fn visit_rel(&mut self, rel: &Rel) -> Result<(), Box<ZeroError>>;
@@ -366,15 +440,17 @@ pub trait RelVisitor {
 #[cfg(test)]
 mod tests {
 
-    use query::{Tokenizer, Parser};
+    use query::{Tokenizer, Parser, ASTNode};
     use config;
     use query::dialects::ansisql::*;
     use query::dialects::mysqlsql::*;
     use std::error::Error;
     use encrypt::{NativeType, EncryptionType};
     use std::rc::Rc;
-    use super::{Planner, SchemaProvider, TableMeta, ColumnMeta};
+    use super::{Planner, SchemaProvider, TableMeta, ColumnMeta, Rel};
     use error::ZeroError;
+
+
     #[test]
     fn plan_simple() {
         let provider = DummyProvider{};
@@ -451,6 +527,61 @@ mod tests {
         let plan = planner.sql_to_rel(&parsed).unwrap();
 
         debug!("Plan {:#?}", plan);
+    }
+
+    #[test]
+    fn plan_simple_func_calls() {
+        let provider = DummyProvider{};
+
+        let ansi = AnsiSQLDialect::new();
+        let dialect = MySQLDialect::new(&ansi);
+
+        let sql = String::from("SELECT COUNT(id)
+         FROM users");
+        let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
+
+        let s = String::from("zero");
+        let default_schema = Some(&s);
+        let planner = Planner::new(default_schema, Rc::new(provider));
+
+        let plan = planner.sql_to_rel(&parsed).unwrap();
+
+        debug!("Plan {:#?}", plan);
+    }
+
+    #[test]
+    fn plan_unsupported() {
+        let mut sql = String::from("SELECT COALESCE(id, first_name, 'foo') FROM users ");
+        let mut plan = parse_and_plan(sql);
+
+
+        match plan {
+            Err(box ZeroError::EncryptionError{message, ..}) => assert_eq!(message, String::from("Function COALESCE does not support operation on encrypted element users.first_name")),
+            _ => panic!("This should fail")
+        }
+
+
+    }
+
+//    fn expect_error<R>(result: Result<R, Box<ZeroError>>, message: String) -> {
+//        match result {
+//            Err(box ZeroError::)
+//        }
+//    }
+    fn parse_and_plan(sql: String) -> Result<(ASTNode, Rel), Box<ZeroError>> {
+        let provider = DummyProvider{};
+
+        let ansi = AnsiSQLDialect::new();
+        let dialect = MySQLDialect::new(&ansi);
+
+        let parsed = sql.tokenize(&dialect)?.parse()?;
+
+        let s = String::from("zero");
+        let default_schema = Some(&s);
+        let planner = Planner::new(default_schema, Rc::new(provider));
+        let plan = planner.sql_to_rel(&parsed)?.unwrap();
+        Ok((parsed, plan))
+
     }
 
     struct DummyProvider {}
