@@ -7,7 +7,8 @@ use std::str::FromStr;
 use std::fmt::Write;
 
 static KEYWORDS: &'static [&'static str] = &["SHOW", "CREATE", "TABLE", "PRECISION",
-	"PRIMARY", "KEY", "UNIQUE", "FULLTEXT", "FOREIGN", "REFERENCES", "CONSTRAINT", "USE"];
+	"PRIMARY", "KEY", "UNIQUE", "FULLTEXT", "FOREIGN", "REFERENCES", "CONSTRAINT", "USE",
+	"COMMIT", "ROLLBACK", "BEGIN"];
 
 pub struct MySQLDialect<'d>{
 	ansi: &'d AnsiSQLDialect
