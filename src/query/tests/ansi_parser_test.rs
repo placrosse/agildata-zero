@@ -1,3 +1,4 @@
+use super::super::ASTNode;
 use super::super::ASTNode::*;
 use super::super::Operator::*;
 use super::super::LiteralExpr::*;
@@ -354,6 +355,84 @@ fn nasty() {
 	println!("Rewritten: {:?}", rewritten);
 }
 
+fn id_boxed(name: &'static str) -> Box<ASTNode> {
+	Box::new(id(name))
+}
+fn id(name: &'static str) -> ASTNode {
+	SQLIdentifier{id: String::from(name), parts: vec![String::from(name)]}
+}
+
+#[test]
+fn select_comparisons() {
+	let dialect = AnsiSQLDialect::new();
+	let sql = String::from("SELECT * FROM foo WHERE a > 1 AND b < 2 AND c != 3 AND d != 4 AND e >= 5 AND f <= 5");
+	let tokens = sql.tokenize(&dialect).unwrap();
+	let parsed = tokens.parse().unwrap();
+
+	assert_eq!(
+		SQLSelect {
+			expr_list: Box::new(SQLExprList(vec![id("*")])),
+			relation: Some(id_boxed("foo")),
+			selection: Some(Box::new(SQLBinary {
+				left: Box::new(SQLBinary {
+					left: Box::new(SQLBinary {
+						left: Box::new(SQLBinary {
+							left: Box::new(SQLBinary {
+								left: Box::new(SQLBinary {
+									left: id_boxed("a"),
+									op: GT,
+									right: Box::new(SQLLiteral(LiteralLong(0, 1)))
+								}),
+								op: AND,
+								right: Box::new(SQLBinary {
+									left: id_boxed("b"),
+									op: LT,
+									right: Box::new(SQLLiteral(LiteralLong(1, 2)))
+								})
+							}),
+							op: AND,
+							right: Box::new(SQLBinary {
+								left: id_boxed("c"),
+								op: NEQ,
+								right: Box::new(SQLLiteral(LiteralLong(2, 3)))
+							})
+						}),
+						op: AND,
+						right: Box::new(SQLBinary {
+							left: id_boxed("d"),
+							op: NEQ,
+							right: Box::new(SQLLiteral(LiteralLong(3, 4)))
+						})
+					}),
+					op: AND,
+					right: Box::new(SQLBinary {
+						left: id_boxed("e"),
+						op: GTEQ,
+						right: Box::new(SQLLiteral(LiteralLong(4, 5)))
+					})
+				}),
+				op: AND,
+				right: Box::new(SQLBinary {
+					left: id_boxed("f"),
+					op: LTEQ,
+					right: Box::new(SQLLiteral(LiteralLong(5, 5)))
+				})
+			})),
+			order: None
+		},
+		parsed
+	);
+
+	println!("{:#?}", parsed);
+
+	let ansi_writer = AnsiSQLWriter{};
+	let writer = SQLWriter::new(vec![&ansi_writer]);
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {:?}", rewritten);
+
+}
 #[test]
 fn insert() {
 

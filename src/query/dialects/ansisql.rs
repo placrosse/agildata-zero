@@ -47,7 +47,7 @@ impl Dialect for AnsiSQLDialect {
 
 	                match chars.peek() {
 	                    Some(&c) => match c {
-	                        '=' => {
+	                        '=' | '>' => {
 	                            op.push(c);
 	                            chars.next(); // consume one
 	                        }
