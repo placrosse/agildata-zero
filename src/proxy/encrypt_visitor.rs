@@ -1,8 +1,13 @@
-use query::planner::{Rel, Rex, RelVisitor, TupleType, HasTupleType};
+use query::planner::{Rel, Rex, RelVisitor, TupleType, HasTupleType, Element};
 use query::{Operator, LiteralExpr};
 use std::collections::HashMap;
 use encrypt::*;
 use error::ZeroError;
+use decimal::*;
+use std::str::FromStr;
+use chrono::*;
+// TODO error: use of unstable library feature 'try_from' (see issue #33417)
+//use std::convert::TryFrom;
 
 #[derive(Debug)]
 pub struct EncryptVisitor {
@@ -14,6 +19,159 @@ impl EncryptVisitor {
 	pub fn get_value_map(&self) -> &HashMap<u32, Vec<u8>> {
 		&self.valuemap
 	}
+
+    pub fn encrypt_literal(&mut self, lit: &LiteralExpr, el: &Element, sign: Option<&Operator>) -> Result<(), Box<ZeroError>> {
+        match el.data_type {
+            NativeType::U64 => {
+                match lit {
+                    &LiteralExpr::LiteralLong(ref i, ref val) => {
+                        match sign {
+                            Some(&Operator::SUB) => return Err(ZeroError::EncryptionError {
+                                message: format!("Negative unary unsupported on unsigned numerics, column: {}.{}", el.name, el.relation).into(),
+                                code: "1064".into()
+                            }.into()),
+                            _ => {self.valuemap.insert(i.clone(), val.encrypt(&el.encryption, &el.key)?);}
+                        }
+
+                    },
+                    _ => return Err(ZeroError::EncryptionError {
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.name, el.relation).into(),
+                        code: "1064".into()
+                    }.into())
+                }
+            },
+            NativeType::I64 => {
+                match lit {
+                    &LiteralExpr::LiteralLong(ref i, ref val) => {
+                        let v = match i64::from_str(&format!("{}", val)) {
+                            Ok(v) => v,
+                            Err(e) => return Err(ZeroError::EncryptionError {
+                                message: format!("Failed to coerce {} to signed due to : {}", val, e).into(),
+                                code: "1064".into()
+                            }.into())
+                        };
+
+                        let encrypted = match sign {
+                            Some(&Operator::SUB) => (-v).encrypt(&el.encryption, &el.key)?,
+                            _ => v.encrypt(&el.encryption, &el.key)?
+                        };
+                        self.valuemap.insert(i.clone(), encrypted);
+                    },
+                    _ => return Err(ZeroError::EncryptionError {
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
+                        code: "1064".into()
+                    }.into())
+                }
+            },
+            NativeType::F64 => {
+                match lit {
+                    &LiteralExpr::LiteralDouble(ref i, ref val) => {
+                        let encrypted = match sign {
+                            Some(&Operator::SUB) => (-val).encrypt(&el.encryption, &el.key)?,
+                            _ => val.encrypt(&el.encryption, &el.key)?
+                        };
+                        self.valuemap.insert(i.clone(), encrypted);
+                    },
+                    _ => return Err(ZeroError::EncryptionError {
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
+                        code: "1064".into()
+                    }.into())
+                }
+            },
+            NativeType::D128 => {
+                match lit {
+                    &LiteralExpr::LiteralDouble(ref i, ref val) => {
+                        // TODO precision loss?
+                        let v = match d128::from_str(&val.to_string()) {
+                            Ok(d) => d,
+                            // Note: d128::from_str e is a ()
+                            Err(e) => return Err(ZeroError::EncryptionError {
+                                message: format!("Failed to coerce {} to d128", val).into(),
+                                code: "1064".into()
+                            }.into())
+                        };
+
+                        let encrypted = match sign {
+                            Some(&Operator::SUB) => (-v).encrypt(&el.encryption, &el.key)?,
+                            _ => v.encrypt(&el.encryption, &el.key)?
+                        };
+                        self.valuemap.insert(i.clone(), encrypted);
+                    },
+                    _ => return Err(ZeroError::EncryptionError {
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
+                        code: "1064".into()
+                    }.into())
+                }
+            },
+            NativeType::BOOL => {
+                match lit {
+                    &LiteralExpr::LiteralBool(ref i, ref val) => {
+                        self.valuemap.insert(i.clone(), val.encrypt(&el.encryption, &el.key)?);
+                    },
+                    _ => return Err(ZeroError::EncryptionError {
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
+                        code: "1064".into()
+                    }.into())
+                }
+            },
+            NativeType::Varchar(..) | NativeType::Char(..) => {
+                match lit {
+                    &LiteralExpr::LiteralString(ref i, ref val) => {
+                        self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption, &el.key)?);
+                    },
+                    _ => return Err(ZeroError::EncryptionError {
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
+                        code: "1064".into()
+                    }.into())
+                }
+            },
+            NativeType::DATE => {
+                match lit {
+                    &LiteralExpr::LiteralString(ref i, ref val) => {
+                        let v = match UTC.datetime_from_str(&format!("{} 00:00:00",val), "%Y-%m-%d %H:%M:%S") {
+                            Ok(v) => v,
+                            Err(e) => return Err(ZeroError::EncryptionError {
+                                message: format!("Failed to coerce {} to date due to {}", val, e).into(),
+                                code: "1064".into()
+                            }.into())
+                        };
+
+                        self.valuemap.insert(i.clone(), v.encrypt(&el.encryption, &el.key)?);
+                    },
+                    _ => return Err(ZeroError::EncryptionError {
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
+                        code: "1064".into()
+                    }.into())
+                }
+            },
+            NativeType::DATETIME(..) => {
+                match lit {
+                    &LiteralExpr::LiteralString(ref i, ref val) => {
+                        let v = match UTC.datetime_from_str(val, "%Y-%m-%d %H:%M:%S%.f") {
+                            Ok(v) => v,
+                            Err(e) => return Err(ZeroError::EncryptionError {
+                                message: format!("Failed to coerce {} to DATETIME due to {}", val, e).into(),
+                                code: "1064".into()
+                            }.into())
+                        };
+
+                        self.valuemap.insert(i.clone(), v.clone().encrypt(&el.encryption, &el.key)?);
+                    },
+                    _ => return Err(ZeroError::EncryptionError {
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
+                        code: "1064".into()
+                    }.into())
+                }
+            },
+            _ => return Err(ZeroError::EncryptionError {
+                message: format!("Unsupported data type {:?} for encryption {:?}. Column: {}.{}", el.data_type, el.encryption, el.relation, el.name).into(),
+                code: "1064".into()
+            }.into())
+
+        }
+
+        Ok(())
+    }
 }
 
 
@@ -61,18 +219,7 @@ impl RelVisitor for EncryptVisitor  {
 								&Rex::Literal(ref lit) => {
 									if let Rex::Identifier{ref id, ref el} = c_list[index] {
 										if el.encryption != EncryptionType::NA {
-											match lit {
-												&LiteralExpr::LiteralLong(ref i, ref val) => {
-													self.valuemap.insert(i.clone(), val.encrypt(&el.encryption, &el.key)?);
-												},
-												&LiteralExpr::LiteralString(ref i, ref val) => {
-													self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption, &el.key)?);
-												}
-												_ => return Err(ZeroError::EncryptionError{
-                                                    message: format!("Unsupported value type {:?} for encryption", lit).into(),
-                                                    code: "1064".into()
-                                                }.into())
-											}
+                                            self.encrypt_literal(lit, el, None)?;
 										}
 
 									} else {
@@ -82,6 +229,20 @@ impl RelVisitor for EncryptVisitor  {
                                         }.into())
                                     }
 								},
+                                // TODO swap this logic out with some evaluate()
+                                &Rex::RexUnary{ref operator, rex: box Rex::Literal(ref lit)} => {
+                                    if let Rex::Identifier{ref id, ref el} = c_list[index] {
+                                        if el.encryption != EncryptionType::NA {
+                                            self.encrypt_literal(lit, el, Some(operator))?;
+                                        }
+
+                                    } else {
+                                        return Err(ZeroError::EncryptionError{
+                                            message: format!("Expected identifier at column list index {}, received {:?}", index, c_list[index]).into(),
+                                            code: "1064".into()
+                                        }.into())
+                                    }
+                                },
 								_ => {}
 							}
 						}
@@ -118,32 +279,48 @@ impl RelVisitor for EncryptVisitor  {
 							},
 							_ => None
 						} {
-							match element.encryption {
-								EncryptionType::NA => {},
-								_ => {
-									match op {
-										&Operator::EQ => {
-											match literal {
-												&LiteralExpr::LiteralLong(ref i, ref val) => {
-													self.valuemap.insert(i.clone(), val.encrypt(&element.encryption, &element.key)?);
-												},
-												&LiteralExpr::LiteralString(ref i, ref val) => {
-													self.valuemap.insert(i.clone(), val.clone().encrypt(&element.encryption, &element.key)?);
-												}
-												_ => return  Err(ZeroError::EncryptionError{
-                                                    message: format!("Unsupported value type {:?} for encryption", literal).into(),
-                                                    code: "1064".into()
-                                                }.into())
-											}
-										},
-										_ => return  Err(ZeroError::EncryptionError{
+                            match element.encryption {
+                                EncryptionType::NA => {},
+                                _ => {
+                                    match op {
+                                        &Operator::EQ => {
+                                            self.encrypt_literal(literal, element, None)?;
+                                        },
+                                        _ => return Err(ZeroError::EncryptionError {
                                             message: format!("Operator {:?} not supported for encrypted column {}", op, element.name).into(),
                                             code: "1064".into()
                                         }.into())
-									}
-								}
-							}
+                                    }
+                                }
+                            }
 
+                        // a binary between and encrypted column and unary operated literal
+                        } else if let Some((element, literal, sign)) = match (left, right) {
+                            (&Rex::Identifier{ref el, ..}, &Rex::RexUnary{ref operator, rex: box Rex::Literal(ref l)})
+                            | (&Rex::RexUnary{ref operator, rex: box Rex::Literal(ref l)}, &Rex::Identifier{ref el, ..}, )=> {
+                                match el.encryption {
+                                    EncryptionType::NA => None,
+                                    _ => Some((el, l, Some(operator)))
+                                }
+                            },
+                            _ => None
+                        } {
+                            match element.encryption {
+                                EncryptionType::NA => {},
+                                _ => {
+                                    match op {
+                                        &Operator::EQ => {
+                                            self.encrypt_literal(literal, element, sign)?;
+                                        },
+                                        _ => return Err(ZeroError::EncryptionError {
+                                            message: format!("Operator {:?} not supported for encrypted column {}", op, element.name).into(),
+                                            code: "1064".into()
+                                        }.into())
+                                    }
+                                }
+                            }
+
+                        // a binary between two encrypted columns
 						} else if let Some((left_element, right_element)) = match (left, right) {
 							(&Rex::Identifier{el: ref l, ..}, &Rex::Identifier{el: ref r, .. }) => Some((l, r)),
 							_ => None

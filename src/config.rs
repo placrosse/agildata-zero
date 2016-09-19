@@ -7,6 +7,20 @@ use self::xml::Xml;
 
 use encrypt::*;
 
+use query::{Tokenizer, ASTNode, MySQLColumnQualifier, MySQLDataType};
+use query::MySQLDataType::*;
+use query::dialects::ansisql::*;
+use query::dialects::mysqlsql::*;
+use error::ZeroError;
+
+// Supported qualifiers
+#[derive(Debug, PartialEq)]
+pub enum NativeTypeQualifier {
+	SIGNED,
+	UNSIGNED,
+	OTHER
+}
+
 
 
 pub fn parse_config(path: &str) -> Config {
@@ -150,10 +164,22 @@ fn parse_table_config(builder: &mut TableConfigBuilder, children: Vec<Xml>) {
                               } else {
                                   [0u8; 32]
                               };
+					let dt = match determine_native_type(&native_type) {
+						Ok(t) => t,
+						Err(e) => panic!("Failed to determine data type for {}.{} : {}", tbl_name, name, e)
+					};
+
+					let encrypt_type = determine_encryption(&encryption);
+					if encrypt_type != EncryptionType::NA && !dt.is_supported() {
+						panic!("Column: {}.{} Native Type {:?} is not supported for encryption {:?}",
+							tbl_name, name, native_type, encrypt_type
+						)
+					}
+
 					builder.add_column(ColumnConfig{
 						name: name,
-                        native_type: determine_native_type(&native_type),
-                        encryption: determine_encryption(&encryption),
+                        native_type: dt,
+                        encryption: encrypt_type,
                         key: key,
 					});
 				},
@@ -171,16 +197,87 @@ fn get_attr_or_fail(name: &str, element: &xml::Element) -> String {
 	}
 }
 
-fn determine_native_type(native_type: &String) -> NativeType {
-	if native_type.contains("VARCHAR") {
-		NativeType::Varchar(50) // TODO hard coded display..
-	} else {
-		match native_type as &str {
-			"INTEGER" => NativeType::U64,
-			"DOUBLE" => NativeType::F64,
-			_ => panic!("Unsupported native type {}", native_type)
+pub fn reconcile_native_type(data_type: &ASTNode, qualifiers: &Vec<NativeTypeQualifier>) -> Result<NativeType, Box<ZeroError>> {
+	Ok(match data_type {
+		&ASTNode::MySQLDataType(ref dt) => match dt {
+			&Bit{..} | &TinyInt{..} |
+			&SmallInt{..} | &MediumInt{..} |
+			&Int{..} | &BigInt{..} => {
+				if qualifiers.contains(&NativeTypeQualifier::SIGNED) {
+					NativeType::I64
+				} else {
+					NativeType::U64
+				}
+			},
+
+			&Double{..} | &Float{..} => NativeType::F64,
+			&Decimal{..} => NativeType::D128,
+			&Bool => NativeType::BOOL,
+			&Char{ref length} | &NChar{ref length}  => NativeType::Char(length.unwrap_or(1)),
+			&Varchar{ref length} | &NVarchar{ref length} => NativeType::Varchar(match length {
+				&Some(l) => l,
+				&None => return Err(ZeroError::SchemaError{message: "CHARACTER VARYING datatype requires length".into(), code: "123".into()}.into())
+			}),
+			&Date => NativeType::DATE,
+			&DateTime{ref fsp} => NativeType::DATETIME(fsp.unwrap_or(0)),
+			&Time{ref fsp} => NativeType::TIME(fsp.unwrap_or(0)),
+			&Timestamp{ref fsp} => NativeType::TIMESTAMP(fsp.unwrap_or(0)),
+			&Year{ref display} => NativeType::YEAR(display.unwrap_or(4)),
+			&Binary{ref length} | &CharByte{ref length} => NativeType::FIXEDBINARY(length.unwrap_or(1)),
+			&VarBinary{ref length} => NativeType::VARBINARY(match length {
+				&Some(l) => l,
+				&None => return Err(ZeroError::SchemaError{message: "VARBINARY requires length argument".into(), code: "123".into()}.into())
+			}),
+			&Blob{ref length} => NativeType::VARBINARY(length.unwrap_or(2_u32.pow(16))),
+			&TinyBlob => NativeType::VARBINARY(2_u32.pow(8)),
+			&MediumBlob => NativeType::LONGBLOB(2_u64.pow(24)),
+			&LongBlob => NativeType::LONGBLOB(2_u64.pow(32)),
+			&Text{ref length} => NativeType::Varchar(length.unwrap_or(2_u32.pow(16))),
+			&TinyText => NativeType::Varchar(2_u32.pow(8)),
+			&MediumText => NativeType::LONGTEXT(2_u64.pow(24)),
+			&LongText => NativeType::LONGTEXT(2_u64.pow(32)),
+
+			_ => return Err(ZeroError::SchemaError{message: format!("Unsupported data type {:?}", dt), code: "123".into()}.into())
+		},
+		_ => return Err(ZeroError::SchemaError{message: format!("Unexpected native type expression {:?}", data_type), code: "123".into()}.into())
+
+	})
+}
+
+// Should fail in config parse, but not as part of get table meta
+pub fn reconcile_column_qualifiers(qualifiers: &Vec<ASTNode>, fail: bool) -> Result<Vec<NativeTypeQualifier>, Box<ZeroError>> {
+	// Iterate over qualifiers and propagate error on unsupported
+	// potential support could be DEFAULT, [NOT] NULL, etc
+	qualifiers
+		.iter().map(|o| {
+		match o {
+			&ASTNode::MySQLColumnQualifier(ref q) => match q {
+				&MySQLColumnQualifier::Signed => Ok(NativeTypeQualifier::SIGNED),
+				&MySQLColumnQualifier::Unsigned => Ok(NativeTypeQualifier::UNSIGNED),
+				_ => if fail {
+					Err(ZeroError::SchemaError{message: format!("Unsupported data type qualifier {:?}", q), code: "123".into()}.into())
+				} else {
+					Ok(NativeTypeQualifier::OTHER)
+				}
+			},
+			_ => Err(ZeroError::SchemaError{message: format!("Unsupported option {:?}", o), code: "123".into()}.into())
 		}
-	}
+	}).collect::<Result<Vec<NativeTypeQualifier>, Box<ZeroError>>>()
+}
+
+fn determine_native_type(native_type: &String) -> Result<NativeType, Box<ZeroError>> {
+	let ansi = AnsiSQLDialect::new();
+	let dialect = MySQLDialect::new(&ansi);
+	let tokens = native_type.tokenize(&dialect).unwrap();
+
+	let data_type = dialect.parse_data_type(&tokens)?;
+
+	let parsed_qs = dialect.parse_column_qualifiers(&tokens)?.unwrap_or(vec![]);
+
+
+	let qualifiers = reconcile_column_qualifiers(&parsed_qs, true)?;
+
+	reconcile_native_type(&data_type, &qualifiers)
 }
 
 fn determine_encryption(encryption: &String) -> EncryptionType {
@@ -198,7 +295,7 @@ fn determine_key(key: &str) -> [u8; 32] {
     hex_key(key)
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct ColumnConfig {
 	pub name: String,
 	pub encryption: EncryptionType,
@@ -206,7 +303,7 @@ pub struct ColumnConfig {
 	pub native_type: NativeType
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct TableConfig {
 	pub name: String,
 	pub column_map: HashMap<String, ColumnConfig>
@@ -400,6 +497,7 @@ impl TTableConfig for TableConfig {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use encrypt::NativeType::*;
 
     #[test]
 	fn config_test() {
@@ -407,4 +505,99 @@ mod tests {
 		debug!("CONFIG {:#?}", config);
 		debug!("HERE {:#?}", config.get_column_config(&String::from("zero"), &String::from("users"), &String::from("age")))
 	}
+
+	#[test]
+	fn test_config_data_types() {
+		let s_config = super::parse_config("src/test/test-zero-config.xml");
+		let test_schema = "zero".into();
+		// Numerics
+
+		let mut config = s_config.get_table_config(&test_schema, &"numerics".into()).unwrap();
+		assert_eq!(config.column_map.get("a").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("b").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("c").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("d").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("e").unwrap().native_type,BOOL);
+		assert_eq!(config.column_map.get("f").unwrap().native_type,BOOL);
+		assert_eq!(config.column_map.get("g").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("h").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("i").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("j").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("k").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("l").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("m").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("n").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("o").unwrap().native_type,D128);
+		assert_eq!(config.column_map.get("p").unwrap().native_type,D128);
+		assert_eq!(config.column_map.get("q").unwrap().native_type,D128);
+		assert_eq!(config.column_map.get("r").unwrap().native_type,D128);
+		assert_eq!(config.column_map.get("s").unwrap().native_type,D128);
+		assert_eq!(config.column_map.get("t").unwrap().native_type,D128);
+		assert_eq!(config.column_map.get("u").unwrap().native_type,F64);
+		assert_eq!(config.column_map.get("v").unwrap().native_type,F64);
+		assert_eq!(config.column_map.get("w").unwrap().native_type,F64);
+		assert_eq!(config.column_map.get("x").unwrap().native_type,F64);
+		assert_eq!(config.column_map.get("y").unwrap().native_type,F64);
+		assert_eq!(config.column_map.get("z").unwrap().native_type,F64);
+		assert_eq!(config.column_map.get("aa").unwrap().native_type,F64);
+		assert_eq!(config.column_map.get("ab").unwrap().native_type,F64);
+		assert_eq!(config.column_map.get("ac").unwrap().native_type,F64);
+
+		config = s_config.get_table_config(&test_schema, &"characters".into()).unwrap();
+		assert_eq!(config.column_map.get("a").unwrap().native_type,Char(1));
+		assert_eq!(config.column_map.get("b").unwrap().native_type,Char(1));
+		assert_eq!(config.column_map.get("c").unwrap().native_type,Char(255));
+		assert_eq!(config.column_map.get("d").unwrap().native_type,Char(1));
+		assert_eq!(config.column_map.get("e").unwrap().native_type,Char(255));
+		assert_eq!(config.column_map.get("f").unwrap().native_type,Char(1));
+		assert_eq!(config.column_map.get("g").unwrap().native_type,Char(1));
+		assert_eq!(config.column_map.get("h").unwrap().native_type,Char(255));
+		assert_eq!(config.column_map.get("i").unwrap().native_type,Char(50));
+		assert_eq!(config.column_map.get("j").unwrap().native_type,Varchar(50));
+		assert_eq!(config.column_map.get("k").unwrap().native_type,Varchar(50));
+		assert_eq!(config.column_map.get("l").unwrap().native_type,Varchar(50));
+
+
+		config = s_config.get_table_config(&test_schema, &"temporal".into()).unwrap();
+		assert_eq!(config.column_map.get("a").unwrap().native_type,DATE);
+		assert_eq!(config.column_map.get("b").unwrap().native_type,DATETIME(0));
+		assert_eq!(config.column_map.get("c").unwrap().native_type,DATETIME(6));
+		assert_eq!(config.column_map.get("d").unwrap().native_type,TIME(0));
+		assert_eq!(config.column_map.get("e").unwrap().native_type,TIME(6));
+		assert_eq!(config.column_map.get("f").unwrap().native_type,TIMESTAMP(0));
+		assert_eq!(config.column_map.get("g").unwrap().native_type,TIMESTAMP(6));
+		assert_eq!(config.column_map.get("h").unwrap().native_type,YEAR(4));
+		assert_eq!(config.column_map.get("i").unwrap().native_type,YEAR(4));
+
+		config = s_config.get_table_config(&test_schema, &"binary".into()).unwrap();
+		assert_eq!(config.column_map.get("a").unwrap().native_type,FIXEDBINARY(1));
+		assert_eq!(config.column_map.get("b").unwrap().native_type,FIXEDBINARY(50));
+		assert_eq!(config.column_map.get("c").unwrap().native_type,VARBINARY(50));
+		assert_eq!(config.column_map.get("d").unwrap().native_type,VARBINARY(2_u32.pow(8)));
+		assert_eq!(config.column_map.get("e").unwrap().native_type,Varchar(2_u32.pow(8)));
+		assert_eq!(config.column_map.get("f").unwrap().native_type,VARBINARY(2_u32.pow(16)));
+		assert_eq!(config.column_map.get("g").unwrap().native_type,VARBINARY(50));
+		assert_eq!(config.column_map.get("h").unwrap().native_type,Varchar(2_u32.pow(16)));
+		assert_eq!(config.column_map.get("i").unwrap().native_type,Varchar(100));
+		assert_eq!(config.column_map.get("j").unwrap().native_type,LONGBLOB(2_u64.pow(24)));
+		assert_eq!(config.column_map.get("k").unwrap().native_type,LONGTEXT(2_u64.pow(24)));
+		assert_eq!(config.column_map.get("l").unwrap().native_type,LONGBLOB(2_u64.pow(32)));
+		assert_eq!(config.column_map.get("m").unwrap().native_type,LONGTEXT(2_u64.pow(32)));
+		assert_eq!(config.column_map.get("n").unwrap().native_type,FIXEDBINARY(1));
+		assert_eq!(config.column_map.get("o").unwrap().native_type,FIXEDBINARY(50));
+
+		config = s_config.get_table_config(&test_schema, &"numerics_signed".into()).unwrap();
+		assert_eq!(config.column_map.get("a").unwrap().native_type,I64);
+		assert_eq!(config.column_map.get("b").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("c").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("d").unwrap().native_type,I64);
+		assert_eq!(config.column_map.get("e").unwrap().native_type,I64);
+		assert_eq!(config.column_map.get("f").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("g").unwrap().native_type,U64);
+		assert_eq!(config.column_map.get("h").unwrap().native_type,I64);
+		assert_eq!(config.column_map.get("i").unwrap().native_type,I64);
+		assert_eq!(config.column_map.get("j").unwrap().native_type,U64);
+
+	}
+
 }
