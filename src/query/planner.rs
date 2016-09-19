@@ -65,6 +65,70 @@ impl Rex {
             _ => panic!("")
         }
     }
+
+    fn get_element(&self) -> Result<Element, Box<ZeroError>> {
+        match self {
+            &Rex::Identifier{ref el, ..} => Ok(el.clone()),
+            &Rex::Literal(ref l) => {
+                let (dt, name) = match l {
+                    &LiteralExpr::LiteralLong(_, ref val) => (NativeType::U64, format!("{}", val)),
+                    &LiteralExpr::LiteralBool(_, ref val) => (NativeType::BOOL, format!("{}", val)),
+                    &LiteralExpr::LiteralDouble(_, ref val)=> (NativeType::F64, format!("{}", val)),
+                    &LiteralExpr::LiteralString(_, ref val) => (NativeType::Varchar(val.len() as u32), format!("{}", val)),
+                };
+                Ok(Element {
+                    name : format!("{}", name),
+                    encryption: EncryptionType::NA,
+                    key: [0_u8; 32],
+                    data_type: dt,
+                    relation: String::from("SYS"),
+                    p_name: None,
+                    p_relation: None
+                })
+            },
+            &Rex::RexFunctionCall{ref name, ref args} => {
+                match &name as &str {
+                    "MAX" | "SUM" | "MIN" | "COALESCE" => {
+                        let elements = args.iter().map(|a| {
+                            let el = a.get_element()?;
+                            if el.encryption != EncryptionType::NA {
+                                Err(ZeroError::EncryptionError {
+                                    message: format!("Function {} does not support operation on encrypted element {}.{}",
+                                                     name, el.relation, el.name).into(),
+                                    code: "1064".into()
+                                }.into())
+                            } else {
+                                Ok(el)
+                            }
+
+                        }).collect::<Result<Vec<Element>,Box<ZeroError>>>()?;
+
+                        Ok(elements[0].clone())
+                    },
+                    "COUNT" => Ok(Element {
+                        name : name.clone(),
+                        encryption: EncryptionType::NA,
+                        key: [0_u8; 32],
+                        data_type: NativeType::U64,
+                        relation: String::from("SYS"),
+                        p_name: None,
+                        p_relation: None
+                    }),
+                    _ => Err(ZeroError::EncryptionError {
+                        message: format!("Unsupported SQL Function {}", name,).into(),
+                        code: "1064".into()
+                    }.into())
+                }
+            },
+            _ => Err(ZeroError::EncryptionError {
+                message: format!("Unsupported Rex to Element : {:?}", self).into(),
+                code: "1064".into()
+            }.into())
+        }
+    }
+
+
+
 }
 
 #[derive(Debug, Clone)]
@@ -362,7 +426,7 @@ impl<'a> Planner<'a> {
 fn reconcile_tt(expr: &Rex) -> Result<TupleType, Box<ZeroError>> {
     match expr {
         &Rex::RexExprList(ref list) => {
-            let elements = list.iter().map(|e| get_element(e))
+            let elements = list.iter().map(|e| e.get_element())
                 .collect::<Result<Vec<Element>, Box<ZeroError>>>()?;
             Ok(TupleType{elements: elements})
         },
@@ -370,57 +434,6 @@ fn reconcile_tt(expr: &Rex) -> Result<TupleType, Box<ZeroError>> {
     }
 }
 
-
-//#[derive(Debug, Clone)]
-//pub struct Element {
-//    pub name: String,
-//    pub encryption: EncryptionType,
-//    pub key: [u8; 32],
-//    pub data_type: NativeType,
-//    pub relation: String,
-//    pub p_name: Option<String>,
-//    pub p_relation: Option<String>
-//}
-fn get_element(expr: &Rex) -> Result<Element, Box<ZeroError>> {
-    match expr {
-        &Rex::Identifier{ref el, ..} => Ok(el.clone()),
-        &Rex::RexFunctionCall{ref name, ref args} => {
-            match &name as &str {
-                "MAX" | "SUM" | "MIN" | "COALESCE" => {
-                    let elements = args.iter().map(|a| {
-                        let el = get_element(a)?;
-                        if el.encryption != EncryptionType::NA {
-                            Err(ZeroError::EncryptionError {
-                                message: format!("Function {} does not support operation on encrypted element {}.{}",
-                                                 name, el.relation, el.name).into(),
-                                code: "1064".into()
-                            }.into())
-                        } else {
-                            Ok(el)
-                        }
-
-                    }).collect::<Result<Vec<Element>,Box<ZeroError>>>()?;
-
-                    Ok(elements[0].clone())
-                },
-                "COUNT" => Ok(Element {
-                    name : name.clone(),
-                    encryption: EncryptionType::NA,
-                    key: [0_u8; 32],
-                    data_type: NativeType::U64,
-                    relation: String::from("SYS"),
-                    p_name: None,
-                    p_relation: None
-                }),
-                _ => Err(ZeroError::EncryptionError {
-                    message: format!("Unsupported SQL Function {}", name,).into(),
-                    code: "1064".into()
-                }.into())
-            }
-        },
-        _ => panic!("Unsupported")
-    }
-}
 
 pub trait RelVisitor {
     fn visit_rel(&mut self, rel: &Rel) -> Result<(), Box<ZeroError>>;
