@@ -38,7 +38,6 @@ echo "AgilData Zero launched: Process ID=$AGILDATA_ZERO_PID"
 
 echo "Create database (if not exist): $AGILDATA_TEST_DB via MySQL on 127.0.0.1 port 3306"
 mysql --host=127.0.0.1 --port=3306 -u$MYSQL_USER -p$MYSQL_PASS -e "CREATE DATABASE IF NOT EXISTS $AGILDATA_TEST_DB CHARACTER SET UTF8"
-mysql --host=127.0.0.1 --port=3306 -u$MYSQL_USER -p$MYSQL_PASS -e "CREATE DATABASE IF NOT EXISTS data_types CHARACTER SET UTF8"
 
 # PS to make sure the process is running
 ps -aux | grep $AGILDATA_ZERO_PID | grep -v grep

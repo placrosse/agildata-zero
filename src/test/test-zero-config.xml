@@ -42,9 +42,7 @@
             <column name="item_name" type="VARCHAR(50)" encryption="aes" key="6A199B65F965156B4C8399DF27AEAECCF4E856EFD843ADC62317A82AF7"/>
             <column name="description" type="VARCHAR(50)" encryption="none"/>
         </table>
-    </schema>
 
-    <schema name="data_types">
         <table name="numerics">
             <column name="a" type="BIT" encryption="AES" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
             <column name="b" type="BIT(2)" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
@@ -139,6 +137,6 @@
             <column name="i" type="BIGINT SIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
             <column name="j" type="BIGINT(100) UNSIGNED" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
         </table>
-
     </schema>
+
 </client-config>

@@ -495,7 +495,7 @@ mod tests {
 	#[test]
 	fn test_config_data_types() {
 		let s_config = super::parse_config("src/test/test-zero-config.xml");
-		let test_schema = "data_types".into();
+		let test_schema = "zero".into();
 		// Numerics
 
 		let mut config = s_config.get_table_config(&test_schema, &"numerics".into()).unwrap();

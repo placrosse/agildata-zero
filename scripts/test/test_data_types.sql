@@ -1,5 +1,3 @@
-USE data_types;
-
 CREATE TABLE numerics (
     a BIT,
     b BIT(2),
