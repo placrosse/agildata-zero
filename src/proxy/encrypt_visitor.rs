@@ -20,49 +20,159 @@ impl EncryptVisitor {
 	}
 
     pub fn encrypt_literal(&mut self, lit: &LiteralExpr, el: &Element, sign: Option<&Operator>) -> Result<(), Box<ZeroError>> {
-        match lit {
-            &LiteralExpr::LiteralLong(ref i, ref val) => {
-                let encrypted = match (&el.data_type, sign) {
-                    // TODO error: use of unstable library feature 'try_from' (see issue #33417)
-//                    (&NativeType::I64, Some(&Operator::SUB)) => match i64::try_from(val.clone()) {
-//                        Ok(v) => v.encrypt(&el.encryption, &el.key)?,
+        match el.data_type {
+            NativeType::U64 => {
+                match lit {
+                    &LiteralExpr::LiteralLong(ref i, ref val) => {
+                        match sign {
+                            Some(&Operator::SUB) => return Err(ZeroError::EncryptionError {
+                                message: format!("Negative unary unsupported on unsigned numerics, column: {}.{}", el.name, el.relation).into(),
+                                code: "1064".into()
+                            }.into()),
+                            _ => {self.valuemap.insert(i.clone(), val.encrypt(&el.encryption, &el.key)?);}
+                        }
+
+                    },
+                    _ => return Err(ZeroError::EncryptionError {
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.name, el.relation).into(),
+                        code: "1064".into()
+                    }.into())
+                }
+            },
+            NativeType::I64 => {
+                match lit {
+                    &LiteralExpr::LiteralLong(ref i, ref val) => {
+                        let v = match i64::from_str(&format!("{}", val)) {
+                            Ok(v) => v,
+                            Err(e) => return Err(ZeroError::EncryptionError {
+                                message: format!("Failed to coerce {} to signed due to : {}", val, e).into(),
+                                code: "1064".into()
+                            }.into())
+                        };
+
+                        let encrypted = match sign {
+                            Some(&Operator::SUB) => (-v).encrypt(&el.encryption, &el.key)?,
+                            _ => v.encrypt(&el.encryption, &el.key)?
+                        };
+                        self.valuemap.insert(i.clone(), encrypted);
+                    },
+                    _ => return Err(ZeroError::EncryptionError {
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.name, el.relation).into(),
+                        code: "1064".into()
+                    }.into())
+                }
+            },
+            NativeType::F64 => {
+                match lit {
+                    &LiteralExpr::LiteralDouble(ref i, ref val) => {
+                        let encrypted = match sign {
+                            Some(&Operator::SUB) => (-val).encrypt(&el.encryption, &el.key)?,
+                            _ => val.encrypt(&el.encryption, &el.key)?
+                        };
+                        self.valuemap.insert(i.clone(), encrypted);
+                    },
+                    _ => return Err(ZeroError::EncryptionError {
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.name, el.relation).into(),
+                        code: "1064".into()
+                    }.into())
+                }
+            },
+            NativeType::D128 => {
+                match lit {
+                    &LiteralExpr::LiteralDouble(ref i, ref val) => {
+                        // TODO precision loss?
+                        let v = match d128::from_str(&val.to_string()) {
+                            Ok(d) => d,
+                            // Note: d128::from_str e is a ()
+                            Err(e) => return Err(ZeroError::EncryptionError {
+                                message: format!("Failed to coerce {} to d128", val).into(),
+                                code: "1064".into()
+                            }.into())
+                        };
+
+                        let encrypted = match sign {
+                            Some(&Operator::SUB) => (-v).encrypt(&el.encryption, &el.key)?,
+                            _ => v.encrypt(&el.encryption, &el.key)?
+                        };
+                        self.valuemap.insert(i.clone(), encrypted);
+                    },
+                    _ => return Err(ZeroError::EncryptionError {
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.name, el.relation).into(),
+                        code: "1064".into()
+                    }.into())
+                }
+            },
+            NativeType::BOOL => {
+                match lit {
+                    &LiteralExpr::LiteralBool(ref i, ref val) => {
+                        self.valuemap.insert(i.clone(), val.encrypt(&el.encryption, &el.key)?);
+                    },
+                    _ => return Err(ZeroError::EncryptionError {
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.name, el.relation).into(),
+                        code: "1064".into()
+                    }.into())
+                }
+            },
+            NativeType::Varchar(..) | NativeType::Char(..) => {
+                match lit {
+                    &LiteralExpr::LiteralString(ref i, ref val) => {
+                        self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption, &el.key)?);
+                    },
+                    _ => return Err(ZeroError::EncryptionError {
+                        message: format!("Invalid value {:?} for column {}.{}", lit, el.name, el.relation).into(),
+                        code: "1064".into()
+                    }.into())
+                }
+            },
+            _ => return Err(ZeroError::EncryptionError {
+                message: format!("Unsupported data type {:?} for encryption {:?}. Column: {}.{}", el.data_type, el.encryption, el.name, el.relation).into(),
+                code: "1064".into()
+            }.into())
+
+        }
+//        match lit {
+//            &LiteralExpr::LiteralLong(ref i, ref val) => {
+//                let encrypted = match (&el.data_type, sign) {
+//                    // TODO error: use of unstable library feature 'try_from' (see issue #33417)
+////                    (&NativeType::I64, Some(&Operator::SUB)) => match i64::try_from(val.clone()) {
+////                        Ok(v) => v.encrypt(&el.encryption, &el.key)?,
+////                        Err(e) => panic!("e")
+////                    },
+//
+//                    // hack, due to unstable TryFrom noted above
+//                    (&NativeType::I64, Some(&Operator::SUB)) => match i64::from_str(&format!("{}", val)) {
+//                        Ok(v) => (-v).encrypt(&el.encryption, &el.key)?,
 //                        Err(e) => panic!("e")
 //                    },
-
-                    // hack, due to unstable TryFrom noted above
-                    (&NativeType::I64, Some(&Operator::SUB)) => match i64::from_str(&format!("{}", val)) {
-                        Ok(v) => (-v).encrypt(&el.encryption, &el.key)?,
-                        Err(e) => panic!("e")
-                    },
-                    _ => val.encrypt(&el.encryption, &el.key)?
-                };
-                self.valuemap.insert(i.clone(), encrypted);
-            },
-            &LiteralExpr::LiteralString(ref i, ref val) => {
-                self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption, &el.key)?);
-            },
-            &LiteralExpr::LiteralBool(ref i, ref val) => {
-                self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption, &el.key)?);
-            },
-            &LiteralExpr::LiteralDouble(ref i, ref val) => {
-                // TODO precision loss?
-                let enc = match el.data_type {
-                    NativeType::D128 => {
-                        match d128::from_str(&val.to_string()) {
-                            Ok(d) => d.encrypt(&el.encryption, &el.key)?,
-                            Err(e) => panic!("")
-                        }
-                    },
-                    NativeType::F64 => val.clone().encrypt(&el.encryption, &el.key)?,
-                    _ => panic!("")
-                };
-                self.valuemap.insert(i.clone(), enc);
-            },
-//            _ => return Err(ZeroError::EncryptionError{
-//                message: format!("Unsupported value type {:?} for encryption", lit).into(),
-//                code: "1064".into()
-//            }.into())
-        }
+//                    _ => val.encrypt(&el.encryption, &el.key)?
+//                };
+//                self.valuemap.insert(i.clone(), encrypted);
+//            },
+//            &LiteralExpr::LiteralString(ref i, ref val) => {
+//                self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption, &el.key)?);
+//            },
+//            &LiteralExpr::LiteralBool(ref i, ref val) => {
+//                self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption, &el.key)?);
+//            },
+//            &LiteralExpr::LiteralDouble(ref i, ref val) => {
+//                // TODO precision loss?
+//                let enc = match el.data_type {
+//                    NativeType::D128 => {
+//                        match d128::from_str(&val.to_string()) {
+//                            Ok(d) => d.encrypt(&el.encryption, &el.key)?,
+//                            Err(e) => panic!("")
+//                        }
+//                    },
+//                    NativeType::F64 => val.clone().encrypt(&el.encryption, &el.key)?,
+//                    _ => panic!("")
+//                };
+//                self.valuemap.insert(i.clone(), enc);
+//            },
+////            _ => return Err(ZeroError::EncryptionError{
+////                message: format!("Unsupported value type {:?} for encryption", lit).into(),
+////                code: "1064".into()
+////            }.into())
+//        }
 
         Ok(())
     }
