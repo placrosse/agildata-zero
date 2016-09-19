@@ -486,6 +486,33 @@ mod tests {
 		assert_eq!(rewritten, String::from("SELECT l.id, r.id, l.first_name, r.user_id FROM users AS l INNER JOIN user_purchases AS r ON l.id = r.user_id"));
 	}
 
+//    #[test]
+//    fn test_relvis_func_calls() {
+//        let sql = String::from("SELECT COUNT(id)
+//         FROM users");
+//        let res = parse_and_plan(sql).unwrap();
+//        let parsed = res.0;
+//        let plan = res.1;
+//
+//        let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
+//        let mut encrypt_vis = EncryptVisitor {
+//            valuemap: value_map
+//        };
+//
+//        encrypt_vis.visit_rel(&plan).unwrap();
+//
+//        let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
+//        let ansi_writer = AnsiSQLWriter{};
+//
+//        let writer = SQLWriter::new(vec![&lit_writer, &ansi_writer]);
+//
+//        let rewritten = writer.write(&parsed).unwrap();
+//
+//        debug!("Rewritten: {}", rewritten);
+//
+//        assert_eq!(rewritten, String::from("SELECT l.id, r.id, l.first_name, r.user_id FROM users AS l INNER JOIN user_purchases AS r ON l.id = r.user_id"));
+//    }
+
 	#[test]
 	fn test_relvis_join_unsupported() {
 

@@ -54,7 +54,8 @@ pub enum Rex {
     BinaryExpr{left: Box<Rex>, op: Operator, right: Box<Rex>},
     //RelationalExpr(Rel),
     RexExprList(Vec<Rex>),
-    RexUnary{operator: Operator, rex: Box<Rex>}
+    RexUnary{operator: Operator, rex: Box<Rex>},
+    RexFunctionCall{name: String, args: Vec<Rex>}
 }
 
 impl Rex {
@@ -166,6 +167,23 @@ impl<'a> Planner<'a> {
             &ASTNode::SQLUnary{ref operator, box ref expr} => {
                 Ok(Rex::RexUnary{operator: operator.clone(), rex: Box::new(self.sql_to_rex(expr, tt)?)})
             },
+            &ASTNode::SQLFunctionCall{box ref identifier, ref args} => {
+                if let &ASTNode::SQLIdentifier{ref id, ..} = identifier {
+
+                    let arguments = args.iter()
+                      .map(|a| self.sql_to_rex(a, tt))
+                      .collect::<Result<Vec<Rex>, Box<ZeroError>>>()?;
+
+                    Ok(Rex::RexFunctionCall{name: id.clone().to_uppercase(), args: arguments})
+
+                } else {
+                    Err(ZeroError::ParseError{
+                      message: format!("Illegal state, function name should be an identifier {:?}", identifier).into(),
+                      code: "1064".into()
+                    }.into())
+                }
+
+            },
             _ => Err(ZeroError::ParseError{
                 message: format!("Unsupported expr {:?}", sql).into(),
                 code: "1064".into()
@@ -197,7 +215,7 @@ impl<'a> Planner<'a> {
                 }
 
                 let project_list = self.sql_to_rex(expr_list, &input.tt() )?;
-                let project_tt = reconcile_tt(&project_list);
+                let project_tt = reconcile_tt(&project_list)?;
                 Ok(Some(Rel::Projection {
                     project: Box::new(project_list),
                     input: Box::new(input),
@@ -341,19 +359,65 @@ impl<'a> Planner<'a> {
     }
 }
 
-fn reconcile_tt(expr: &Rex) -> TupleType {
+fn reconcile_tt(expr: &Rex) -> Result<TupleType, Box<ZeroError>> {
     match expr {
         &Rex::RexExprList(ref list) => {
-            let elements = list.iter().map(|e| get_element(e)).collect();
-            TupleType{elements: elements}
+            let elements = list.iter().map(|e| get_element(e))
+                .collect::<Result<Vec<Element>, Box<ZeroError>>>()?;
+            Ok(TupleType{elements: elements})
         },
         _ => panic!("Unsupported")
     }
 }
 
-fn get_element(expr: &Rex) -> Element {
+
+//#[derive(Debug, Clone)]
+//pub struct Element {
+//    pub name: String,
+//    pub encryption: EncryptionType,
+//    pub key: [u8; 32],
+//    pub data_type: NativeType,
+//    pub relation: String,
+//    pub p_name: Option<String>,
+//    pub p_relation: Option<String>
+//}
+fn get_element(expr: &Rex) -> Result<Element, Box<ZeroError>> {
     match expr {
-        &Rex::Identifier{ref el, ..} => el.clone(),
+        &Rex::Identifier{ref el, ..} => Ok(el.clone()),
+        &Rex::RexFunctionCall{ref name, ref args} => {
+            match &name as &str {
+                "MAX" | "SUM" | "MIN" | "COALESCE" => {
+                    let elements = args.iter().map(|a| {
+                        let el = get_element(a)?;
+                        if el.encryption != EncryptionType::NA {
+                            Err(ZeroError::EncryptionError {
+                                message: format!("Function {} does not support operation on encrypted element {}.{}",
+                                                 name, el.relation, el.name).into(),
+                                code: "1064".into()
+                            }.into())
+                        } else {
+                            Ok(el)
+                        }
+
+                    }).collect::<Result<Vec<Element>,Box<ZeroError>>>()?;
+
+                    Ok(elements[0].clone())
+                },
+                "COUNT" => Ok(Element {
+                    name : name.clone(),
+                    encryption: EncryptionType::NA,
+                    key: [0_u8; 32],
+                    data_type: NativeType::U64,
+                    relation: String::from("SYS"),
+                    p_name: None,
+                    p_relation: None
+                }),
+                _ => Err(ZeroError::EncryptionError {
+                    message: format!("Unsupported SQL Function {}", name,).into(),
+                    code: "1064".into()
+                }.into())
+            }
+        },
         _ => panic!("Unsupported")
     }
 }
@@ -442,6 +506,26 @@ mod tests {
         let sql = String::from("SELECT l.id, r.id, l.first_name, r.user_id
          FROM users AS l
          JOIN user_purchases AS r ON l.id = r.user_id");
+        let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
+
+        let s = String::from("zero");
+        let default_schema = Some(&s);
+        let planner = Planner::new(default_schema, Rc::new(provider));
+
+        let plan = planner.sql_to_rel(&parsed).unwrap();
+
+        debug!("Plan {:#?}", plan);
+    }
+
+    #[test]
+    fn plan_simple_func_calls() {
+        let provider = DummyProvider{};
+
+        let ansi = AnsiSQLDialect::new();
+        let dialect = MySQLDialect::new(&ansi);
+
+        let sql = String::from("SELECT COUNT(id)
+         FROM users");
         let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
 
         let s = String::from("zero");
