@@ -78,7 +78,7 @@ impl MySQLBackedSchemaProvider {
 			ASTNode::MySQLCreateTable{table: box ASTNode::SQLIdentifier{id: ref table, ..}, ref column_list, ..} => {
 				let columns = column_list.iter().map(|c| {
 					match c {
-						&ASTNode::MySQLColumnDef{column: box ASTNode::SQLIdentifier{ref id, ..}, data_type: box ASTNode::MySQLDataType(ref dt), ..} => {
+						&ASTNode::MySQLColumnDef{column: box ASTNode::SQLIdentifier{ref id, ..}, data_type: box ref dt, ref qualifiers} => {
 							if let Some(column_config) = self.config.get_column_config(schema, table, id) {
 								Ok(ColumnMeta {
 								    name: id.clone(),
@@ -87,9 +87,12 @@ impl MySQLBackedSchemaProvider {
                                     key: column_config.key.clone(),
 								})
 							} else {
+								let default = vec![];
+								let qs = qualifiers.as_ref().unwrap_or(&default);
+								//qualifiers: Option<Vec<ASTNode>>
 								Ok(ColumnMeta {
 									name: id.clone(),
-									native_type: self._reconcile_native_type(dt)?,
+									native_type: reconcile_native_type(dt, &reconcile_column_qualifiers(&qs, false)?)?,
 									encryption: EncryptionType::NA,
                                     key: [0u8; 32],
 								})

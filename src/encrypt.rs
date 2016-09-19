@@ -24,11 +24,34 @@ pub enum EncryptionType {
 pub enum NativeType {
 	U64,
 	I64,
-	Varchar(u32),
+	Char(u32), // fixed
+	Varchar(u32), // variable
 	F64,
 	D128,
 	BOOL,
-	DATETIME,
+	DATETIME(u32), // fsp
+	DATE,
+
+	// These are representative native types, but not supported as encrypted columns
+	TIMESTAMP(u32),
+	TIME(u32),
+	YEAR(u32),
+	FIXEDBINARY(u32),
+	VARBINARY(u32), // Max of 65535
+	LONGBLOB(u64),
+	LONGTEXT(u64)
+}
+
+impl NativeType {
+	pub fn is_supported(&self) -> bool {
+		match *self {
+			NativeType::U64 | NativeType::I64 | NativeType::Char(_) |
+			NativeType::Varchar(_) | NativeType::F64 | NativeType::D128 |
+			NativeType::BOOL | NativeType::DATETIME(_) |
+			NativeType::DATE => true,
+			_ => false
+		}
+	}
 }
 
 pub trait Encrypt {
@@ -70,6 +93,7 @@ impl Encrypt for bool {
 				let mut buf: Vec<u8> = Vec::new();
 				buf.write_u8(self as u8).unwrap();
 
+				println!("HERE {}", buf.len());
 				encrypt(key, &buf)
 			},
 			_ => Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
@@ -133,6 +157,7 @@ impl Encrypt for i64 {
 				let mut buf: Vec<u8> = Vec::new();
 				buf.write_i64::<BigEndian>(self).unwrap();
 
+				println!("HERE {}", buf.len());
 				encrypt(key, &buf)
 			},
 			_ => Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
@@ -423,13 +448,14 @@ mod test {
 
 	#[test]
 	fn test_encrypt_datetime() {
-		let value = String::from("2014-11-28 21:00:09");
+		let value = String::from("2015-01-24 15:22:06");
 		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
 		let enc = EncryptionType::AES;
 		let datetime = UTC.datetime_from_str(&value, "%Y-%m-%d %H:%M:%S").unwrap();
 
 		let encrypted = datetime.encrypt(&enc, &key).unwrap();
 		let decrypted = DateTime::decrypt(&encrypted, &enc, &key).unwrap();
+		println!("HERERE {}", encrypted.len());
 		assert_eq!(decrypted, datetime);
 
 		let rewritten = decrypted.format("%Y-%m-%d %H:%M:%S").to_string();
@@ -445,6 +471,7 @@ mod test {
 		let datetime = UTC.datetime_from_str(&value, "%Y-%m-%d %H:%M:%S%.f").unwrap();
 
 		let encrypted = datetime.encrypt(&enc, &key).unwrap();
+		println!("HERERE {}", encrypted.len());
 		let decrypted = DateTime::decrypt(&encrypted, &enc, &key).unwrap();
 		assert_eq!(decrypted, datetime);
 
@@ -455,7 +482,7 @@ mod test {
 
 	#[test]
 	fn test_encrypt_date() {
-		let value = String::from("2014-11-28");
+		let value = String::from("2016-09-15");
 		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
 		let enc = EncryptionType::AES;
 		let datetime = UTC.datetime_from_str(&format!("{} 00:00:00",&value), "%Y-%m-%d %H:%M:%S").unwrap();
@@ -477,6 +504,8 @@ mod test {
 		let enc = EncryptionType::AES;
 
 		let encrypted = value.encrypt(&enc, &key).unwrap();
+
+		println!("THERE {}", encrypted.len());
 		let decrypted = bool::decrypt(&encrypted, &enc, &key).unwrap();
 		assert_eq!(decrypted, value);
 	}

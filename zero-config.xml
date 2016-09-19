@@ -43,4 +43,8 @@
             <column name="description" type="VARCHAR(50)" encryption="none"/>
 		</table>
 	</schema>
+
+	<schema name="test">
+
+	</schema>
 </client-config>

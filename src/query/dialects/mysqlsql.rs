@@ -302,7 +302,7 @@ impl<'d> MySQLDialect<'d> {
 		Ok(ASTNode::MySQLColumnDef{column: Box::new(column), data_type: Box::new(data_type), qualifiers: qualifiers})
 	}
 
-	fn parse_column_qualifiers<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) ->  Result<Option<Vec<ASTNode>>,  Box<ZeroError>>
+	pub fn parse_column_qualifiers<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) ->  Result<Option<Vec<ASTNode>>,  Box<ZeroError>>
 		 {
 
 		let mut ret: Vec<ASTNode> = Vec::new();
@@ -318,7 +318,7 @@ impl<'d> MySQLDialect<'d> {
 		}
 	}
 
-	fn parse_column_qualifier<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) ->  Result<Option<ASTNode>,  Box<ZeroError>>
+	pub fn parse_column_qualifier<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) ->  Result<Option<ASTNode>,  Box<ZeroError>>
 		 {
 
 		debug!("parse_column_qualifier() {:?}", tokens.peek());
@@ -406,7 +406,7 @@ impl<'d> MySQLDialect<'d> {
 		}
 	}
 
-	fn parse_data_type<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) ->  Result<ASTNode,  Box<ZeroError>>
+	pub fn parse_data_type<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) ->  Result<ASTNode,  Box<ZeroError>>
 		 {
 
 		let data_token = tokens.next();
