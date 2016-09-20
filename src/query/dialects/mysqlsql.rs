@@ -327,7 +327,9 @@ impl<'d> MySQLDialect<'d> {
 			Some(&Token::Keyword(ref v)) | Some(&Token::Identifier(ref v)) => match &v.to_uppercase() as &str {
 				"NOT" => {
 					tokens.next();
-					if tokens.consume_keyword("NULL") {
+                    if let Some(&Token::Literal(LiteralToken::LiteralNull(_))) = tokens.peek() {
+                        tokens.next();
+//					if tokens.consume_keyword("NULL") {
 						Ok(Some(ASTNode::MySQLColumnQualifier(MySQLColumnQualifier::NotNull)))
 					} else {
                         Err(ZeroError::ParseError{
@@ -335,10 +337,6 @@ impl<'d> MySQLDialect<'d> {
                             code: "1064".into()
                         }.into())
 					}
-				},
-				"NULL" => {
-					tokens.next();
-					Ok(Some(ASTNode::MySQLColumnQualifier(MySQLColumnQualifier::Null)))
 				},
 				"AUTO_INCREMENT" => {
 					tokens.next();
@@ -403,6 +401,10 @@ impl<'d> MySQLDialect<'d> {
 				}
 				_ => Ok(None)
 			},
+            Some(&Token::Literal(LiteralToken::LiteralNull(_))) => {
+                tokens.next();
+                Ok(Some(ASTNode::MySQLColumnQualifier(MySQLColumnQualifier::Null)))
+            },
 			_ => Ok(None)
 		}
 	}

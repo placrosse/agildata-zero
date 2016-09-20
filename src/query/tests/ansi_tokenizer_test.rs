@@ -18,6 +18,22 @@ fn simple_tokenize() {
 }
 
 #[test]
+fn tokenize_with_null() {
+	let dialect = AnsiSQLDialect::new();
+	let tokens = String::from("SELECT NULL, null").tokenize(&dialect).unwrap();
+	assert_eq!(
+		vec![Token::Keyword("SELECT".to_string()),
+			Token::Literal(LiteralToken::LiteralNull(0)),
+			Token::Punctuator(",".to_string()),
+			Token::Literal(LiteralToken::LiteralNull(1))
+		],
+		tokens.tokens
+	);
+
+	// let parsed = tokens.parse().unwrap();
+}
+
+#[test]
 fn complex_tokenize() {
 	let dialect = AnsiSQLDialect::new();
     assert_eq!(

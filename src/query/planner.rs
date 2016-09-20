@@ -76,6 +76,7 @@ impl Rex {
                     &LiteralExpr::LiteralBool(_, ref val) => (NativeType::BOOL, format!("{}", val)),
                     &LiteralExpr::LiteralDouble(_, ref val)=> (NativeType::F64, format!("{}", val)),
                     &LiteralExpr::LiteralString(_, ref val) => (NativeType::Varchar(val.len() as u32), format!("{}", val)),
+                    &LiteralExpr::LiteralNull(_) => (NativeType::NULL, "NULL".to_string()),
                 };
                 Ok(Element {
                     name : format!("{}", name),
@@ -569,7 +570,7 @@ mod tests {
 
         let plan = planner.sql_to_rel(&parsed).unwrap();
 
-        warn!("Plan {:#?}", plan);
+        debug!("Plan {:#?}", plan);
     }
 
     #[test]
@@ -580,6 +581,26 @@ mod tests {
         let plan = res.1;
 
         debug!("Plan {:#?}", plan);
+    }
+
+    #[test]
+    fn plan_select_with_nulls() {
+
+        let sql = String::from("SELECT id FROM users WHERE id = NULL");
+        let res = parse_and_plan(sql).unwrap();
+        let plan = res.1;
+
+        println!("Plan {:#?}", plan);
+    }
+
+    #[test]
+    fn plan_insert_with_nulls() {
+
+        let sql = String::from("INSERT INTO users  (id, first_name, last_name, ssn, age, sex) VALUES(NULL, null, null, NULL, null, NULL)");
+        let res = parse_and_plan(sql).unwrap();
+        let plan = res.1;
+
+        println!("Plan {:#?}", plan);
     }
 
     #[test]

@@ -38,6 +38,41 @@ fn select_wildcard() {
 }
 
 #[test]
+fn select_with_nulls() {
+    let dialect = AnsiSQLDialect::new();
+    let sql = String::from("SELECT a, NULL FROM foo WHERE b = null");
+    let tokens = sql.tokenize(&dialect).unwrap();
+    let parsed = tokens.parse().unwrap();
+
+    assert_eq!(
+		SQLSelect {
+			expr_list: Box::new(SQLExprList(vec![
+			    SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]},
+			    SQLLiteral(LiteralNull(0))
+            ])),
+			relation: Some(Box::new(SQLIdentifier{id: String::from("foo"), parts: vec![String::from("foo")]})),
+			selection: Some(Box::new(SQLBinary {
+			    left: Box::new(SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]}),
+			    op: EQ,
+			    right: Box::new(SQLLiteral(LiteralNull(1)))
+			})),
+			order: None
+		},
+		parsed
+	);
+
+    println!("{:#?}", parsed);
+
+    let ansi_writer = AnsiSQLWriter{};
+    let writer = SQLWriter::new(vec![&ansi_writer]);
+    let rewritten = writer.write(&parsed).unwrap();
+    assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+    println!("Rewritten: {:?}", rewritten);
+
+}
+
+#[test]
 fn sqlparser() {
 	let dialect = AnsiSQLDialect::new();
 	let sql = String::from("SELECT 1 + 1 + 1,

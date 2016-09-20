@@ -27,7 +27,8 @@ impl<'a> ExprWriter for LiteralReplacingWriter<'a> {
 				&LiteralExpr::LiteralLong(ref i, _) => self.optionally_write_literal(i, builder),
     			&LiteralExpr::LiteralBool(ref i, _) => self.optionally_write_literal(i, builder),
     			&LiteralExpr::LiteralDouble(ref i, _) => self.optionally_write_literal(i, builder),
-    			&LiteralExpr::LiteralString(ref i, _) => self.optionally_write_literal(i, builder)
+    			&LiteralExpr::LiteralString(ref i, _) => self.optionally_write_literal(i, builder),
+                &LiteralExpr::LiteralNull(_) => Ok(false)
 			},
             &ASTNode::SQLUnary{ref operator, expr: box ASTNode::SQLLiteral(ref e)} => match e {
               &LiteralExpr::LiteralLong(ref i, _) | &LiteralExpr::LiteralDouble(ref i, _) => {

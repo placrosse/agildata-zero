@@ -39,7 +39,10 @@ pub enum NativeType {
 	FIXEDBINARY(u32),
 	VARBINARY(u32), // Max of 65535
 	LONGBLOB(u64),
-	LONGTEXT(u64)
+	LONGTEXT(u64),
+
+	// Unknown
+	NULL,
 }
 
 impl NativeType {

@@ -21,6 +21,16 @@ impl EncryptVisitor {
 	}
 
     pub fn encrypt_literal(&mut self, lit: &LiteralExpr, el: &Element, sign: Option<&Operator>) -> Result<(), Box<ZeroError>> {
+
+        // Handle null values
+        // This will insert nothing into the value map
+        // This may need to change if an encrypted null is not a real NULL
+        match lit {
+            &LiteralExpr::LiteralNull(ref i ) => return Ok(()),
+            _ => {}
+        }
+
+        // Handle non-null values
         match el.data_type {
             NativeType::U64 => {
                 match lit {
@@ -609,6 +619,36 @@ mod tests {
 
         encrypt_vis.visit_rel(&plan).unwrap();
 
+    }
+
+    #[test]
+    fn test_relvis_select_with_null() {
+
+        let sql = String::from("SELECT id FROM users WHERE id = NULL AND first_name = NULL");
+        let res = parse_and_plan(sql).unwrap();
+        let plan = res.1;
+
+        let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
+        let mut encrypt_vis = EncryptVisitor {
+            valuemap: value_map
+        };
+
+        encrypt_vis.visit_rel(&plan).unwrap();
+    }
+
+    #[test]
+    fn test_relvis_insert_with_null() {
+
+        let sql = String::from("INSERT INTO users  (id, first_name, last_name, ssn, age, sex) VALUES(NULL, null, null, NULL, null, NULL)");
+        let res = parse_and_plan(sql).unwrap();
+        let plan = res.1;
+
+        let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
+        let mut encrypt_vis = EncryptVisitor {
+            valuemap: value_map
+        };
+
+        encrypt_vis.visit_rel(&plan).unwrap();
     }
 
 	fn parse_and_plan(sql: String) -> Result<(ASTNode, Rel), Box<ZeroError>> {

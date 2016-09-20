@@ -571,7 +571,7 @@ fn create_column_qualifiers() {
 		            qualifiers: Some(vec![
 		                    MySQLColumnQualifier(Signed),
 		                    MySQLColumnQualifier(NotNull),
-		                    MySQLColumnQualifier(Default(Box::new(SQLLiteral(LiteralLong(1,123456789)))))
+		                    MySQLColumnQualifier(Default(Box::new(SQLLiteral(LiteralLong(4,123456789)))))
 		                ]
 		            )
 		        },
@@ -581,8 +581,8 @@ fn create_column_qualifiers() {
 		            qualifiers: Some(vec![
 		                    MySQLColumnQualifier(Unsigned),
 		                    MySQLColumnQualifier(Null),
-		                    MySQLColumnQualifier(Default(Box::new(SQLIdentifier{id: String::from("NULL"), parts: vec![String::from("NULL")]}))), // TODO should be literal null ?
-							MySQLColumnQualifier(Comment(Box::new(SQLLiteral(LiteralString(2,String::from("Some Comment"))))))
+		                    MySQLColumnQualifier(Default(Box::new(SQLLiteral(LiteralNull(6))))), // TODO should be literal null ?
+							MySQLColumnQualifier(Comment(Box::new(SQLLiteral(LiteralString(7,String::from("Some Comment"))))))
 		                ]
 		            )
 		        },
