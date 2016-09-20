@@ -166,6 +166,7 @@ impl Dialect for AnsiSQLDialect {
 					"SELECT" => Ok(Some(try!(self.parse_select(tokens)))),
 					"INSERT" => Ok(Some(try!(self.parse_insert(tokens)))),
 					"UPDATE" => Ok(Some(try!(self.parse_update(tokens)))),
+					"DELETE" => Ok(Some(try!(self.parse_delete(tokens)))),
 					// "CREATE" => Ok(Some(try!(self.parse_create(tokens)))),
 					_ => Err(ZeroError::ParseError {
                             message: format!("Unsupported prefix {:?}", v).into(),
@@ -388,6 +389,26 @@ impl AnsiSQLDialect {
 		Ok(ASTNode::SQLUpdate {
 			table: Box::new(table),
 			assignments: Box::new(assignments),
+			selection: selection
+		})
+	}
+
+	fn parse_delete<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode, Box<ZeroError>>
+	{
+
+		tokens.consume_keyword("DELETE");
+		tokens.consume_keyword("FROM");
+
+		let table = try!(self.parse_identifier(tokens));
+
+		let selection = if tokens.consume_keyword("WHERE") {
+			Some(Box::new(tokens.parse_expr(0)?))
+		} else {
+			None
+		};
+
+		Ok(ASTNode::SQLDelete {
+			table: Box::new(table),
 			selection: selection
 		})
 	}
@@ -701,6 +722,17 @@ impl ExprWriter for AnsiSQLWriter {
 				writer._write(builder, table)?;
 				builder.push_str(" SET");
 				writer._write(builder, assignments)?;
+				match selection {
+					&Some(box ref e) => {
+						builder.push_str(" WHERE");
+						writer._write(builder, e)?
+					},
+					&None => {}
+				}
+			},
+			&ASTNode::SQLDelete{box ref table, ref selection} => {
+				builder.push_str("DELETE FROM");
+				writer._write(builder, table)?;
 				match selection {
 					&Some(box ref e) => {
 						builder.push_str(" WHERE");

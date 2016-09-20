@@ -209,6 +209,10 @@ pub enum ASTNode {
         assignments: Box<ASTNode>,
         selection: Option<Box<ASTNode>>
     },
+	SQLDelete {
+		table: Box<ASTNode>,
+		selection: Option<Box<ASTNode>>
+	},
     SQLUnion{left: Box<ASTNode>, union_type: UnionType, right: Box<ASTNode>},
     SQLJoin{left: Box<ASTNode>, join_type: JoinType, right: Box<ASTNode>, on_expr: Option<Box<ASTNode>>},
 	SQLFunctionCall{identifier: Box<ASTNode>, args: Vec<ASTNode>},
