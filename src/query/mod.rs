@@ -184,6 +184,13 @@ impl<'a, D: Dialect> Parser<D> for Tokens<'a, D> {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum InsertMode {
+	INSERT,
+	IGNORE,
+	REPLACE,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum ASTNode {
 	// ANSISQL nodes
 	SQLIdentifier{id: String, parts: Vec<String>},
@@ -202,6 +209,7 @@ pub enum ASTNode {
     },
     SQLInsert {
         table: Box<ASTNode>,
+		insert_mode: InsertMode,
         column_list: Box<ASTNode>,
         values_list: Box<ASTNode>
     },
@@ -210,6 +218,10 @@ pub enum ASTNode {
         assignments: Box<ASTNode>,
         selection: Option<Box<ASTNode>>
     },
+	SQLDelete {
+		table: Box<ASTNode>,
+		selection: Option<Box<ASTNode>>
+	},
     SQLUnion{left: Box<ASTNode>, union_type: UnionType, right: Box<ASTNode>},
     SQLJoin{left: Box<ASTNode>, join_type: JoinType, right: Box<ASTNode>, on_expr: Option<Box<ASTNode>>},
 	SQLFunctionCall{identifier: Box<ASTNode>, args: Vec<ASTNode>},

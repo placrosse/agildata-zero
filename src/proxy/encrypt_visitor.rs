@@ -187,17 +187,17 @@ impl EncryptVisitor {
 
 impl RelVisitor for EncryptVisitor  {
 	fn visit_rel(&mut self, rel: &Rel) -> Result<(),  Box<ZeroError>> {
-		match rel {
-			&Rel::Projection{box ref project, box ref input, ref tt} => {
+		match *rel {
+			Rel::Projection{box ref project, box ref input, ref tt} => {
 				self.visit_rex(project, tt)?;
 				self.visit_rel(input)?;
 			},
-			&Rel::Selection{box ref expr, box ref input} => {
+			Rel::Selection{box ref expr, box ref input} => {
 				self.visit_rex(expr, input.tt())?;
 				self.visit_rel(input)?;
 			},
-			&Rel::TableScan{..} => {},
-			&Rel::Join{box ref left, box ref right, ref on_expr, ref tt, ..} => {
+			Rel::TableScan{..} => {},
+			Rel::Join{box ref left, box ref right, ref on_expr, ref tt, ..} => {
 				self.visit_rel(left)?;
 				self.visit_rel(right)?;
 				match on_expr {
@@ -205,9 +205,9 @@ impl RelVisitor for EncryptVisitor  {
 					&None => {}
 				}
 			},
-			&Rel::AliasedRel{box ref input, ..} => self.visit_rel(input)?,
-			&Rel::Dual{..} => {},
-			&Rel::Update{ref table, box ref set_stmts, ref selection, ref tt} => {
+			Rel::AliasedRel{box ref input, ..} => self.visit_rel(input)?,
+			Rel::Dual{..} => {},
+			Rel::Update{ref table, box ref set_stmts, ref selection, ref tt} => {
 				match set_stmts {
 					&Rex::RexExprList(ref list) => {
 						for e in list.iter() {
@@ -221,7 +221,13 @@ impl RelVisitor for EncryptVisitor  {
 					&None => {}
 				}
 			},
-			&Rel::Insert{ref table, box ref columns, box ref values, ..} => {
+            Rel::Delete{ref table, ref selection, ref tt} => {
+                match selection {
+                    &Some(box ref s) => self.visit_rex(s, tt)?,
+                    &None => {}
+                }
+            },
+			Rel::Insert{ref table, box ref columns, box ref values, ..} => {
 				match (columns, values) {
 					(&Rex::RexExprList(ref c_list), &Rex::RexExprList(ref v_list)) => {
 						for (index, v) in v_list.iter().enumerate() {

@@ -22,6 +22,17 @@
         <property name="mode" value="strict"/>
     </parsing>
 
+	<schema name="tpcc">
+		<table name="customer">
+			<column name="c_id"       type="INTEGER"     encryption="none" pkOrdinal="0"/>
+			<column name="c_first"    type="VARCHAR(16)" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+			<column name="c_middle"   type="VARCHAR(2)"  encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+			<column name="c_last"     type="VARCHAR(16)" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+			<column name="c_street_1" type="VARCHAR(20)" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+			<column name="c_street_2" type="VARCHAR(20)" encryption="aes" key="44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"/>
+		</table>
+	</schema>
+
 	<schema name="zero">
 		<table name="users">
 			<column name="id" type="INTEGER" encryption="none" pkOrdinal="0"/>

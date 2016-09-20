@@ -611,6 +611,36 @@ fn update() {
 }
 
 #[test]
+fn delete() {
+		let dialect = AnsiSQLDialect::new();
+		let sql = String::from("DELETE FROM foo WHERE c > 10");
+		let tokens = sql.tokenize(&dialect).unwrap();
+		let parsed = tokens.parse().unwrap();
+
+		assert_eq!(
+		SQLDelete {
+			table: Box::new(SQLIdentifier{id: String::from("foo"), parts: vec![String::from("foo")]}),
+			selection: Some(Box::new(SQLBinary{
+				left: Box::new(SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}),
+				op: GT,
+				right : Box::new(SQLLiteral(LiteralLong(0, 10_u64)))
+			}))
+		},
+		parsed
+	);
+
+	println!("{:#?}", parsed);
+
+	let ansi_writer = AnsiSQLWriter{};
+	let writer = SQLWriter::new(vec![&ansi_writer]);
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {:?}", rewritten);
+}
+
+
+#[test]
 fn select_function_calls() {
     let dialect = AnsiSQLDialect::new();
     let sql = String::from("SELECT COUNT(id) FROM foo WHERE LOWER(b) = 'lowercase'");

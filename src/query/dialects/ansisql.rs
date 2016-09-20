@@ -168,6 +168,7 @@ impl Dialect for AnsiSQLDialect {
 					"SELECT" => Ok(Some(try!(self.parse_select(tokens)))),
 					"INSERT" => Ok(Some(try!(self.parse_insert(tokens)))),
 					"UPDATE" => Ok(Some(try!(self.parse_update(tokens)))),
+					"DELETE" => Ok(Some(try!(self.parse_delete(tokens)))),
 					// "CREATE" => Ok(Some(try!(self.parse_create(tokens)))),
 					_ => Err(ZeroError::ParseError {
                             message: format!("Unsupported prefix {:?}", v).into(),
@@ -296,6 +297,11 @@ impl AnsiSQLDialect {
 
 		// TODO validation
 		tokens.consume_keyword("INSERT");
+		let insert_mode = if tokens.consume_keyword("IGNORE") {
+			InsertMode::IGNORE
+		} else {
+			InsertMode::INSERT
+		};
 		tokens.consume_keyword("INTO");
 
 		let table = try!(self.parse_identifier(tokens));
@@ -318,6 +324,7 @@ impl AnsiSQLDialect {
 
 		Ok(ASTNode::SQLInsert {
 			table: Box::new(table),
+			insert_mode: insert_mode,
 			column_list: Box::new(columns),
 			values_list: Box::new(values)
 		})
@@ -394,6 +401,26 @@ impl AnsiSQLDialect {
 		Ok(ASTNode::SQLUpdate {
 			table: Box::new(table),
 			assignments: Box::new(assignments),
+			selection: selection
+		})
+	}
+
+	fn parse_delete<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode, Box<ZeroError>>
+	{
+
+		tokens.consume_keyword("DELETE");
+		tokens.consume_keyword("FROM");
+
+		let table = try!(self.parse_identifier(tokens));
+
+		let selection = if tokens.consume_keyword("WHERE") {
+			Some(Box::new(tokens.parse_expr(0)?))
+		} else {
+			None
+		};
+
+		Ok(ASTNode::SQLDelete {
+			table: Box::new(table),
 			selection: selection
 		})
 	}
@@ -693,8 +720,13 @@ impl ExprWriter for AnsiSQLWriter {
 				}
 
 			},
-			&ASTNode::SQLInsert{box ref table, box ref column_list, box ref values_list} => {
-				builder.push_str("INSERT INTO");
+			&ASTNode::SQLInsert{box ref table, ref insert_mode, box ref column_list, box ref values_list} => {
+				builder.push_str("INSERT ");
+				match *insert_mode {
+					InsertMode::IGNORE => builder.push_str("IGNORE "),
+					_ => {}
+				}
+				builder.push_str(" INTO");
 				writer._write(builder, table)?;
 				builder.push_str(" (");
 				writer._write(builder, column_list)?;
@@ -707,6 +739,17 @@ impl ExprWriter for AnsiSQLWriter {
 				writer._write(builder, table)?;
 				builder.push_str(" SET");
 				writer._write(builder, assignments)?;
+				match selection {
+					&Some(box ref e) => {
+						builder.push_str(" WHERE");
+						writer._write(builder, e)?
+					},
+					&None => {}
+				}
+			},
+			&ASTNode::SQLDelete{box ref table, ref selection} => {
+				builder.push_str("DELETE FROM");
+				writer._write(builder, table)?;
 				match selection {
 					&Some(box ref e) => {
 						builder.push_str(" WHERE");

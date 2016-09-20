@@ -287,6 +287,8 @@ impl ZeroHandler {
         let query = parse_string(&p.bytes[5..]);
         debug!("COM_QUERY : {}", query);
 
+        self.tt = None;
+
         // parse query
         let ansi = AnsiSQLDialect::new();
         let dialect = MySQLDialect::new(&ansi);
@@ -408,15 +410,16 @@ impl ZeroHandler {
                           p: &Packet,
                           ) -> Result<Action, Box<ZeroError>> {
 
-        debug!("Received row");
-
         match self.tt {
             Some(ref tt) => {
+
+                debug!("Received row: tt={:?}", tt);
+
                 let mut r = MySQLPacketParser::new(&p.bytes);
                 let mut wtr: Vec<u8> = vec![];
 
                 for i in 0..tt.elements.len() {
-                    debug!("decrypt element {:?}", &tt.elements[i]);
+                    debug!("decrypt element {} : {:?}", i, &tt.elements[i]);
 
                     let value = match &tt.elements[i].encryption {
                         &EncryptionType::NA => r.read_lenenc_string(),
