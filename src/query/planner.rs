@@ -67,7 +67,7 @@ impl Rex {
         }
     }
 
-    fn get_element(&self) -> Result<Element, Box<ZeroError>> {
+    pub fn get_element(&self) -> Result<Element, Box<ZeroError>> {
         match self {
             &Rex::Identifier{ref el, ..} => Ok(el.clone()),
             &Rex::Literal(ref l) => {
@@ -120,6 +120,17 @@ impl Rex {
                         code: "1064".into()
                     }.into())
                 }
+            },
+            &Rex::RexNested(ref expr) => expr.get_element(),
+            &Rex::RelationalExpr(ref rel) => {
+                let tt = rel.tt();
+                if (tt.elements.len() != 1) {
+                    return Err(ZeroError::EncryptionError {
+                        message: format!("Subselects returning > 1 column currently unsupported").into(),
+                        code: "1064".into()
+                    }.into())
+                }
+                Ok(tt.elements[0].clone())
             },
             _ => Err(ZeroError::EncryptionError {
                 message: format!("Unsupported Rex to Element : {:?}", self).into(),
