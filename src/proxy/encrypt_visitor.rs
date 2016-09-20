@@ -261,6 +261,7 @@ impl RelVisitor for EncryptVisitor  {
 	fn visit_rex(&mut self, rex: &Rex, tt: &TupleType) -> Result<(),  Box<ZeroError>> {
 		match rex {
 			&Rex::BinaryExpr{box ref left, ref op, box ref right} => {
+//                println!("HERE: {:?} {:?} {:?}");
 				match op {
 					&Operator::AND | &Operator::OR => {
 						self.visit_rex(left, tt)?;
@@ -351,7 +352,38 @@ impl RelVisitor for EncryptVisitor  {
 									}
 								}
 							}
-						}
+                        } else if let Some((element, rel)) = match (left, right) {
+                            (&Rex::Identifier{el: ref l, ..}, &Rex::RexNested(box Rex::RelationalExpr(_))) => Some((l, right)),
+                            (&Rex::RexNested(box Rex::RelationalExpr(_)), &Rex::Identifier{el: ref l, ..}) => Some((l, left)),
+                            _ => None
+                        } {
+                            let rel_element = rel.get_element()?;
+                            if !(element.encryption == rel_element.encryption && element.data_type == rel_element.data_type && element.key == rel_element.key) {
+                                return Err(ZeroError::EncryptionError{
+                                    message: format!("Unsupported operation:  {}.{} [{:?}, {:?}] {:?} {}.{} [{:?}, {:?}]",
+                                                     element.relation, element.name, element.encryption, element.data_type,
+                                                     op,
+                                                     rel_element.relation, rel_element.name, rel_element.encryption, rel_element.data_type
+                                    ).into(),
+                                    code: "1064".into()
+                                }.into())
+                            } else {
+                                // If they do match, validate
+                                if element.encryption != EncryptionType::NA {
+                                    match op {
+                                        &Operator::EQ => {}, // OK,
+                                        _ =>return Err(ZeroError::EncryptionError{
+                                            message: format!("Unsupported operation:  {}.{} [{:?}, {:?}] {:?} {}.{} [{:?}, {:?}]",
+                                                             element.relation, element.name, element.encryption, element.data_type,
+                                                             op,
+                                                             rel_element.relation, rel_element.name, rel_element.encryption, rel_element.data_type
+                                            ).into(),
+                                            code: "1064".into()
+                                        }.into())
+                                    }
+                                }
+                            }
+                        }
 					}
 				}
 			},
@@ -360,7 +392,11 @@ impl RelVisitor for EncryptVisitor  {
                     self.visit_rex(a, tt)?
                 }
             }
-			_ => {} // TODO
+//			_ => return Err(ZeroError::EncryptionError{
+//                message: format!("Unsupported Expr for encryption and validation {:?}", rex).into(),
+//                code: "1064".into()
+//            }.into())
+            _ => {}
 		}
 		Ok(())
 	}
@@ -547,6 +583,31 @@ mod tests {
 		 JOIN user_purchases AS r ON l.age > r.item_code");
 		plan = parse_and_plan(sql).unwrap().1;
 		assert_eq!(encrypt_vis.visit_rel(&plan).err().unwrap().to_string(), String::from("Unsupported operation:  l.age [AES, U64] GT r.item_code [AES, U64]"));
+
+        sql = String::from("SELECT id FROM users WHERE id = (SELECT first_name FROM users)");
+        plan = parse_and_plan(sql).unwrap().1;
+        assert_eq!(encrypt_vis.visit_rel(&plan).err().unwrap().to_string(), String::from("Unsupported operation:  users.id [NA, U64] EQ users.first_name [AES, Varchar(50)]"));
+
+        sql = String::from("SELECT id FROM users WHERE id = (SELECT id, first_name FROM users)");
+        plan = parse_and_plan(sql).unwrap().1;
+        assert_eq!(encrypt_vis.visit_rel(&plan).err().unwrap().to_string(), String::from("Subselects returning > 1 column currently unsupported"));
+
+    }
+
+    #[test]
+    fn test_relvis_rel_as_rex() {
+
+        let sql = String::from("SELECT id FROM users WHERE first_name = (SELECT first_name FROM users)
+            AND age = (SELECT age FROM users) AND id = (SELECT id FROM users)");
+        let res = parse_and_plan(sql).unwrap();
+        let plan = res.1;
+
+        let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
+        let mut encrypt_vis = EncryptVisitor {
+            valuemap: value_map
+        };
+
+        encrypt_vis.visit_rel(&plan).unwrap();
 
     }
 
