@@ -137,7 +137,8 @@ pub enum Rel {
     Join{left: Box<Rel>, join_type: JoinType, right: Box<Rel>, on_expr: Option<Box<Rex>>, tt: TupleType},
     Dual { tt: TupleType },
     Insert {table: String, columns: Box<Rex>, values: Box<Rex>, tt: TupleType},
-	Update {table: String, set_stmts: Box<Rex>, selection: Option<Box<Rex>>, tt: TupleType}    
+	Update {table: String, set_stmts: Box<Rex>, selection: Option<Box<Rex>>, tt: TupleType},
+	Delete {table: String, selection: Option<Box<Rex>>, tt: TupleType},
 }
 
 pub trait HasTupleType {
@@ -146,15 +147,16 @@ pub trait HasTupleType {
 
 impl HasTupleType for Rel {
     fn tt<'a>(&'a self) -> &'a TupleType {
-        match self {
-            &Rel::Projection { ref tt, .. } => tt,
-            &Rel::Selection { ref input, .. } => input.tt(),
-            &Rel::TableScan { ref tt, .. } => tt,
-            &Rel::Dual { ref tt, .. } => tt,
-            &Rel::Insert {ref tt, ..} => tt,
-            &Rel::AliasedRel{ref tt, ..} => tt,
-            &Rel::Join{ref tt, ..} => tt,
-            &Rel::Update{ref tt, ..} => tt
+        match *self {
+            Rel::Projection { ref tt, .. } => tt,
+            Rel::Selection { ref input, .. } => input.tt(),
+            Rel::TableScan { ref tt, .. } => tt,
+            Rel::Dual { ref tt, .. } => tt,
+            Rel::Insert {ref tt, ..} => tt,
+            Rel::AliasedRel { ref tt, ..} => tt,
+            Rel::Join { ref tt, ..} => tt,
+            Rel::Update { ref tt, ..} => tt,
+            Rel::Delete { ref tt, ..} => tt,
         }
     }
 }
@@ -253,8 +255,8 @@ impl<'a> Planner<'a> {
     }
 
     pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Option<Rel>, Box<ZeroError>> {
-        match sql {
-            &ASTNode::SQLSelect { box ref expr_list, ref relation, ref selection, ref order } => {
+        match *sql {
+            ASTNode::SQLSelect { box ref expr_list, ref relation, ref selection, ref order } => {
 
                 let relation = match relation {
                     &Some(box ref r) => self.sql_to_rel(r)?,
@@ -283,7 +285,7 @@ impl<'a> Planner<'a> {
                     tt: project_tt
                 }))
             },
-            &ASTNode::SQLInsert {box ref table, box ref column_list, box ref values_list} => {
+            ASTNode::SQLInsert {box ref table, box ref column_list, box ref values_list} => {
                 match self.sql_to_rel(table)? {
                     Some(Rel::TableScan {table, tt}) => {
                         Ok(Some(Rel::Insert{
@@ -300,7 +302,7 @@ impl<'a> Planner<'a> {
                     None => return Ok(None)
                 }
             },
-            &ASTNode::SQLJoin{box ref left, ref join_type, box ref right, ref on_expr} => {
+            ASTNode::SQLJoin{box ref left, ref join_type, box ref right, ref on_expr} => {
                 let left_rel = self.sql_to_rel(left)?;
                 let right_rel = self.sql_to_rel(right)?;
 
@@ -337,7 +339,7 @@ impl<'a> Planner<'a> {
                     }
                 }
             },
-            &ASTNode::SQLAlias{box ref expr, box ref alias} => {
+            ASTNode::SQLAlias{box ref expr, box ref alias} => {
 
                 let input = self.sql_to_rel(expr)?;
                 let a = match alias {
@@ -361,7 +363,7 @@ impl<'a> Planner<'a> {
                     None => Ok(None) // TODO expected behaviour?
                 }
             },
-            &ASTNode::SQLIdentifier { ref id, ref parts } => {
+            ASTNode::SQLIdentifier { ref id, ref parts } => {
 
                 let (table_schema, table_name) = if parts.len() == 2 {
                     (Some(&parts[0]), parts[1].clone())
@@ -388,9 +390,9 @@ impl<'a> Planner<'a> {
                     }.into())
                 }
             },
-            &ASTNode::MySQLCreateTable{..} => Ok(None), // Dont need to plan this yet...
+            ASTNode::MySQLCreateTable{..} => Ok(None), // Dont need to plan this yet...
 
-            &ASTNode::SQLUpdate{ box ref table, box ref assignments, ref selection } => {
+            ASTNode::SQLUpdate{ box ref table, box ref assignments, ref selection } => {
 
 				match self.sql_to_rel(table)? {
                     Some(Rel::TableScan {table, tt}) => {
@@ -410,7 +412,28 @@ impl<'a> Planner<'a> {
                     }.into()),
                     None => Ok(None)
                 }
-            }
+            },
+            ASTNode::SQLDelete{ box ref table, ref selection } => {
+
+                match self.sql_to_rel(table)? {
+                    Some(Rel::TableScan {table, tt}) => {
+
+                        Ok(Some(Rel::Delete {
+                            table: table,
+                            selection: match selection {
+                                &Some(box ref expr) => Some(Box::new(self.sql_to_rex(expr, &tt)?)),
+                                &None => None
+                            },
+                            tt: tt}))
+                    },
+                    Some(other) => return Err(ZeroError::ParseError{
+                        message: format!("Unsupported table relation for UPDATE {:?}", other).into(),
+                        code: "1064".into()
+                    }.into()),
+                    None => Ok(None)
+                }
+            },
+
             _ => Err(ZeroError::ParseError {
                     message: format!("Unsupported expr for planning {:?}", sql).into(),
                     code: "1064".into()
@@ -478,6 +501,44 @@ mod tests {
         let dialect = MySQLDialect::new(&ansi);
 
         let sql = String::from("SELECT id, first_name, last_name, ssn, age, sex FROM users WHERE first_name = 'Frodo'");
+        let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
+
+        let s = String::from("zero");
+        let default_schema = Some(&s);
+        let planner = Planner::new(default_schema, Rc::new(provider));
+
+        let plan = planner.sql_to_rel(&parsed).unwrap();
+
+        debug!("Plan {:#?}", plan);
+    }
+
+    #[test]
+    fn plan_simple_delete() {
+        let provider = DummyProvider{};
+
+        let ansi = AnsiSQLDialect::new();
+        let dialect = MySQLDialect::new(&ansi);
+
+        let sql = String::from("DELETE FROM users WHERE first_name = 'Frodo'");
+        let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
+
+        let s = String::from("zero");
+        let default_schema = Some(&s);
+        let planner = Planner::new(default_schema, Rc::new(provider));
+
+        let plan = planner.sql_to_rel(&parsed).unwrap();
+
+        debug!("Plan {:#?}", plan);
+    }
+
+    #[test]
+    fn plan_simple_update() {
+        let provider = DummyProvider{};
+
+        let ansi = AnsiSQLDialect::new();
+        let dialect = MySQLDialect::new(&ansi);
+
+        let sql = String::from("UPDATE users SET first_name = 'Hobbit' WHERE first_name = 'Frodo'");
         let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
 
         let s = String::from("zero");
