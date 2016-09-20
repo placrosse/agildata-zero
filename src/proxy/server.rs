@@ -357,13 +357,13 @@ impl PacketHandler for ZeroHandler {
             HandlerState::StmtExecuteResultRow => {
                 print_packet_chars("StmtExecuteResultRow", &p.bytes);
                 match p.bytes[4] {
-                    0x00 => (HandlerState::ExpectClientRequest, Action::Forward),
+                    0x00 | 0xfe | 0xff => (HandlerState::ExpectClientRequest, Action::Forward),
                     0x01 => (HandlerState::StmtExecuteResultRow, Action::Forward),
                     _ => panic!("invalid packet type {:?} for StmtExecuteResultRow", p.bytes[4])
-
                 }
             },
             _ => {
+                print_packet_chars("Unexpected server response", &p.bytes);
                 println!("Unsupported state {:?}", self.state);
                 (HandlerState::ExpectClientRequest, Action::Forward)
             }
@@ -379,7 +379,7 @@ impl PacketHandler for ZeroHandler {
 
 #[allow(dead_code)]
 pub fn print_packet_chars(msg: &'static str, buf: &[u8]) {
-    print!("{}: [", msg);
+    print!("{}: packet_type={} [", msg, buf[4]);
     for i in 0..buf.len() {
         print!("{} ", buf[i] as char);
     }
