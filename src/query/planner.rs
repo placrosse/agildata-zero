@@ -427,7 +427,7 @@ impl<'a> Planner<'a> {
                             tt: tt}))
                     },
                     Some(other) => return Err(ZeroError::ParseError{
-                        message: format!("Unsupported table relation for UPDATE {:?}", other).into(),
+                        message: format!("Unsupported table relation for DELETE {:?}", other).into(),
                         code: "1064".into()
                     }.into()),
                     None => Ok(None)
