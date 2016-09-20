@@ -291,6 +291,11 @@ impl AnsiSQLDialect {
 
 		// TODO validation
 		tokens.consume_keyword("INSERT");
+		let insert_mode = if tokens.consume_keyword("IGNORE") {
+			InsertMode::IGNORE
+		} else {
+			InsertMode::INSERT
+		};
 		tokens.consume_keyword("INTO");
 
 		let table = try!(self.parse_identifier(tokens));
@@ -313,6 +318,7 @@ impl AnsiSQLDialect {
 
 		Ok(ASTNode::SQLInsert {
 			table: Box::new(table),
+			insert_mode: insert_mode,
 			column_list: Box::new(columns),
 			values_list: Box::new(values)
 		})
@@ -708,8 +714,13 @@ impl ExprWriter for AnsiSQLWriter {
 				}
 
 			},
-			&ASTNode::SQLInsert{box ref table, box ref column_list, box ref values_list} => {
-				builder.push_str("INSERT INTO");
+			&ASTNode::SQLInsert{box ref table, ref insert_mode, box ref column_list, box ref values_list} => {
+				builder.push_str("INSERT ");
+				match *insert_mode {
+					InsertMode::IGNORE => builder.push_str("IGNORE "),
+					_ => {}
+				}
+				builder.push_str(" INTO");
 				writer._write(builder, table)?;
 				builder.push_str(" (");
 				writer._write(builder, column_list)?;

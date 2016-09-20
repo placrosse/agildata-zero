@@ -183,6 +183,13 @@ impl<'a, D: Dialect> Parser<D> for Tokens<'a, D> {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum InsertMode {
+	INSERT,
+	IGNORE,
+	REPLACE,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum ASTNode {
 	// ANSISQL nodes
 	SQLIdentifier{id: String, parts: Vec<String>},
@@ -201,6 +208,7 @@ pub enum ASTNode {
     },
     SQLInsert {
         table: Box<ASTNode>,
+		insert_mode: InsertMode,
         column_list: Box<ASTNode>,
         values_list: Box<ASTNode>
     },

@@ -307,7 +307,7 @@ impl<'a> Planner<'a> {
                     tt: project_tt
                 }))
             },
-            ASTNode::SQLInsert {box ref table, box ref column_list, box ref values_list} => {
+            ASTNode::SQLInsert {box ref table, box ref column_list, box ref values_list, .. } => {
                 match self.sql_to_rel(table)? {
                     Some(Rel::TableScan {table, tt}) => {
                         Ok(Some(Rel::Insert{
