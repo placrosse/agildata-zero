@@ -154,6 +154,7 @@ pub enum LiteralToken {
     LiteralLong(u32, String),
     LiteralDouble(u32, String),
     LiteralBool(u32, String),
+    LiteralNull(u32)
 }
 // Parser APIs
 pub trait Parser<D: Dialect> {
@@ -233,7 +234,8 @@ pub enum LiteralExpr {
 	LiteralLong(u32, u64),
 	LiteralBool(u32, bool),
 	LiteralDouble(u32, f64),
-	LiteralString(u32, String)
+	LiteralString(u32, String),
+    LiteralNull(u32)
 }
 
 #[derive(Debug, PartialEq, Clone)]

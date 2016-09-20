@@ -93,7 +93,9 @@ impl Dialect for AnsiSQLDialect {
 	                }
 
 	                if "true".eq_ignore_ascii_case(&text) || "false".eq_ignore_ascii_case(&text) {
-	                    Ok(Some(Token::Literal(LiteralToken::LiteralBool(self.lit_index.fetch_add(1, Ordering::SeqCst), text))))
+                        Ok(Some(Token::Literal(LiteralToken::LiteralBool(self.lit_index.fetch_add(1, Ordering::SeqCst), text))))
+                    } else if "null".eq_ignore_ascii_case(&text) {
+                        Ok(Some(Token::Literal(LiteralToken::LiteralNull(self.lit_index.fetch_add(1, Ordering::SeqCst)))))
 	                } else if keywords.iter().position(|&r| r.eq_ignore_ascii_case(&text)).is_none() {
 	                    Ok(Some(Token::Identifier(text)))
 	                } else if "AND".eq_ignore_ascii_case(&text) || "OR".eq_ignore_ascii_case(&text) {
@@ -186,9 +188,13 @@ impl Dialect for AnsiSQLDialect {
 						Ok(Some(ASTNode::SQLLiteral(LiteralExpr::LiteralDouble(i, f64::from_str(&value).unwrap()))))
 					},
 					&LiteralToken::LiteralString(i, ref value) => {
-						tokens.next();
-						Ok(Some(ASTNode::SQLLiteral(LiteralExpr::LiteralString(i, value.clone()))))
-					}
+                        tokens.next();
+                        Ok(Some(ASTNode::SQLLiteral(LiteralExpr::LiteralString(i, value.clone()))))
+                    },
+                    &LiteralToken::LiteralNull(i) => {
+                        tokens.next();
+                        Ok(Some(ASTNode::SQLLiteral(LiteralExpr::LiteralNull(i))))
+                    }
 					//_ => panic!("Unsupported literal {:?}", v)
 				},
 				&Token::Identifier(_) => {
@@ -735,7 +741,10 @@ impl ExprWriter for AnsiSQLWriter {
 				},
 				&LiteralExpr::LiteralString(_, ref s) => {
 					write!(builder, " '{}'", s).unwrap()
-				}
+				},
+                &LiteralExpr::LiteralNull(_) => {
+                    builder.push_str(" NULL");
+                }
 				//_ => panic!("Unsupported literal for writing {:?}", lit)
 			},
 			&ASTNode::SQLAlias{box ref expr, box ref alias} => {
