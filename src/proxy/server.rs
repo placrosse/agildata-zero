@@ -113,7 +113,7 @@ enum HandlerState {
     /// Expecting a COM_QUERY response
     ComQueryResponse,
     /// Expecting 1 or more field definitions as part of a COM_QUERY response
-    ExpectFieldPacket(usize),
+    ComQueryFieldPacket(usize),
     // Expecting a COM_QUERY result row
     ExpectResultRow,
     /// Expecting a COM_STMT_PREPARE response
@@ -122,6 +122,10 @@ enum HandlerState {
     StmtPrepareFieldPacket(Option<u16>, Option<u16>),
     /// Expecting a COM_STMT_EXECUTE response
     StmtExecuteResponse,
+    /// Expecting 1 or more field definitions as part of a COM_QUERY response
+    StmtExecuteFieldPacket(usize),
+    // Binary result row
+    StmtExecuteResultRow,
     /// Instructs the packet handler to ignore all further result rows (due to an earlier error)
     IgnoreFurtherResults,
     /// Forward any further packets
@@ -260,7 +264,7 @@ impl PacketHandler for ZeroHandler {
                                 // expect 0 or more result rows
                                 // expect result set terminator
 
-                                (HandlerState::ExpectFieldPacket(tt.elements.len()),Action::Forward)
+                                (HandlerState::ComQueryFieldPacket(tt.elements.len()), Action::Forward)
                             },
                             None => {
                                 (HandlerState::ForwardAll, Action::Forward)
@@ -273,14 +277,14 @@ impl PacketHandler for ZeroHandler {
                         // expect field_count x field_meta packet
                         // expect 0 or more result rows
                         // expect result set terminator
-                        (HandlerState::ExpectFieldPacket(field_count),Action::Forward)
+                        (HandlerState::ComQueryFieldPacket(field_count), Action::Forward)
                     }
                 }
             },
-            HandlerState::ExpectFieldPacket(n) => if n == 1 {
+            HandlerState::ComQueryFieldPacket(n) => if n == 1 {
                 (HandlerState::ExpectResultRow, Action::Forward)
             } else {
-                (HandlerState::ExpectFieldPacket(n -1), Action::Forward)
+                (HandlerState::ComQueryFieldPacket(n -1), Action::Forward)
             },
             HandlerState::ExpectResultRow => match p.bytes[4] {
                 0x00 | 0xfe | 0xff => (HandlerState::ExpectClientRequest, Action::Forward),
@@ -331,17 +335,38 @@ impl PacketHandler for ZeroHandler {
                     }
                 }
             },
-            HandlerState::StmtExecuteResponse => match p.bytes[4] {
-                0x00 | 0xfe | 0xff => (HandlerState::ExpectClientRequest, Action::Forward),
-                _ => {
-                    panic!("no support for binary result set");
-//                    match self.process_result_row(p) {
-//                        Ok(a) => (HandlerState::ExpectResultRow, a),
-//                        Err(e) => (HandlerState::IgnoreFurtherResults, create_error_from_err(e))
-//                    }
+            HandlerState::StmtExecuteResponse => {
+                print_packet_chars("StmtExecuteResponse", &p.bytes);
+                match p.bytes[4] {
+                    0x00 | 0xfe | 0xff => (HandlerState::ExpectClientRequest, Action::Forward),
+                    _ => {
+                        let mut r = MySQLPacketParser::new(&p.bytes);
+                        let col_count = r.read_len();
+                        (HandlerState::StmtExecuteFieldPacket(col_count), Action::Forward)
+                    },
                 }
             },
-            _ => panic!("Unsupported state {:?}", self.state)
+            HandlerState::StmtExecuteFieldPacket(col_count) => {
+                print_packet_chars("StmtExecuteFieldPacket", &p.bytes);
+                if col_count > 1 {
+                    (HandlerState::StmtExecuteFieldPacket(col_count-1), Action::Forward)
+                } else {
+                    (HandlerState::StmtExecuteResultRow, Action::Forward)
+                }
+            },
+            HandlerState::StmtExecuteResultRow => {
+                print_packet_chars("StmtExecuteResultRow", &p.bytes);
+                match p.bytes[4] {
+                    0x00 => (HandlerState::ExpectClientRequest, Action::Forward),
+                    0x01 => (HandlerState::StmtExecuteResultRow, Action::Forward),
+                    _ => panic!("invalid packet type {:?} for StmtExecuteResultRow", p.bytes[4])
+
+                }
+            },
+            _ => {
+                println!("Unsupported state {:?}", self.state);
+                (HandlerState::ExpectClientRequest, Action::Forward)
+            }
 
         };
 
@@ -350,6 +375,15 @@ impl PacketHandler for ZeroHandler {
 
 
    }
+}
+
+#[allow(dead_code)]
+pub fn print_packet_chars(msg: &'static str, buf: &[u8]) {
+    print!("{}: [", msg);
+    for i in 0..buf.len() {
+        print!("{} ", buf[i] as char);
+    }
+    println!("]");
 }
 
 impl ZeroHandler {
