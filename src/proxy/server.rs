@@ -129,7 +129,9 @@ enum HandlerState {
     /// Instructs the packet handler to ignore all further result rows (due to an earlier error)
     IgnoreFurtherResults,
     /// Forward any further packets
-    ForwardAll
+    ForwardAll,
+    /// Expect an OK or ERR packet
+    OkErrResponse,
 }
 
 struct ZeroHandler {
@@ -232,14 +234,15 @@ impl PacketHandler for ZeroHandler {
                     self.state = HandlerState::StmtExecuteResponse;
                     Action::Forward
                 },
-//                Ok(PacketType::ComStmtClose) => {
-//                    self.state = HandlerState::ComQueryResponse;
-//                    Action::Forward
-//                },
-//                Ok(PacketType::ComStmtReset) => {
-//                    self.state = HandlerState::ComQueryResponse;
-//                    Action::Forward
-//                },
+                Ok(PacketType::ComStmtClose) => {
+                    // no response for this statement
+                    self.state = HandlerState::ExpectClientRequest;
+                    Action::Forward
+                },
+                Ok(PacketType::ComStmtReset) => {
+                    self.state = HandlerState::OkErrResponse;
+                    Action::Forward
+                },
                 _ => {
                     self.state = HandlerState::ComQueryResponse;
                     Action::Forward
@@ -357,10 +360,18 @@ impl PacketHandler for ZeroHandler {
             HandlerState::StmtExecuteResultRow => {
                 print_packet_chars("StmtExecuteResultRow", &p.bytes);
                 match p.bytes[4] {
-                    0x00 | 0xfe | 0xff => (HandlerState::ExpectClientRequest, Action::Forward),
-                    0x01 => (HandlerState::StmtExecuteResultRow, Action::Forward),
+                    0xfe | 0xff => (HandlerState::ExpectClientRequest, Action::Forward),
+                    0x00 => (HandlerState::StmtExecuteResultRow, Action::Forward),
                     _ => panic!("invalid packet type {:?} for StmtExecuteResultRow", p.bytes[4])
                 }
+            },
+            HandlerState::OkErrResponse => {
+                print_packet_chars("OkErrResponse", &p.bytes);
+                match p.bytes[4] {
+                    0x00 | 0xff => (HandlerState::ExpectClientRequest, Action::Forward),
+                    _ => panic!("invalid packet type {:?} for OkErrResponse", p.bytes[4])
+                }
+
             },
             _ => {
                 print_packet_chars("Unexpected server response", &p.bytes);
