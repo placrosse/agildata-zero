@@ -684,4 +684,39 @@ fn select_function_calls() {
 
 }
 
+#[test]
+fn select_for_update() {
+    let dialect = AnsiSQLDialect::new();
+    let sql = String::from("SELECT id FROM users WHERE id = 1 FOR UPDATE");
+    let tokens = sql.tokenize(&dialect).unwrap();
+    let parsed = tokens.parse().unwrap();
+
+    assert_eq!(
+		SQLSelect {
+			expr_list: Box::new(SQLExprList(vec![
+			    SQLIdentifier{id: String::from("id"), parts: vec![String::from("id")]}
+            ])),
+			relation: Some(Box::new(SQLIdentifier{id: String::from("users"), parts: vec![String::from("users")]})),
+			selection: Some(Box::new(SQLBinary {
+			    left: Box::new(SQLIdentifier{id: String::from("id"), parts: vec![String::from("id")]}),
+			    op: EQ,
+			    right: Box::new(SQLLiteral(LiteralLong(0, 1_u64)))
+			})),
+			order: None
+		},
+		parsed
+	);
+
+    println!("{:#?}", parsed);
+
+    let ansi_writer = AnsiSQLWriter{};
+    let writer = SQLWriter::new(vec![&ansi_writer]);
+    let rewritten = writer.write(&parsed).unwrap();
+    assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+    println!("Rewritten: {:?}", rewritten);
+
+
+}
+
 
