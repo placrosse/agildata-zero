@@ -178,7 +178,7 @@ impl ZeroHandler {
 fn determine_parsing_mode(mode: &String) -> ParsingMode {
     match &mode.to_uppercase() as &str {
         "STRICT" => ParsingMode::Strict,
-        "PASSIVE" => ParsingMode::Passive,
+        "PERMISSIVE" => ParsingMode::Permissive,
         _ => panic!("Unsupported parsing mode {}", mode)
     }
 }
@@ -186,7 +186,7 @@ fn determine_parsing_mode(mode: &String) -> ParsingMode {
 #[derive(Debug, PartialEq, Clone)]
 pub enum ParsingMode {
     Strict,
-    Passive
+    Permissive
 }
 
 //TODO: add this to MySQLPacketReader in mysql-proxy-rs
@@ -223,12 +223,8 @@ impl PacketHandler for ZeroHandler {
         } else {
             match p.packet_type() {
                 Ok(PacketType::ComInitDb) => self.process_init_db(p),
-                Ok(PacketType::ComQuery) => self.process_query(p),
-                Ok(PacketType::ComStmtPrepare) => {
-                    println!("ComStmtPrepare");
-                    self.state = HandlerState::StmtPrepareResponse;
-                    Action::Forward
-                },
+                Ok(PacketType::ComQuery) => self.process_com_query(p),
+                Ok(PacketType::ComStmtPrepare) => self.process_com_stmt_prepare(p),
                 Ok(PacketType::ComStmtExecute) => {
                     println!("ComStmtExecute");
                     self.state = HandlerState::StmtExecuteResponse;
@@ -407,18 +403,69 @@ impl ZeroHandler {
         Action::Forward
     }
 
-    fn process_query(&mut self, p:&Packet) -> Action {
+    fn process_com_query(&mut self, p:&Packet) -> Action {
+        self.state = HandlerState::ComQueryResponse;
+        self.process_query(p, 0x03)
+    }
+
+    fn process_com_stmt_prepare(&mut self, p:&Packet) -> Action {
+        self.state = HandlerState::StmtPrepareResponse;
+        self.process_query(p, 0x16)
+    }
+
+    fn process_query(&mut self, p:&Packet, packet_type: u8) -> Action {
+
         let query = parse_string(&p.bytes[5..]);
         debug!("COM_QUERY : {}", query);
 
         self.tt = None;
 
-        // parse query
+        // parse query, return error on an error
+        let parsed = match self.parse_query(query) {
+            Ok(ast) => ast, // Option
+            Err(e) => return create_error_from_err(e)
+        };
+
+        // plan query, return error on an error
+        let plan = match self.plan(&parsed) {
+            Ok(p) => p, // Option
+            Err(e) => return create_error_from_err(e)
+        };
+
+        // re-write query
+        let rewritten = self.rewrite_query(&parsed, &plan);
+
+        let action = match rewritten {
+            Ok(Some(sql)) => {
+                // write packed with new query
+                let slice: &[u8] = sql.as_bytes();
+                let mut packet: Vec<u8> = Vec::with_capacity(slice.len() + 4);
+                packet.write_u32::<LittleEndian>((slice.len() + 1) as u32).unwrap();
+                assert!(0x00 == packet[3]);
+                packet.push(packet_type);
+                packet.extend_from_slice(slice);
+
+                match plan {
+                    None => {self.tt = None;},
+                    Some(p) => {
+                        self.tt = Some(p.tt().clone()); //TODO: don't clone
+                    }
+                }
+
+               Action::Mutate(Packet { bytes: packet })
+            },
+            Ok(None) => Action::Forward,
+            Err(e) => return create_error_from_err(e)
+        };
+        action
+    }
+
+    fn parse_query(&mut self, query: String) -> Result<Option<ASTNode>, Box<ZeroError>> {
+
         let ansi = AnsiSQLDialect::new();
         let dialect = MySQLDialect::new(&ansi);
 
-        // TODO error handling
-        let parsed = match query.tokenize(&dialect) {
+        match query.tokenize(&dialect) {
             Ok(tokens) => {
                 match tokens.parse() {
                     Ok(parsed) => {
@@ -428,25 +475,28 @@ impl ZeroHandler {
                             },
                             _ => {}
                         };
-                        Some(parsed)
+                        Ok(Some(parsed))
                     },
                     Err(e) => {
                         debug!("Failed to parse with: {}", e);
-                        match self.parsing_mode{
-                            ParsingMode::Strict =>{
+                        match self.parsing_mode {
+                            ParsingMode::Strict => {
                                 let q = query.to_uppercase();
                                 if q.starts_with("SET") || q.starts_with("SHOW") || q.starts_with("BEGIN")
                                     || q.starts_with("COMMIT") || q.starts_with("ROLLBACK") {
                                     debug!("In Strict mode, allowing use of SET and SHOW");
-                                    None
+                                    Ok(None)
                                 } else {
                                     error!("FAILED TO PARSE QUERY {}", query);
-                                    return create_error(e.to_string());
+                                    Err(Box::new(ZeroError::ParseError {
+                                        message: format!("Failed to parse query {}", query),
+                                        code: "1064".into()
+                                    }))
                                 }
                             },
-                            ParsingMode::Passive =>{
+                            ParsingMode::Permissive => {
                                 debug!("In Passive mode, falling through to MySQL");
-                                None
+                                Ok(None)
                             }
                         }
                     }
@@ -454,80 +504,69 @@ impl ZeroHandler {
             },
             Err(e) => {
                 debug!("Failed to tokenize with: {}", e);
-                None
-            }
-        };
-
-        let plan = match self.plan(&parsed) {
-            Ok(p) => p,
-            Err(e) => {
-                error!("FAILED TO PLAN QUERY {}", query);
-                return create_error_from_err(e)
-            }
-        };
-
-        // reqwrite query
-       let action = if parsed.is_some() {
-
-            let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
-            let mut encrypt_vis = EncryptVisitor{valuemap: value_map};
-
-            // Visit and conditionally encrypt (if there was a plan)
-            match plan {
-                Some(ref p) => {
-                    match encrypt_vis.visit_rel(p) {
-                        Ok(r) => r,
-                        Err(e) => return create_error_from_err(e)
+                match self.parsing_mode {
+                    ParsingMode::Strict => {
+                        Err(Box::new(ZeroError::ParseError {
+                            message: format!("Failed to tokenize with: {}", e),
+                            code: "1064".into()
+                        }))
+                    },
+                    ParsingMode::Permissive => {
+                        debug!("In Passive mode, falling through to MySQL");
+                        Ok(None)
                     }
-                },
-                None => {}
+                }
             }
+        }
+    }
 
-            let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
-            let s = match self.schema {
-                Some(ref s) => s.clone(),
-                None => String::from("") // TODO
-            };
-            let translator = CreateTranslatingWriter {
-                config: &self.config,
-                schema: &s
-            };
-            let mysql_writer = MySQLWriter{};
-            let ansi_writer = AnsiSQLWriter{};
+    fn rewrite_query(&mut self, parsed: &Option<ASTNode>, plan: &Option<Rel>)
+        -> Result<Option<String>, Box<ZeroError>> {
 
-            let writer = SQLWriter::new(vec![
+        match parsed {
+
+            &Some(ref ast) => {
+                let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
+                let mut encrypt_vis = EncryptVisitor { valuemap: value_map };
+
+                // Visit and conditionally encrypt (if there was a plan)
+                match plan {
+                    &Some(ref p) => {
+                        match encrypt_vis.visit_rel(p) {
+                            Ok(r) => r,
+                            Err(e) => return Err(Box::new(ZeroError::EncryptionError {
+                                message: format!("Failed to encrypt: {}", e),
+                                code: "1064".into()
+                            }))
+                        }
+                    },
+                    &None => {}
+                }
+
+                let lit_writer = LiteralReplacingWriter { literals: &encrypt_vis.get_value_map() };
+                let s = match self.schema {
+                    Some(ref s) => s.clone(),
+                    None => String::from("") // TODO
+                };
+                let translator = CreateTranslatingWriter {
+                    config: &self.config,
+                    schema: &s
+                };
+                let mysql_writer = MySQLWriter {};
+                let ansi_writer = AnsiSQLWriter {};
+
+                let writer = SQLWriter::new(vec![
                                         &lit_writer,
                                         &translator,
                                         &mysql_writer,
                                         &ansi_writer
                                     ]);
 
-            let rewritten = writer.write(&parsed.unwrap()).unwrap();
-
-            debug!("REWRITTEN {}", rewritten);
-
-            // write packed with new query
-            let slice: &[u8] = rewritten.as_bytes();
-            let mut packet: Vec<u8> = Vec::with_capacity(slice.len() + 4);
-            packet.write_u32::<LittleEndian>((slice.len() + 1) as u32).unwrap();
-            assert!(0x00 == packet[3]);
-            packet.push(0x03); // packet type for COM_Query
-            packet.extend_from_slice(slice);
-
-            match plan {
-                None => {self.tt = None;},
-                Some(p) => {
-                    self.tt = Some(p.tt().clone()); //TODO: don't clone
-                }
-            }
-
-           Action::Mutate(Packet { bytes: packet })
-        } else {
-            Action::Forward
-        };
-
-        self.state = HandlerState::ComQueryResponse;
-        action
+                let rewritten = writer.write(ast).unwrap();
+                Ok(Some(rewritten))
+            },
+            &None => Ok(None)
+        }
     }
 
     fn process_result_row(&mut self,
