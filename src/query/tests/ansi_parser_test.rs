@@ -21,7 +21,8 @@ fn select_wildcard() {
 			expr_list: Box::new(SQLExprList(vec![SQLIdentifier{id: String::from("*"), parts: vec![String::from("*")]}])),
 			relation: Some(Box::new(SQLIdentifier{id: String::from("foo"), parts: vec![String::from("foo")]})),
 			selection: None,
-			order: None
+			order: None,
+			for_update: false
 		},
 		parsed
 	);
@@ -56,7 +57,8 @@ fn select_with_nulls() {
 			    op: EQ,
 			    right: Box::new(SQLLiteral(LiteralNull(1)))
 			})),
-			order: None
+			order: None,
+			for_update: false
 		},
 		parsed
 	);
@@ -139,7 +141,8 @@ fn sqlparser() {
 									op: EQ,
 									right:  Box::new(SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]})
 								})),
-								order: None
+								order: None,
+								for_update: false
 							})
 						)),
 						alias:  Box::new(SQLIdentifier{id: String::from("subselect"), parts: vec![String::from("subselect")]})
@@ -159,7 +162,8 @@ fn sqlparser() {
 						)),
 						relation: Some( Box::new(SQLIdentifier{id: String::from("tThree"), parts: vec![String::from("tThree")]})),
 						selection: None,
-						order: None
+						order: None,
+						for_update: false
 					})
 				)),
 				alias:  Box::new(SQLIdentifier{id: String::from("l"), parts: vec![String::from("l")]})
@@ -198,7 +202,8 @@ fn sqlparser() {
 						is_asc: true
 					},
 				]
-			)))
+			))),
+			for_update: false
 		},
 		parsed
 	);
@@ -260,7 +265,8 @@ fn sql_join() {
 									op: GT,
 									right: Box::new(SQLLiteral(LiteralLong(0, 0_u64)))
 								})),
-								order: None
+								order: None,
+								for_update: false
 							})
 						)),
 						alias: Box::new(SQLIdentifier{id: String::from("r"), parts: vec![String::from("r")]})
@@ -284,7 +290,8 @@ fn sql_join() {
 						is_asc: false
 					}
 				]
-			)))
+			))),
+			for_update: false
 		},
 		parsed
 	);
@@ -322,7 +329,8 @@ fn nasty() {
 									])),
 									relation: Some(Box::new(SQLIdentifier{id: String::from("tOne"), parts: vec![String::from("tOne")]})),
 									selection: None,
-									order: None
+									order: None,
+									for_update: false
 								}),
 								union_type: UNION,
 								right: Box::new(SQLNested(
@@ -334,7 +342,8 @@ fn nasty() {
 										])),
 										relation: Some(Box::new(SQLIdentifier{id: String::from("tTwo"), parts: vec![String::from("tTwo")]})),
 										selection: None,
-										order: None
+										order: None,
+										for_update: false
 									})
 								))
 							})
@@ -355,7 +364,8 @@ fn nasty() {
 								])),
 								relation: Some(Box::new(SQLIdentifier{id: String::from("tThree"), parts: vec![String::from("tThree")]})),
 								selection: None,
-								order: None
+								order: None,
+								for_update: false
 							})
 						)),
 						union_type: UNION,
@@ -369,7 +379,8 @@ fn nasty() {
 									])),
 									relation: Some(Box::new(SQLIdentifier{id: String::from("tFour"), parts: vec![String::from("tFour")]})),
 									selection: None,
-									order: None
+									order: None,
+									for_update: false
 								})
 							))
 						))
@@ -453,7 +464,8 @@ fn select_comparisons() {
 					right: Box::new(SQLLiteral(LiteralLong(5, 5)))
 				})
 			})),
-			order: None
+			order: None,
+			for_update: false
 		},
 		parsed
 	);
@@ -669,7 +681,8 @@ fn select_function_calls() {
                         right: Box::new(SQLLiteral(LiteralString(0,String::from("lowercase"))))
                     })
             ),
-			order: None
+			order: None,
+			for_update: false
 		},
 		parsed
 	);
@@ -685,39 +698,40 @@ fn select_function_calls() {
 
 }
 
-//#[test]
-//fn select_for_update() {
-//    let dialect = AnsiSQLDialect::new();
-//    let sql = String::from("SELECT id FROM users WHERE id = 1 FOR UPDATE");
-//    let tokens = sql.tokenize(&dialect).unwrap();
-//    let parsed = tokens.parse().unwrap();
-//
-//    assert_eq!(
-//		SQLSelect {
-//			expr_list: Box::new(SQLExprList(vec![
-//			    SQLIdentifier{id: String::from("id"), parts: vec![String::from("id")]}
-//            ])),
-//			relation: Some(Box::new(SQLIdentifier{id: String::from("users"), parts: vec![String::from("users")]})),
-//			selection: Some(Box::new(SQLBinary {
-//			    left: Box::new(SQLIdentifier{id: String::from("id"), parts: vec![String::from("id")]}),
-//			    op: EQ,
-//			    right: Box::new(SQLLiteral(LiteralLong(0, 1_u64)))
-//			})),
-//			order: None
-//		},
-//		parsed
-//	);
-//
-//    println!("{:#?}", parsed);
-//
-//    let ansi_writer = AnsiSQLWriter{};
-//    let writer = SQLWriter::new(vec![&ansi_writer]);
-//    let rewritten = writer.write(&parsed).unwrap();
-//    assert_eq!(format_sql(&rewritten), format_sql(&sql));
-//
-//    println!("Rewritten: {:?}", rewritten);
-//
-//
-//}
+#[test]
+fn select_for_update() {
+    let dialect = AnsiSQLDialect::new();
+    let sql = String::from("SELECT id FROM users WHERE id = 1 FOR UPDATE");
+    let tokens = sql.tokenize(&dialect).unwrap();
+    let parsed = tokens.parse().unwrap();
+
+    assert_eq!(
+		SQLSelect {
+			expr_list: Box::new(SQLExprList(vec![
+			    SQLIdentifier{id: String::from("id"), parts: vec![String::from("id")]}
+            ])),
+			relation: Some(Box::new(SQLIdentifier{id: String::from("users"), parts: vec![String::from("users")]})),
+			selection: Some(Box::new(SQLBinary {
+			    left: Box::new(SQLIdentifier{id: String::from("id"), parts: vec![String::from("id")]}),
+			    op: EQ,
+			    right: Box::new(SQLLiteral(LiteralLong(0, 1_u64)))
+			})),
+			order: None,
+			for_update: true
+		},
+		parsed
+	);
+
+    println!("{:#?}", parsed);
+
+    let ansi_writer = AnsiSQLWriter{};
+    let writer = SQLWriter::new(vec![&ansi_writer]);
+    let rewritten = writer.write(&parsed).unwrap();
+    assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+    println!("Rewritten: {:?}", rewritten);
+
+
+}
 
 

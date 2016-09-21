@@ -378,7 +378,22 @@ impl AnsiSQLDialect {
 			}
 		};
 
-		Ok(ASTNode::SQLSelect{expr_list: proj, relation: from, selection: whr, order: ob})
+        // TODO limit
+
+        let for_update = if tokens.consume_keyword("FOR") {
+            if tokens.consume_keyword("UPDATE") {
+                true
+            } else {
+                return Err(ZeroError::ParseError {
+                    message: format!("Expected FOR UPDATE, found FOR {:?}", tokens.peek()).into(),
+                    code: "1064".into()
+                }.into())
+            }
+        } else {
+            false
+        };
+
+		Ok(ASTNode::SQLSelect{expr_list: proj, relation: from, selection: whr, order: ob, for_update: for_update})
 	}
 
 	fn parse_update<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode, Box<ZeroError>>
@@ -694,7 +709,7 @@ pub struct AnsiSQLWriter{}
 impl ExprWriter for AnsiSQLWriter {
 	fn write(&self, writer: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, Box<ZeroError>> {
 		match node {
-			&ASTNode::SQLSelect{box ref expr_list, ref relation, ref selection, ref order} => {
+			&ASTNode::SQLSelect{box ref expr_list, ref relation, ref selection, ref order, ref for_update} => {
 				builder.push_str("SELECT");
 				writer._write(builder, expr_list)?;
 				match relation {
@@ -718,6 +733,9 @@ impl ExprWriter for AnsiSQLWriter {
 					},
 					&None => {}
 				}
+                if *for_update {
+                    builder.push_str(" FOR UPDATE");
+                }
 
 			},
 			&ASTNode::SQLInsert{box ref table, ref insert_mode, box ref column_list, box ref values_list} => {

@@ -838,7 +838,8 @@ fn test_integration() {
 			expr_list: Box::new(SQLExprList(vec![SQLIdentifier{id: String::from("*"), parts: vec![String::from("*")]}])),
 			relation: Some(Box::new(SQLIdentifier{id: String::from("foo"), parts: vec![String::from("foo")]})),
 			selection: None,
-			order: None
+			order: None,
+			for_update: false
 		},
 		parsed
 	);
