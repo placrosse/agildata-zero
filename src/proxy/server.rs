@@ -224,11 +224,7 @@ impl PacketHandler for ZeroHandler {
             match p.packet_type() {
                 Ok(PacketType::ComInitDb) => self.process_init_db(p),
                 Ok(PacketType::ComQuery) => self.process_com_query(p),
-                Ok(PacketType::ComStmtPrepare) => {
-                    println!("ComStmtPrepare");
-                    self.state = HandlerState::StmtPrepareResponse;
-                    Action::Forward
-                },
+                Ok(PacketType::ComStmtPrepare) => self.process_com_stmt_prepare(p),
                 Ok(PacketType::ComStmtExecute) => {
                     println!("ComStmtExecute");
                     self.state = HandlerState::StmtExecuteResponse;
@@ -408,6 +404,17 @@ impl ZeroHandler {
     }
 
     fn process_com_query(&mut self, p:&Packet) -> Action {
+        self.state = HandlerState::ComQueryResponse;
+        self.process_query(p, 0x03)
+    }
+
+    fn process_com_stmt_prepare(&mut self, p:&Packet) -> Action {
+        self.state = HandlerState::StmtPrepareResponse;
+        self.process_query(p, 0x16)
+    }
+
+    fn process_query(&mut self, p:&Packet, packet_type: u8) -> Action {
+
         let query = parse_string(&p.bytes[5..]);
         debug!("COM_QUERY : {}", query);
 
@@ -430,15 +437,12 @@ impl ZeroHandler {
 
         let action = match rewritten {
             Ok(Some(sql)) => {
-
-                debug!("REWRITTEN {}", sql);
-
                 // write packed with new query
                 let slice: &[u8] = sql.as_bytes();
                 let mut packet: Vec<u8> = Vec::with_capacity(slice.len() + 4);
                 packet.write_u32::<LittleEndian>((slice.len() + 1) as u32).unwrap();
                 assert!(0x00 == packet[3]);
-                packet.push(0x03); // packet type for COM_Query
+                packet.push(packet_type);
                 packet.extend_from_slice(slice);
 
                 match plan {
@@ -453,8 +457,6 @@ impl ZeroHandler {
             Ok(None) => Action::Forward,
             Err(e) => return create_error_from_err(e)
         };
-
-        self.state = HandlerState::ComQueryResponse;
         action
     }
 
