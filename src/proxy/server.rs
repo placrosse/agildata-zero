@@ -223,7 +223,7 @@ impl PacketHandler for ZeroHandler {
         } else {
             match p.packet_type() {
                 Ok(PacketType::ComInitDb) => self.process_init_db(p),
-                Ok(PacketType::ComQuery) => self.process_query(p),
+                Ok(PacketType::ComQuery) => self.process_com_query(p),
                 Ok(PacketType::ComStmtPrepare) => {
                     println!("ComStmtPrepare");
                     self.state = HandlerState::StmtPrepareResponse;
@@ -407,7 +407,7 @@ impl ZeroHandler {
         Action::Forward
     }
 
-    fn process_query(&mut self, p:&Packet) -> Action {
+    fn process_com_query(&mut self, p:&Packet) -> Action {
         let query = parse_string(&p.bytes[5..]);
         debug!("COM_QUERY : {}", query);
 
@@ -425,64 +425,33 @@ impl ZeroHandler {
             Err(e) => return create_error_from_err(e)
         };
 
-        // reqwrite query
-        let action = if parsed.is_some() {
+        // re-write query
+        let rewritten = self.rewrite_query(&parsed, &plan);
 
-            let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
-            let mut encrypt_vis = EncryptVisitor{valuemap: value_map};
+        let action = match rewritten {
+            Ok(Some(sql)) => {
 
-            // Visit and conditionally encrypt (if there was a plan)
-            match plan {
-                Some(ref p) => {
-                    match encrypt_vis.visit_rel(p) {
-                        Ok(r) => r,
-                        Err(e) => return create_error_from_err(e)
+                debug!("REWRITTEN {}", sql);
+
+                // write packed with new query
+                let slice: &[u8] = sql.as_bytes();
+                let mut packet: Vec<u8> = Vec::with_capacity(slice.len() + 4);
+                packet.write_u32::<LittleEndian>((slice.len() + 1) as u32).unwrap();
+                assert!(0x00 == packet[3]);
+                packet.push(0x03); // packet type for COM_Query
+                packet.extend_from_slice(slice);
+
+                match plan {
+                    None => {self.tt = None;},
+                    Some(p) => {
+                        self.tt = Some(p.tt().clone()); //TODO: don't clone
                     }
-                },
-                None => {}
-            }
-
-            let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
-            let s = match self.schema {
-                Some(ref s) => s.clone(),
-                None => String::from("") // TODO
-            };
-            let translator = CreateTranslatingWriter {
-                config: &self.config,
-                schema: &s
-            };
-            let mysql_writer = MySQLWriter{};
-            let ansi_writer = AnsiSQLWriter{};
-
-            let writer = SQLWriter::new(vec![
-                                        &lit_writer,
-                                        &translator,
-                                        &mysql_writer,
-                                        &ansi_writer
-                                    ]);
-
-            let rewritten = writer.write(&parsed.unwrap()).unwrap();
-
-            debug!("REWRITTEN {}", rewritten);
-
-            // write packed with new query
-            let slice: &[u8] = rewritten.as_bytes();
-            let mut packet: Vec<u8> = Vec::with_capacity(slice.len() + 4);
-            packet.write_u32::<LittleEndian>((slice.len() + 1) as u32).unwrap();
-            assert!(0x00 == packet[3]);
-            packet.push(0x03); // packet type for COM_Query
-            packet.extend_from_slice(slice);
-
-            match plan {
-                None => {self.tt = None;},
-                Some(p) => {
-                    self.tt = Some(p.tt().clone()); //TODO: don't clone
                 }
-            }
 
-           Action::Mutate(Packet { bytes: packet })
-        } else {
-            Action::Forward
+               Action::Mutate(Packet { bytes: packet })
+            },
+            Ok(None) => Action::Forward,
+            Err(e) => return create_error_from_err(e)
         };
 
         self.state = HandlerState::ComQueryResponse;
@@ -538,6 +507,55 @@ impl ZeroHandler {
                     code: "1064".into()
                 }))
             }
+        }
+    }
+
+    fn rewrite_query(&mut self, parsed: &Option<ASTNode>, plan: &Option<Rel>)
+        -> Result<Option<String>, Box<ZeroError>> {
+
+        match parsed {
+
+            &Some(ref ast) => {
+                let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
+                let mut encrypt_vis = EncryptVisitor { valuemap: value_map };
+
+                // Visit and conditionally encrypt (if there was a plan)
+                match plan {
+                    &Some(ref p) => {
+                        match encrypt_vis.visit_rel(p) {
+                            Ok(r) => r,
+                            Err(e) => return Err(Box::new(ZeroError::EncryptionError {
+                                message: format!("Failed to encrypt: {}", e),
+                                code: "1064".into()
+                            }))
+                        }
+                    },
+                    &None => {}
+                }
+
+                let lit_writer = LiteralReplacingWriter { literals: &encrypt_vis.get_value_map() };
+                let s = match self.schema {
+                    Some(ref s) => s.clone(),
+                    None => String::from("") // TODO
+                };
+                let translator = CreateTranslatingWriter {
+                    config: &self.config,
+                    schema: &s
+                };
+                let mysql_writer = MySQLWriter {};
+                let ansi_writer = AnsiSQLWriter {};
+
+                let writer = SQLWriter::new(vec![
+                                        &lit_writer,
+                                        &translator,
+                                        &mysql_writer,
+                                        &ansi_writer
+                                    ]);
+
+                let rewritten = writer.write(ast).unwrap();
+                Ok(Some(rewritten))
+            },
+            &None => Ok(None)
         }
     }
 
