@@ -5,6 +5,8 @@
 # For the record, this script is very chatty.  This is so we can verify
 # each step of the way as the build runs.
 
+set -e
+
 source /home/ubuntu/.cargo/env
 
 RUST_BUILD="nightly-2016-09-12"
