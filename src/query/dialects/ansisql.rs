@@ -726,7 +726,7 @@ impl ExprWriter for AnsiSQLWriter {
 					InsertMode::IGNORE => builder.push_str("IGNORE "),
 					_ => {}
 				}
-				builder.push_str(" INTO");
+				builder.push_str("INTO");
 				writer._write(builder, table)?;
 				builder.push_str(" (");
 				writer._write(builder, column_list)?;
