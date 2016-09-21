@@ -9,7 +9,7 @@ pattern = "{d(%+)(local)} [{t}] {h({l})} {M}:{m}{n}"
 
 [[appenders.console.filter]]
 kind = "threshold"
-level = "debug"
+level = "warn"
 
 [appenders.file]
 kind = "file"
@@ -17,7 +17,7 @@ path = "error.log"
 pattern = "{d} [{t}] {l} {M}:{m}{n}"
 
 [root]
-level = "debug"
+level = "warn"
 appenders = ["console"]
 
 [loggers."test::a"]
