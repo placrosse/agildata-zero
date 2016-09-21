@@ -205,7 +205,8 @@ pub enum ASTNode {
         expr_list: Box<ASTNode>,
         relation: Option<Box<ASTNode>>,
         selection: Option<Box<ASTNode>>,
-        order: Option<Box<ASTNode>>
+        order: Option<Box<ASTNode>>,
+        for_update: bool
     },
     SQLInsert {
         table: Box<ASTNode>,

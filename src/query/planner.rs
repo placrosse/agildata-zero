@@ -279,7 +279,7 @@ impl<'a> Planner<'a> {
 
     pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Option<Rel>, Box<ZeroError>> {
         match *sql {
-            ASTNode::SQLSelect { box ref expr_list, ref relation, ref selection, ref order } => {
+            ASTNode::SQLSelect { box ref expr_list, ref relation, ref selection, ref order, ref for_update } => {
 
                 let relation = match relation {
                     &Some(box ref r) => self.sql_to_rel(r)?,
