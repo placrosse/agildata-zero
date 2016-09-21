@@ -413,61 +413,20 @@ impl ZeroHandler {
 
         self.tt = None;
 
-        // parse query
-        let ansi = AnsiSQLDialect::new();
-        let dialect = MySQLDialect::new(&ansi);
-
-        // TODO error handling
-        let parsed = match query.tokenize(&dialect) {
-            Ok(tokens) => {
-                match tokens.parse() {
-                    Ok(parsed) => {
-                        match parsed {
-                            ASTNode::MySQLUse(box ASTNode::SQLIdentifier{id: ref schema, ..}) => {
-                                self.schema = Some(schema.clone())
-                            },
-                            _ => {}
-                        };
-                        Some(parsed)
-                    },
-                    Err(e) => {
-                        debug!("Failed to parse with: {}", e);
-                        match self.parsing_mode{
-                            ParsingMode::Strict =>{
-                                let q = query.to_uppercase();
-                                if q.starts_with("SET") || q.starts_with("SHOW") || q.starts_with("BEGIN")
-                                    || q.starts_with("COMMIT") || q.starts_with("ROLLBACK") {
-                                    debug!("In Strict mode, allowing use of SET and SHOW");
-                                    None
-                                } else {
-                                    error!("FAILED TO PARSE QUERY {}", query);
-                                    return create_error(e.to_string());
-                                }
-                            },
-                            ParsingMode::Passive =>{
-                                debug!("In Passive mode, falling through to MySQL");
-                                None
-                            }
-                        }
-                    }
-                }
-            },
-            Err(e) => {
-                debug!("Failed to tokenize with: {}", e);
-                None
-            }
+        // parse query, return error on an error
+        let parsed = match self.parse_query(query) {
+            Ok(ast) => ast, // Option
+            Err(e) => return create_error_from_err(e)
         };
 
+        // plan query, return error on an error
         let plan = match self.plan(&parsed) {
-            Ok(p) => p,
-            Err(e) => {
-                error!("FAILED TO PLAN QUERY {}", query);
-                return create_error_from_err(e)
-            }
+            Ok(p) => p, // Option
+            Err(e) => return create_error_from_err(e)
         };
 
         // reqwrite query
-       let action = if parsed.is_some() {
+        let action = if parsed.is_some() {
 
             let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
             let mut encrypt_vis = EncryptVisitor{valuemap: value_map};
@@ -530,7 +489,7 @@ impl ZeroHandler {
         action
     }
 
-    fn parse_query(&mut self, query: String) -> Result<Option<ASTNode>, ZeroError> {
+    fn parse_query(&mut self, query: String) -> Result<Option<ASTNode>, Box<ZeroError>> {
 
         let ansi = AnsiSQLDialect::new();
         let dialect = MySQLDialect::new(&ansi);
@@ -558,10 +517,10 @@ impl ZeroHandler {
                                     Ok(None)
                                 } else {
                                     error!("FAILED TO PARSE QUERY {}", query);
-                                    Err(ZeroError::ParseError {
+                                    Err(Box::new(ZeroError::ParseError {
                                         message: format!("Failed to parse query {}", query),
                                         code: "1064".into()
-                                    })
+                                    }))
                                 }
                             },
                             ParsingMode::Passive => {
@@ -574,10 +533,10 @@ impl ZeroHandler {
             },
             Err(e) => {
                 debug!("Failed to tokenize with: {}", e);
-                Err(ZeroError::ParseError {
+                Err(Box::new(ZeroError::ParseError {
                     message: format!("Failed to tokenize with: {}", e),
                     code: "1064".into()
-                })
+                }))
             }
         }
     }
