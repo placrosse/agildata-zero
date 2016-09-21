@@ -530,6 +530,58 @@ impl ZeroHandler {
         action
     }
 
+    fn parse_query(&mut self, query: String) -> Result<Option<ASTNode>, ZeroError> {
+
+        let ansi = AnsiSQLDialect::new();
+        let dialect = MySQLDialect::new(&ansi);
+
+        match query.tokenize(&dialect) {
+            Ok(tokens) => {
+                match tokens.parse() {
+                    Ok(parsed) => {
+                        match parsed {
+                            ASTNode::MySQLUse(box ASTNode::SQLIdentifier{id: ref schema, ..}) => {
+                                self.schema = Some(schema.clone())
+                            },
+                            _ => {}
+                        };
+                        Ok(Some(parsed))
+                    },
+                    Err(e) => {
+                        debug!("Failed to parse with: {}", e);
+                        match self.parsing_mode {
+                            ParsingMode::Strict => {
+                                let q = query.to_uppercase();
+                                if q.starts_with("SET") || q.starts_with("SHOW") || q.starts_with("BEGIN")
+                                    || q.starts_with("COMMIT") || q.starts_with("ROLLBACK") {
+                                    debug!("In Strict mode, allowing use of SET and SHOW");
+                                    Ok(None)
+                                } else {
+                                    error!("FAILED TO PARSE QUERY {}", query);
+                                    Err(ZeroError::ParseError {
+                                        message: format!("Failed to parse query {}", query),
+                                        code: "1064".into()
+                                    })
+                                }
+                            },
+                            ParsingMode::Passive => {
+                                debug!("In Passive mode, falling through to MySQL");
+                                Ok(None)
+                            }
+                        }
+                    }
+                }
+            },
+            Err(e) => {
+                debug!("Failed to tokenize with: {}", e);
+                Err(ZeroError::ParseError {
+                    message: format!("Failed to tokenize with: {}", e),
+                    code: "1064".into()
+                })
+            }
+        }
+    }
+
     fn process_result_row(&mut self,
                           p: &Packet,
                           ) -> Result<Action, Box<ZeroError>> {
