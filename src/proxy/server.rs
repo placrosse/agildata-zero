@@ -178,7 +178,7 @@ impl ZeroHandler {
 fn determine_parsing_mode(mode: &String) -> ParsingMode {
     match &mode.to_uppercase() as &str {
         "STRICT" => ParsingMode::Strict,
-        "PASSIVE" => ParsingMode::Passive,
+        "PERMISSIVE" => ParsingMode::Permissive,
         _ => panic!("Unsupported parsing mode {}", mode)
     }
 }
@@ -186,7 +186,7 @@ fn determine_parsing_mode(mode: &String) -> ParsingMode {
 #[derive(Debug, PartialEq, Clone)]
 pub enum ParsingMode {
     Strict,
-    Passive
+    Permissive
 }
 
 //TODO: add this to MySQLPacketReader in mysql-proxy-rs
@@ -494,7 +494,7 @@ impl ZeroHandler {
                                     }))
                                 }
                             },
-                            ParsingMode::Passive => {
+                            ParsingMode::Permissive => {
                                 debug!("In Passive mode, falling through to MySQL");
                                 Ok(None)
                             }
@@ -504,10 +504,18 @@ impl ZeroHandler {
             },
             Err(e) => {
                 debug!("Failed to tokenize with: {}", e);
-                Err(Box::new(ZeroError::ParseError {
-                    message: format!("Failed to tokenize with: {}", e),
-                    code: "1064".into()
-                }))
+                match self.parsing_mode {
+                    ParsingMode::Strict => {
+                        Err(Box::new(ZeroError::ParseError {
+                            message: format!("Failed to tokenize with: {}", e),
+                            code: "1064".into()
+                        }))
+                    },
+                    ParsingMode::Permissive => {
+                        debug!("In Passive mode, falling through to MySQL");
+                        Ok(None)
+                    }
+                }
             }
         }
     }
