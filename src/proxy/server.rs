@@ -517,7 +517,7 @@ impl ZeroHandler {
                 let mut packet: Vec<u8> = Vec::with_capacity(slice.len() + 4);
                 packet.write_u32::<LittleEndian>((slice.len() + 1) as u32).unwrap();
                 assert!(0x00 == packet[3]);
-                packet.push(0x03); // COM_QUERY response
+                packet.push(0x03); // COM_QUERY request packet type
                 packet.extend_from_slice(slice);
 
                 match plan {
