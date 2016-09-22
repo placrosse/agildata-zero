@@ -206,7 +206,7 @@ fn read_u16_le(buf: &[u8]) -> u16 {
 impl PacketHandler for ZeroHandler {
 
     fn handle_request(&mut self, p: &Packet) -> Action {
-        if self.state == HandlerState::Handshake {
+        let action = if self.state == HandlerState::Handshake {
             self.state = HandlerState::ComQueryResponse;
 
             // see https://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeResponse
@@ -252,14 +252,19 @@ impl PacketHandler for ZeroHandler {
                     Action::Forward
                 }
             }
-        }
+        };
+        debug!("Request action: {:?}", action);
+        action
     }
 
     fn handle_response(&mut self, p: &Packet) -> Action {
 
+        print_packet_chars("handle_response", &p.bytes);
+
         let (state, action) = match self.state {
             HandlerState::Handshake => (None, Action::Forward),
             HandlerState::ComQueryResponse => {
+                print_packet_chars("ComQueryResponse", &p.bytes);
                 // this logic only applies to the very first response packet after a request
                 match p.bytes[4] {
                     0x00 | 0xfe | 0xff => (Some(HandlerState::ExpectClientRequest), Action::Forward),
@@ -312,7 +317,7 @@ impl PacketHandler for ZeroHandler {
                 _ => (None, Action::Forward)
             },
             HandlerState::StmtPrepareResponse => {
-                println!("StmtPrepareResponse");
+                print_packet_chars("StmtPrepareResponse", &p.bytes);
                 // COM_STMT_PREPARE_OK
                 //status (1) -- [00] OK
                 //statement_id (4) -- statement-id
@@ -369,9 +374,9 @@ impl PacketHandler for ZeroHandler {
                     (Some(HandlerState::ExpectClientRequest), Action::Forward)
                 } else {
                     if num_params > 0 {
-                        num_params = num_params - 1;
+                        h.num_params -= 1;
                     } else if num_columns > 0 {
-                        num_columns = num_columns - 1;
+                        h.num_columns -= 1;
                     }
                     (None, Action::Forward)
                 }
@@ -463,11 +468,12 @@ impl PacketHandler for ZeroHandler {
 
 #[allow(dead_code)]
 pub fn print_packet_chars(msg: &'static str, buf: &[u8]) {
-    print!("{}: packet_type={} [", msg, buf[4]);
-    for i in 0..buf.len() {
-        print!("{} ", buf[i] as char);
-    }
-    println!("]");
+    debug!("{} {:?}", msg, &buf);
+//    print!("{}: packet_type={} [", msg, buf[4]);
+//    for i in 0..buf.len() {
+//        print!("{} ", buf[i] as char);
+//    }
+//    println!("]");
 }
 
 impl ZeroHandler {
@@ -481,19 +487,9 @@ impl ZeroHandler {
     }
 
     fn process_com_query(&mut self, p:&Packet) -> Action {
+        debug!("COM_QUERY : {}", parse_string(&p.bytes[5..]));
         self.state = HandlerState::ComQueryResponse;
-        self.process_query(p, 0x03)
-    }
-
-    fn process_com_stmt_prepare(&mut self, p:&Packet) -> Action {
-        self.state = HandlerState::StmtPrepareResponse;
-        self.process_query(p, 0x16)
-    }
-
-    fn process_query(&mut self, p:&Packet, packet_type: u8) -> Action {
-
         let query = parse_string(&p.bytes[5..]);
-        debug!("COM_QUERY : {}", query);
 
         self.tt = None;
 
@@ -519,7 +515,7 @@ impl ZeroHandler {
                 let mut packet: Vec<u8> = Vec::with_capacity(slice.len() + 4);
                 packet.write_u32::<LittleEndian>((slice.len() + 1) as u32).unwrap();
                 assert!(0x00 == packet[3]);
-                packet.push(packet_type);
+                packet.push(0x03); // COM_QUERY response
                 packet.extend_from_slice(slice);
 
                 match plan {
@@ -529,13 +525,22 @@ impl ZeroHandler {
                     }
                 }
 
-               Action::Mutate(Packet { bytes: packet })
+                Action::Mutate(Packet { bytes: packet })
             },
             Ok(None) => Action::Forward,
             Err(e) => return create_error_from_err(e)
         };
         action
     }
+
+    fn process_com_stmt_prepare(&mut self, p:&Packet) -> Action {
+        debug!("COM_STMT_PREPARE : {}", parse_string(&p.bytes[5..]));
+        self.state = HandlerState::StmtPrepareResponse;
+        let query = parse_string(&p.bytes[5..]);
+
+        Action::Forward
+    }
+
 
     fn parse_query(&mut self, query: String) -> Result<Option<ASTNode>, Box<ZeroError>> {
 
