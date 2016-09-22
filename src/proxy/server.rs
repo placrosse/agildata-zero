@@ -237,7 +237,10 @@ impl PacketHandler for ZeroHandler {
             match p.packet_type() {
                 Ok(PacketType::ComInitDb) => self.process_init_db(p),
                 Ok(PacketType::ComQuery) => self.process_com_query(p),
-                Ok(PacketType::ComStmtPrepare) => self.process_com_stmt_prepare(p),
+                Ok(PacketType::ComStmtPrepare) => {
+//                    self.process_com_stmt_prepare(p)
+                    create_error(String::from("Prepared statements are not supported"))
+                },
                 Ok(PacketType::ComStmtExecute) => {
                     print_packet_chars("ComStmtExecute", &p.bytes);
                     let stmt_id = read_u16_le(&p.bytes[5..9]);
