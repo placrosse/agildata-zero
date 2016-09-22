@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::env;
 use std::rc::Rc;
 use std::error::Error;
+use std::ops::Deref;
 
 use config::{Config, TConfig, ColumnConfig};
 use error::ZeroError;
@@ -136,7 +137,7 @@ enum HandlerState {
     OkErrResponse,
 }
 
-#[derive(Debug,PartialEq)]
+#[derive(Debug,PartialEq,Clone)]
 struct PStmt {
     param_types: Vec<u8>,
     column_types: Vec<u8>,
@@ -150,7 +151,7 @@ struct ZeroHandler {
     schema: Option<String>, // the current schema
     parsing_mode: ParsingMode,
     tt: Option<TupleType>,
-//    stmt_map: HashMap<u16, Box<PStmt>>,
+    stmt_map: HashMap<u16, Box<PStmt>>,
 }
 
 impl ZeroHandler {
@@ -165,7 +166,8 @@ impl ZeroHandler {
             state: HandlerState::Handshake,
             schema: None,
             parsing_mode: parsing_mode,
-            tt: None
+            tt: None,
+            stmt_map: HashMap::new(),
         }
     }
 
@@ -237,7 +239,22 @@ impl PacketHandler for ZeroHandler {
                 Ok(PacketType::ComQuery) => self.process_com_query(p),
                 Ok(PacketType::ComStmtPrepare) => self.process_com_stmt_prepare(p),
                 Ok(PacketType::ComStmtExecute) => {
-                    println!("ComStmtExecute");
+                    print_packet_chars("ComStmtExecute", &p.bytes);
+                    let stmt_id = read_u16_le(&p.bytes[5..9]);
+
+                    debug!("stmt_id = {}", stmt_id);
+
+                    match self.stmt_map.get(&stmt_id) {
+                        Some(ref pstmt) => {
+                            debug!("Executing with {:?}", pstmt);
+
+                        },
+                        None => {
+                            debug!("No statement in map for id {}", stmt_id);
+                        }
+                    }
+
+
                     self.state = HandlerState::StmtExecuteResponse;
                     Action::Forward
                 },
@@ -328,7 +345,7 @@ impl PacketHandler for ZeroHandler {
                 //num_params (2) -- number of params
                 //reserved_1 (1) -- [00] filler
                 //warning_count (2) -- number of warnings
-                let stmt_id     = read_u16_le(&p.bytes[ 1.. 5]);
+                let stmt_id     = read_u16_le(&p.bytes[ 5.. 9]);
                 let num_columns = read_u16_le(&p.bytes[ 9..11]);
                 let num_params  = read_u16_le(&p.bytes[11..13]);
 
@@ -345,11 +362,11 @@ impl PacketHandler for ZeroHandler {
                     AtomicU32::new(num_columns as u32),
                 )), Action::Forward)
             },
-            HandlerState::StmtPrepareFieldPacket(stmt_id, ref pstmt, ref mut num_params, ref mut num_columns) => {
+            HandlerState::StmtPrepareFieldPacket(stmt_id, ref mut pstmt, ref mut num_params, ref mut num_columns) => {
                 println!("StmtPrepareFieldPacket: stmt_id={}, num_columns={:?}, num_params={:?}", stmt_id, num_columns, num_params);
 
                 println!("{:?}", &p.bytes);
-                
+
                 let mut r = MySQLPacketParser::new(&p.bytes);
                 let _ = r.read_lenenc_string(); // catalog
                 let _ = r.read_lenenc_string(); // schema
@@ -360,7 +377,7 @@ impl PacketHandler for ZeroHandler {
                 let _ = r.read_len(); // length of fixed-length fields [0c]
                 r.skip(2); // character set
                 r.skip(4); // column length
-                let mysql_type = r.read_byte(); // type
+                let mysql_type = r.read_byte().unwrap_or(0); // type
                 r.skip(2); // flags
                 r.skip(1); // decimals
                 r.skip(2); // filler [00] [00]
@@ -372,46 +389,24 @@ impl PacketHandler for ZeroHandler {
                   }*/
 
 
-                if num_params.load(Ordering::SeqCst) == 0 && num_columns.load(Ordering::SeqCst) == 0 {
-                    // TODO store in map
-                    (Some(HandlerState::ExpectClientRequest), Action::Forward)
-                } else {
-                    if num_params.load(Ordering::SeqCst) > 0 {
-                        num_params.fetch_sub(1, Ordering::SeqCst);
-                    } else if num_columns.load(Ordering::SeqCst) > 0 {
-                        num_columns.fetch_sub(1, Ordering::SeqCst);
-                    }
-                    (None, Action::Forward)
+                if num_params.load(Ordering::SeqCst) > 0 {
+                    pstmt.param_types.push(mysql_type);
+                    num_params.fetch_sub(1, Ordering::SeqCst);
+                } else if num_columns.load(Ordering::SeqCst) > 0 {
+                    pstmt.column_types.push(mysql_type);
+                    num_columns.fetch_sub(1, Ordering::SeqCst);
                 }
 
-
-//                match num_params {
-//                    Some(mut n) => {
-//                        n = n -1;
-//                        (None, Action::Forward)
-//                    },
-//                    None => match num_columns {
-//                        Some(mut n) => {
-//                            if n != 0 {
-//                                n = n -1;
-//                                (None, Action::Forward)
-//                            } else {
-//                                (Some(HandlerState::ExpectClientRequest), Action::Forward)
-//                            }
-//
-//                        },
-//                        None => {
-//
-//                            //TODO: store pstmt in map
-//
-//
-//                            (Some(HandlerState::ExpectClientRequest), Action::Forward)
-//                        }
-//                    }
-//                }
-
-
-
+                // if all params and columns have been processed, store the pstmt in the map
+                if num_params.load(Ordering::SeqCst) == 0
+                    && num_columns.load(Ordering::SeqCst) == 0 {
+                    debug!("stmt_id = {}, pstmt = {:?}", stmt_id, pstmt);
+                    let b : Box<PStmt> = pstmt.clone();
+                    self.stmt_map.insert(stmt_id, b);
+                    (Some(HandlerState::ExpectClientRequest), Action::Forward)
+                } else {
+                    (None, Action::Forward)
+                }
             },
             HandlerState::StmtExecuteResponse => {
                 print_packet_chars("StmtExecuteResponse", &p.bytes);

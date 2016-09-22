@@ -25,3 +25,6 @@ level = "info"
 appenders = ["file"]
 additive = true
 
+[loggers."agildata_zero::proxy::server"]
+level = "debug"
+
