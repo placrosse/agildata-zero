@@ -119,7 +119,7 @@ enum HandlerState {
     /// Expecting a COM_STMT_PREPARE response
     StmtPrepareResponse,
     /// Expecting column definitions for column and parameters as part of a COM_STMT_PREPARE response
-    StmtPrepareFieldPacket(u16, Box<PStmt>, Option<u16>, Option<u16>),
+    StmtPrepareFieldPacket(u16, Box<PStmt>, u16, u16),
     /// Expecting a COM_STMT_EXECUTE response
     StmtExecuteResponse,
     /// Expecting 1 or more field definitions as part of a COM_QUERY response
@@ -258,11 +258,11 @@ impl PacketHandler for ZeroHandler {
     fn handle_response(&mut self, p: &Packet) -> Action {
 
         let (state, action) = match self.state {
-            HandlerState::Handshake => (HandlerState::Handshake, Action::Forward),
+            HandlerState::Handshake => (None, Action::Forward),
             HandlerState::ComQueryResponse => {
                 // this logic only applies to the very first response packet after a request
                 match p.bytes[4] {
-                    0x00 | 0xfe | 0xff => (HandlerState::ExpectClientRequest, Action::Forward),
+                    0x00 | 0xfe | 0xff => (Some(HandlerState::ExpectClientRequest), Action::Forward),
                     0xfb => panic!("not implemented"), //TODO: should not panic
                     0x03 => {
                         match self.tt {
@@ -271,10 +271,10 @@ impl PacketHandler for ZeroHandler {
                                 // expect 0 or more result rows
                                 // expect result set terminator
 
-                                (HandlerState::ComQueryFieldPacket(tt.elements.len()), Action::Forward)
+                                (Some(HandlerState::ComQueryFieldPacket(tt.elements.len())), Action::Forward)
                             },
                             None => {
-                                (HandlerState::ForwardAll, Action::Forward)
+                                (Some(HandlerState::ForwardAll), Action::Forward)
                             }
                         }
                     },
@@ -284,31 +284,32 @@ impl PacketHandler for ZeroHandler {
                         // expect field_count x field_meta packet
                         // expect 0 or more result rows
                         // expect result set terminator
-                        (HandlerState::ComQueryFieldPacket(field_count), Action::Forward)
+                        (Some(HandlerState::ComQueryFieldPacket(field_count)), Action::Forward)
                     }
                 }
             },
-            HandlerState::ComQueryFieldPacket(n) => if n == 1 {
-                (HandlerState::ExpectResultRow, Action::Forward)
+            HandlerState::ComQueryFieldPacket(mut n) => if n == 1 {
+                (Some(HandlerState::ExpectResultRow), Action::Forward)
             } else {
-                (HandlerState::ComQueryFieldPacket(n -1), Action::Forward)
+                n = n - 1;
+                (None, Action::Forward)
             },
             HandlerState::ExpectResultRow => match p.bytes[4] {
-                0x00 | 0xfe | 0xff => (HandlerState::ExpectClientRequest, Action::Forward),
+                0x00 | 0xfe | 0xff => (Some(HandlerState::ExpectClientRequest), Action::Forward),
                 _ => {
                     match self.process_result_row(p) {
-                        Ok(a) => (HandlerState::ExpectResultRow, a),
-                        Err(e) => (HandlerState::IgnoreFurtherResults, create_error_from_err(e))
+                        Ok(a) => (None, a),
+                        Err(e) => (Some(HandlerState::IgnoreFurtherResults), create_error_from_err(e))
                     }
                 }
             },
             HandlerState::IgnoreFurtherResults => match p.bytes[4] {
-                0x00 | 0xfe | 0xff => (HandlerState::ExpectClientRequest, Action::Drop),
-                _ => (HandlerState::IgnoreFurtherResults, Action::Drop)
+                0x00 | 0xfe | 0xff => (Some(HandlerState::ExpectClientRequest), Action::Drop),
+                _ => (None, Action::Drop)
             },
             HandlerState::ForwardAll => match p.bytes[4] {
-                0x00 | 0xfe | 0xff => (HandlerState::ExpectClientRequest, Action::Forward),
-                _ => (HandlerState::ForwardAll, Action::Forward)
+                0x00 | 0xfe | 0xff => (Some(HandlerState::ExpectClientRequest), Action::Forward),
+                _ => (None, Action::Forward)
             },
             HandlerState::StmtPrepareResponse => {
                 println!("StmtPrepareResponse");
@@ -329,14 +330,14 @@ impl PacketHandler for ZeroHandler {
                 };
 
                 println!("StmtPrepareResponse: stmt_id={}, num_columns={}, num_params={}", stmt_id, num_columns, num_params);
-                (HandlerState::StmtPrepareFieldPacket(
+                (Some(HandlerState::StmtPrepareFieldPacket(
                     stmt_id,
                     Box::new(pstmt),
-                    if num_params  > 0 { Some(num_params)  } else { None },
-                    if num_columns > 0 { Some(num_columns) } else { None }
-                ), Action::Forward)
+                    num_params,
+                    num_columns,
+                )), Action::Forward)
             },
-            HandlerState::StmtPrepareFieldPacket(stmt_id, ref mut pstmt, num_params, num_columns) => {
+            HandlerState::StmtPrepareFieldPacket(stmt_id, ref pstmt, mut num_params, mut num_columns) => {
                 println!("StmtPrepareFieldPacket: stmt_id={}, num_columns={:?}, num_params={:?}", stmt_id, num_columns, num_params);
 
                 println!("{:?}", &p.bytes);
@@ -362,25 +363,44 @@ impl PacketHandler for ZeroHandler {
                 string[$len]   default values
                   }*/
 
-                match num_params {
-                    Some(n) => (HandlerState::StmtPrepareFieldPacket(
-                        stmt_id,
-                        Box::new(pstmt),
-                        if n == 1 { None } else { Some(n-1) }, num_columns), Action::Forward),
-                    None => match num_columns {
-                        Some(n) => (HandlerState::StmtPrepareFieldPacket(
-                            stmt_id,
-                            Box::new(pstmt),
-                            None, if n == 1 { None } else { Some(n-1) }), Action::Forward),
-                        None => {
 
-                            //TODO: store pstmt in map
-
-
-                            (HandlerState::ExpectClientRequest, Action::Forward)
-                        }
+                if num_params == 0 && num_columns == 0 {
+                    // TODO store in map
+                    (Some(HandlerState::ExpectClientRequest), Action::Forward)
+                } else {
+                    if num_params > 0 {
+                        num_params = num_params - 1;
+                    } else if num_columns > 0 {
+                        num_columns = num_columns - 1;
                     }
+                    (None, Action::Forward)
                 }
+
+
+//                match num_params {
+//                    Some(mut n) => {
+//                        n = n -1;
+//                        (None, Action::Forward)
+//                    },
+//                    None => match num_columns {
+//                        Some(mut n) => {
+//                            if n != 0 {
+//                                n = n -1;
+//                                (None, Action::Forward)
+//                            } else {
+//                                (Some(HandlerState::ExpectClientRequest), Action::Forward)
+//                            }
+//
+//                        },
+//                        None => {
+//
+//                            //TODO: store pstmt in map
+//
+//
+//                            (Some(HandlerState::ExpectClientRequest), Action::Forward)
+//                        }
+//                    }
+//                }
 
 
 
@@ -388,34 +408,35 @@ impl PacketHandler for ZeroHandler {
             HandlerState::StmtExecuteResponse => {
                 print_packet_chars("StmtExecuteResponse", &p.bytes);
                 match p.bytes[4] {
-                    0x00 | 0xfe | 0xff => (HandlerState::ExpectClientRequest, Action::Forward),
+                    0x00 | 0xfe | 0xff => (Some(HandlerState::ExpectClientRequest), Action::Forward),
                     _ => {
                         let mut r = MySQLPacketParser::new(&p.bytes);
                         let col_count = r.read_len();
-                        (HandlerState::StmtExecuteFieldPacket(col_count), Action::Forward)
+                        (Some(HandlerState::StmtExecuteFieldPacket(col_count)), Action::Forward)
                     },
                 }
             },
-            HandlerState::StmtExecuteFieldPacket(col_count) => {
+            HandlerState::StmtExecuteFieldPacket(mut col_count) => {
                 print_packet_chars("StmtExecuteFieldPacket", &p.bytes);
                 if col_count > 1 {
-                    (HandlerState::StmtExecuteFieldPacket(col_count-1), Action::Forward)
+                    col_count = col_count - 1;
+                    (None, Action::Forward)
                 } else {
-                    (HandlerState::StmtExecuteResultRow, Action::Forward)
+                    (Some(HandlerState::StmtExecuteResultRow), Action::Forward)
                 }
             },
             HandlerState::StmtExecuteResultRow => {
                 print_packet_chars("StmtExecuteResultRow", &p.bytes);
                 match p.bytes[4] {
-                    0xfe | 0xff => (HandlerState::ExpectClientRequest, Action::Forward),
-                    0x00 => (HandlerState::StmtExecuteResultRow, Action::Forward),
+                    0xfe | 0xff => (Some(HandlerState::ExpectClientRequest), Action::Forward),
+                    0x00 => (None, Action::Forward),
                     _ => panic!("invalid packet type {:?} for StmtExecuteResultRow", p.bytes[4])
                 }
             },
             HandlerState::OkErrResponse => {
                 print_packet_chars("OkErrResponse", &p.bytes);
                 match p.bytes[4] {
-                    0x00 | 0xff => (HandlerState::ExpectClientRequest, Action::Forward),
+                    0x00 | 0xff => (Some(HandlerState::ExpectClientRequest), Action::Forward),
                     _ => panic!("invalid packet type {:?} for OkErrResponse", p.bytes[4])
                 }
 
@@ -423,12 +444,17 @@ impl PacketHandler for ZeroHandler {
             _ => {
                 print_packet_chars("Unexpected server response", &p.bytes);
                 println!("Unsupported state {:?}", self.state);
-                (HandlerState::ExpectClientRequest, Action::Forward)
+                (Some(HandlerState::ExpectClientRequest), Action::Forward)
             }
 
         };
 
-        self.state = state;
+        match state {
+            Some(s) => {self.state = s},
+            None => {}
+        }
+
+        //self.state = state;
         action
 
 
