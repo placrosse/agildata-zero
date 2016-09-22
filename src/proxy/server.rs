@@ -32,6 +32,8 @@ use query::planner::{Planner, TupleType, HasTupleType, RelVisitor, Rel};
 use decimal::*;
 use chrono::{DateTime, TimeZone, NaiveDateTime};
 
+use std::sync::atomic::{AtomicU32, Ordering};
+
 pub struct Proxy {
 //    server: TcpListener,
 //    config: &'a Config,
@@ -102,7 +104,7 @@ impl Proxy {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(Debug)]
 enum HandlerState {
     /// Expect response from the server
     ExpectServerResponse,
@@ -113,13 +115,13 @@ enum HandlerState {
     /// Expecting a COM_QUERY response
     ComQueryResponse,
     /// Expecting 1 or more field definitions as part of a COM_QUERY response
-    ComQueryFieldPacket(usize),
+    ComQueryFieldPacket(AtomicU32),
     // Expecting a COM_QUERY result row
     ExpectResultRow,
     /// Expecting a COM_STMT_PREPARE response
     StmtPrepareResponse,
     /// Expecting column definitions for column and parameters as part of a COM_STMT_PREPARE response
-    StmtPrepareFieldPacket(u16, Box<PStmt>, u16, u16),
+    StmtPrepareFieldPacket(u16, Box<PStmt>, AtomicU32, AtomicU32),
     /// Expecting a COM_STMT_EXECUTE response
     StmtExecuteResponse,
     /// Expecting 1 or more field definitions as part of a COM_QUERY response
@@ -206,7 +208,8 @@ fn read_u16_le(buf: &[u8]) -> u16 {
 impl PacketHandler for ZeroHandler {
 
     fn handle_request(&mut self, p: &Packet) -> Action {
-        let action = if self.state == HandlerState::Handshake {
+//        let action = if self.state == HandlerState::Handshake {
+        let action = if let HandlerState::Handshake = self.state {
             self.state = HandlerState::ComQueryResponse;
 
             // see https://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeResponse
@@ -276,7 +279,7 @@ impl PacketHandler for ZeroHandler {
                                 // expect 0 or more result rows
                                 // expect result set terminator
 
-                                (Some(HandlerState::ComQueryFieldPacket(tt.elements.len())), Action::Forward)
+                                (Some(HandlerState::ComQueryFieldPacket(AtomicU32::new(tt.elements.len() as u32))), Action::Forward)
                             },
                             None => {
                                 (Some(HandlerState::ForwardAll), Action::Forward)
@@ -289,14 +292,14 @@ impl PacketHandler for ZeroHandler {
                         // expect field_count x field_meta packet
                         // expect 0 or more result rows
                         // expect result set terminator
-                        (Some(HandlerState::ComQueryFieldPacket(field_count)), Action::Forward)
+                        (Some(HandlerState::ComQueryFieldPacket(AtomicU32::new(field_count as u32))), Action::Forward)
                     }
                 }
             },
-            HandlerState::ComQueryFieldPacket(mut n) => if n == 1 {
+            HandlerState::ComQueryFieldPacket(ref mut n) => if n.load(Ordering::SeqCst) == 1 {
                 (Some(HandlerState::ExpectResultRow), Action::Forward)
             } else {
-                n = n - 1;
+                n.fetch_sub(1, Ordering::SeqCst);
                 (None, Action::Forward)
             },
             HandlerState::ExpectResultRow => match p.bytes[4] {
@@ -338,11 +341,11 @@ impl PacketHandler for ZeroHandler {
                 (Some(HandlerState::StmtPrepareFieldPacket(
                     stmt_id,
                     Box::new(pstmt),
-                    num_params,
-                    num_columns,
+                    AtomicU32::new(num_params as u32),
+                    AtomicU32::new(num_columns as u32),
                 )), Action::Forward)
             },
-            HandlerState::StmtPrepareFieldPacket(stmt_id, ref pstmt, mut num_params, mut num_columns) => {
+            HandlerState::StmtPrepareFieldPacket(stmt_id, ref pstmt, ref mut num_params, ref mut num_columns) => {
                 println!("StmtPrepareFieldPacket: stmt_id={}, num_columns={:?}, num_params={:?}", stmt_id, num_columns, num_params);
 
                 println!("{:?}", &p.bytes);
@@ -369,14 +372,14 @@ impl PacketHandler for ZeroHandler {
                   }*/
 
 
-                if num_params == 0 && num_columns == 0 {
+                if num_params.load(Ordering::SeqCst) == 0 && num_columns.load(Ordering::SeqCst) == 0 {
                     // TODO store in map
                     (Some(HandlerState::ExpectClientRequest), Action::Forward)
                 } else {
-                    if num_params > 0 {
-                        h.num_params -= 1;
-                    } else if num_columns > 0 {
-                        h.num_columns -= 1;
+                    if num_params.load(Ordering::SeqCst) > 0 {
+                        num_params.fetch_sub(1, Ordering::SeqCst);
+                    } else if num_columns.load(Ordering::SeqCst) > 0 {
+                        num_columns.fetch_sub(1, Ordering::SeqCst);
                     }
                     (None, Action::Forward)
                 }
