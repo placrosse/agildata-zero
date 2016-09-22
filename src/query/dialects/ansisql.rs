@@ -14,12 +14,16 @@ static KEYWORDS: &'static [&'static str] = &["SELECT", "FROM", "WHERE", "AND", "
     "FULL", "ON", "INSERT", "UPDATE", "SET", "VALUES", "INTO", "DELETE"];
 
 pub struct AnsiSQLDialect {
-	lit_index: AtomicU32
+	lit_index: AtomicU32,
+	bound_param_index: AtomicU32,
 }
 
 impl AnsiSQLDialect {
 
-	pub fn new() -> Self {AnsiSQLDialect{lit_index: AtomicU32::new(0)}}
+	pub fn new() -> Self {AnsiSQLDialect{
+		lit_index: AtomicU32::new(0),
+		bound_param_index: AtomicU32::new(0),
+	}}
 }
 
 impl Dialect for AnsiSQLDialect {
@@ -60,6 +64,10 @@ impl Dialect for AnsiSQLDialect {
 	                }
 	                Ok(Some(Token::Operator(op)))
 	            },
+	            '?' => {
+					chars.next(); // consume char
+					Ok(Some(Token::BoundParam(self.bound_param_index.fetch_add(1, Ordering::SeqCst))))
+				},
 	            '0'...'9' | '.' => {
 	                let mut text = String::new();
 	                while let Some(&c) = chars.peek() { // will break when it.peek() => None
@@ -175,6 +183,7 @@ impl Dialect for AnsiSQLDialect {
                             code: "1064".into()
                         }.into())
 				},
+				&Token::BoundParam(ref i) => Ok(Some(ASTNode::SQLBoundParam(*i))),
 				&Token::Literal(ref v) => match v {
 					&LiteralToken::LiteralLong(i, ref value) => {
 						tokens.next();
@@ -790,6 +799,7 @@ impl ExprWriter for AnsiSQLWriter {
 				writer._write(builder, right)?;
 
 			},
+			&ASTNode::SQLBoundParam(ref i) => builder.push_str("?"),
 			&ASTNode::SQLLiteral(ref lit) => match lit {
 				&LiteralExpr::LiteralLong(_, ref l) => {
 					write!(builder, " {}", l).unwrap()

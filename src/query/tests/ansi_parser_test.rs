@@ -484,7 +484,7 @@ fn select_comparisons() {
 fn insert() {
 
 	let dialect = AnsiSQLDialect::new();
-	let sql = String::from("INSERT INTO foo (a, b, c) VALUES(1, 20.45, 'abcdefghijk')");
+	let sql = String::from("INSERT INTO foo (a, b, c) VALUES(1, 20.45, ?)");
 	let tokens = sql.tokenize(&dialect).unwrap();
 	let parsed = tokens.parse().unwrap();
 
@@ -503,7 +503,7 @@ fn insert() {
 				vec![
 					SQLLiteral(LiteralLong(0, 1_u64)),
 					SQLLiteral(LiteralDouble(1, 20.45_f64)),
-					SQLLiteral(LiteralString(2, String::from("abcdefghijk")))
+					SQLBoundParam(0)
 				]
 			))
 		},
