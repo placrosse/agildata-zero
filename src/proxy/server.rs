@@ -354,7 +354,7 @@ impl PacketHandler for ZeroHandler {
                     column_types: Vec::with_capacity(num_columns as usize),
                 };
 
-                println!("StmtPrepareResponse: stmt_id={}, num_columns={}, num_params={}", stmt_id, num_columns, num_params);
+                debug!("StmtPrepareResponse: stmt_id={}, num_columns={}, num_params={}", stmt_id, num_columns, num_params);
                 (Some(HandlerState::StmtPrepareFieldPacket(
                     stmt_id,
                     Box::new(pstmt),
@@ -363,16 +363,15 @@ impl PacketHandler for ZeroHandler {
                 )), Action::Forward)
             },
             HandlerState::StmtPrepareFieldPacket(stmt_id, ref mut pstmt, ref mut num_params, ref mut num_columns) => {
-                println!("StmtPrepareFieldPacket: stmt_id={}, num_columns={:?}, num_params={:?}", stmt_id, num_columns, num_params);
 
-                println!("{:?}", &p.bytes);
+                debug!("StmtPrepareFieldPacket {:?}", &p.bytes);
 
                 let mut r = MySQLPacketParser::new(&p.bytes);
                 let _ = r.read_lenenc_string(); // catalog
-                let _ = r.read_lenenc_string(); // schema
-                let _ = r.read_lenenc_string(); // table
+                let schema = r.read_lenenc_string(); // schema
+                let table = r.read_lenenc_string(); // table
                 let _ = r.read_lenenc_string(); // org_table
-                let _ = r.read_lenenc_string(); // name
+                let name = r.read_lenenc_string(); // name
                 let _ = r.read_lenenc_string(); // org_name
                 let _ = r.read_len(); // length of fixed-length fields [0c]
                 r.skip(2); // character set
@@ -388,6 +387,8 @@ impl PacketHandler for ZeroHandler {
                 string[$len]   default values
                   }*/
 
+                debug!("StmtPrepareFieldPacket: stmt_id={}, num_columns={:?}, num_params={:?}, {:?}:{:?}:{:?}",
+                         stmt_id, num_columns, num_params, schema, table, name);
 
                 if num_params.load(Ordering::SeqCst) > 0 {
                     pstmt.param_types.push(mysql_type);
