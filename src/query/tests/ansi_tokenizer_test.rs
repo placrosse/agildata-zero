@@ -36,6 +36,7 @@ fn tokenize_with_null() {
 #[test]
 fn complex_tokenize() {
 	let dialect = AnsiSQLDialect::new();
+    let tokens = String::from("SELECT a, 'hello' FROM tOne WHERE b > 2.22 AND c != true").tokenize(&dialect).unwrap();
     assert_eq!(
         vec![Token::Keyword("SELECT".to_string()),
             Token::Identifier("a".to_string()),
@@ -52,7 +53,9 @@ fn complex_tokenize() {
             Token::Operator("!=".to_string()),
             Token::Literal(2)
 		],
-        String::from("SELECT a, 'hello' FROM tOne WHERE b > 2.22 AND c != true").tokenize(&dialect).unwrap().tokens
+        tokens.tokens
     );
+
+    println!("TOKEN HASH {}", get_token_hash(&tokens))
 
 }
