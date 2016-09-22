@@ -323,6 +323,27 @@ impl PacketHandler for ZeroHandler {
                 println!("StmtPrepareFieldPacket: num_columns={:?}, num_params={:?}", num_columns, num_params);
 
                 println!("{:?}", &p.bytes);
+                
+                let mut r = MySQLPacketParser::new(&p.bytes);
+                let _ = r.read_lenenc_string(); // catalog
+                let _ = r.read_lenenc_string(); // schema
+                let _ = r.read_lenenc_string(); // table
+                let _ = r.read_lenenc_string(); // org_table
+                let _ = r.read_lenenc_string(); // name
+                let _ = r.read_lenenc_string(); // org_name
+                let _ = r.read_len(); // length of fixed-length fields [0c]
+                r.skip(2); // character set
+                r.skip(4); // column length
+                let mysql_type = r.read_byte(); // type
+                r.skip(2); // flags
+                r.skip(1); // decimals
+                r.skip(2); // filler [00] [00]
+
+                /* TODO: support this eventually
+                  if command was COM_FIELD_LIST {
+                lenenc_int     length of default-values
+                string[$len]   default values
+                  }*/
 
                 match num_params {
                     Some(n) => (HandlerState::StmtPrepareFieldPacket(
@@ -722,7 +743,18 @@ impl<'a> MySQLPacketParser<'a> {
         }
     }
 
-    /// reads a length-encoded string
+    /// reads a single byte
+    pub fn read_byte(&mut self) -> Option<u8> {
+        if self.pos < self.payload.len() {
+            let b = self.payload[self.pos];
+            self.pos += 1;
+            Some(b)
+        } else {
+            None
+        }
+    }
+
+        /// reads a length-encoded string
     pub fn read_lenenc_string(&mut self) -> Option<String> {
         match self.read_bytes() {
             Some(s) => Some(String::from_utf8(s.to_vec()).expect("Invalid UTF-8")),
