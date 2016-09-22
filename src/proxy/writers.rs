@@ -1,6 +1,6 @@
 // use super::super::parser::sql_writer::*;
 // use super::super::parser::sql_parser::{SQLExpr, LiteralExpr, DataType};
-use query::{Writer, ExprWriter, ASTNode, LiteralExpr, MySQLColumnQualifier};
+use query::{Writer, ExprWriter, ASTNode, MySQLColumnQualifier};
 use query::MySQLDataType::*;
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -23,23 +23,18 @@ pub struct LiteralReplacingWriter<'a> {
 impl<'a> ExprWriter for LiteralReplacingWriter<'a> {
 	fn write(&self, _: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, Box<ZeroError>> {
 		match node {
-			&ASTNode::SQLLiteral(ref e) => match e {
-				&LiteralExpr::LiteralLong(ref i, _) => self.optionally_write_literal(i, builder),
-    			&LiteralExpr::LiteralBool(ref i, _) => self.optionally_write_literal(i, builder),
-    			&LiteralExpr::LiteralDouble(ref i, _) => self.optionally_write_literal(i, builder),
-    			&LiteralExpr::LiteralString(ref i, _) => self.optionally_write_literal(i, builder),
-                &LiteralExpr::LiteralNull(_) => Ok(false)
-			},
-            &ASTNode::SQLUnary{ref operator, expr: box ASTNode::SQLLiteral(ref e)} => match e {
-              &LiteralExpr::LiteralLong(ref i, _) | &LiteralExpr::LiteralDouble(ref i, _) => {
-                  // This value was encrypted as a signed value, so do not write the unary...
-                  if self.literals.contains_key(i) {
-                      self.optionally_write_literal(i, builder)
-                  } else {
-                      Ok(false)
-                  }
-              },
-              _ => Ok(false)
+			&ASTNode::SQLLiteral(i) => {
+                let index = i as u32;
+                self.optionally_write_literal(&index, builder)
+            },
+            &ASTNode::SQLUnary{ref operator, expr: box ASTNode::SQLLiteral(i)} => {
+                // This value was encrypted as a signed value, so do not write the unary...
+                let index = i as u32;
+                if self.literals.contains_key(&index as &u32) {
+                  self.optionally_write_literal(&index as &u32, builder)
+                } else {
+                  Ok(false)
+                }
             },
 			_ => Ok(false)
 		}

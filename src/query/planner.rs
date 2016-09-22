@@ -1,5 +1,5 @@
 use std::error::Error;
-use super::{ASTNode, Operator, LiteralExpr, JoinType};
+use super::{ASTNode, Operator, JoinType};
 use encrypt::EncryptionType;
 //use config::*;
 use encrypt::NativeType;
@@ -50,7 +50,7 @@ pub struct Element {
 pub enum Rex {
     //Alias { name: String, expr: Box<Rex> },
     Identifier { id: Vec<String>, el: Element },
-    Literal(LiteralExpr),
+    Literal(usize),
     BinaryExpr{left: Box<Rex>, op: Operator, right: Box<Rex>},
     RelationalExpr(Rel),
     RexExprList(Vec<Rex>),
@@ -70,24 +70,24 @@ impl Rex {
     pub fn get_element(&self) -> Result<Element, Box<ZeroError>> {
         match self {
             &Rex::Identifier{ref el, ..} => Ok(el.clone()),
-            &Rex::Literal(ref l) => {
-                let (dt, name) = match l {
-                    &LiteralExpr::LiteralLong(_, ref val) => (NativeType::U64, format!("{}", val)),
-                    &LiteralExpr::LiteralBool(_, ref val) => (NativeType::BOOL, format!("{}", val)),
-                    &LiteralExpr::LiteralDouble(_, ref val)=> (NativeType::F64, format!("{}", val)),
-                    &LiteralExpr::LiteralString(_, ref val) => (NativeType::Varchar(val.len() as u32), format!("{}", val)),
-                    &LiteralExpr::LiteralNull(_) => (NativeType::NULL, "NULL".to_string()),
-                };
-                Ok(Element {
-                    name : format!("{}", name),
-                    encryption: EncryptionType::NA,
-                    key: [0_u8; 32],
-                    data_type: dt,
-                    relation: String::from("SYS"),
-                    p_name: None,
-                    p_relation: None
-                })
-            },
+//            &Rex::Literal(ref l) => {
+//                let (dt, name) = match l {
+//                    &LiteralExpr::LiteralLong(_, ref val) => (NativeType::U64, format!("{}", val)),
+//                    &LiteralExpr::LiteralBool(_, ref val) => (NativeType::BOOL, format!("{}", val)),
+//                    &LiteralExpr::LiteralDouble(_, ref val)=> (NativeType::F64, format!("{}", val)),
+//                    &LiteralExpr::LiteralString(_, ref val) => (NativeType::Varchar(val.len() as u32), format!("{}", val)),
+//                    &LiteralExpr::LiteralNull(_) => (NativeType::NULL, "NULL".to_string()),
+//                };
+//                Ok(Element {
+//                    name : format!("{}", name),
+//                    encryption: EncryptionType::NA,
+//                    key: [0_u8; 32],
+//                    data_type: dt,
+//                    relation: String::from("SYS"),
+//                    p_name: None,
+//                    p_relation: None
+//                })
+//            },
             &Rex::RexFunctionCall{ref name, ref args} => {
                 match &name as &str {
                     "MAX" | "SUM" | "MIN" | "COALESCE" => {

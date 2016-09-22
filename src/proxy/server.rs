@@ -25,7 +25,7 @@ use super::encrypt_visitor::EncryptVisitor;
 use super::schema_provider::MySQLBackedSchemaProvider;
 use super::writers::*;
 
-use query::{Tokenizer, Parser, Writer, SQLWriter, ASTNode};
+use query::{Tokenizer, Parser, Writer, SQLWriter, ASTNode, LiteralToken};
 use query::dialects::mysqlsql::*;
 use query::dialects::ansisql::*;
 use query::planner::{Planner, TupleType, HasTupleType, RelVisitor, Rel};
@@ -496,7 +496,7 @@ impl ZeroHandler {
         self.tt = None;
 
         // parse query, return error on an error
-        let parsed = match self.parse_query(query) {
+        let (tokens, parsed) = match self.parse_query(query) {
             Ok(ast) => ast, // Option
             Err(e) => return create_error_from_err(e)
         };
@@ -508,7 +508,7 @@ impl ZeroHandler {
         };
 
         // re-write query
-        let rewritten = self.rewrite_query(&parsed, &plan);
+        let rewritten = self.rewrite_query(&tokens, &parsed, &plan);
 
         let action = match rewritten {
             Ok(Some(sql)) => {
@@ -544,7 +544,7 @@ impl ZeroHandler {
     }
 
 
-    fn parse_query(&mut self, query: String) -> Result<Option<ASTNode>, Box<ZeroError>> {
+    fn parse_query(&mut self, query: String) -> Result<(Option<Vec<LiteralToken>>, Option<ASTNode>), Box<ZeroError>> {
 
         let ansi = AnsiSQLDialect::new();
         let dialect = MySQLDialect::new(&ansi);
@@ -559,7 +559,7 @@ impl ZeroHandler {
                             },
                             _ => {}
                         };
-                        Ok(Some(parsed))
+                        Ok((Some(tokens.literals), Some(parsed)))
                     },
                     Err(e) => {
                         debug!("Failed to parse with: {}", e);
@@ -569,7 +569,7 @@ impl ZeroHandler {
                                 if q.starts_with("SET") || q.starts_with("SHOW") || q.starts_with("BEGIN")
                                     || q.starts_with("COMMIT") || q.starts_with("ROLLBACK") {
                                     debug!("In Strict mode, allowing use of SET and SHOW");
-                                    Ok(None)
+                                    Ok((None, None))
                                 } else {
                                     error!("FAILED TO PARSE QUERY {}", query);
                                     Err(Box::new(ZeroError::ParseError {
@@ -580,7 +580,7 @@ impl ZeroHandler {
                             },
                             ParsingMode::Permissive => {
                                 debug!("In Passive mode, falling through to MySQL");
-                                Ok(None)
+                                Ok((None, None))
                             }
                         }
                     }
@@ -597,21 +597,24 @@ impl ZeroHandler {
                     },
                     ParsingMode::Permissive => {
                         debug!("In Passive mode, falling through to MySQL");
-                        Ok(None)
+                        Ok((None, None))
                     }
                 }
             }
         }
     }
 
-    fn rewrite_query(&mut self, parsed: &Option<ASTNode>, plan: &Option<Rel>)
+    fn rewrite_query(&mut self, literals: &Option<Vec<LiteralToken>>, parsed: &Option<ASTNode>, plan: &Option<Rel>)
         -> Result<Option<String>, Box<ZeroError>> {
 
         match parsed {
 
             &Some(ref ast) => {
                 let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
-                let mut encrypt_vis = EncryptVisitor { valuemap: value_map };
+                let mut encrypt_vis = EncryptVisitor {
+                    literal_tokens: literals.as_ref().unwrap(),
+                    valuemap: value_map
+                };
 
                 // Visit and conditionally encrypt (if there was a plan)
                 match plan {
@@ -637,7 +640,9 @@ impl ZeroHandler {
                     schema: &s
                 };
                 let mysql_writer = MySQLWriter {};
-                let ansi_writer = AnsiSQLWriter {};
+                let ansi_writer = AnsiSQLWriter {
+                    literal_tokens: literals.as_ref().unwrap()
+                };
 
                 let writer = SQLWriter::new(vec![
                                         &lit_writer,

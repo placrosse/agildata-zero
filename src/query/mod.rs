@@ -14,7 +14,7 @@ pub trait Dialect {
 
 	fn get_keywords(&self) -> Vec<&'static str>;
 
-	fn get_token(&self, chars: &mut Peekable<Chars>, keywords: &Vec<&'static str>) -> Result<Option<Token>, Box<ZeroError>>;
+	fn get_token(&self, chars: &mut Peekable<Chars>, keywords: &Vec<&'static str>, literals: &mut Vec<LiteralToken>) -> Result<Option<Token>, Box<ZeroError>>;
 
 	fn parse_prefix<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<Option<ASTNode>, Box<ZeroError>>;
 
@@ -37,8 +37,9 @@ impl<D: Dialect> Tokenizer<D> for String {
 
 		let mut chars = self.chars().peekable();
 		let mut tokens: Vec<Token> = Vec::new();
+        let mut literals: Vec<LiteralToken> = Vec::new();
 		while let Some(&ch) = chars.peek() {
-			match dialect.get_token(&mut chars, &keywords)? {
+			match dialect.get_token(&mut chars, &keywords, &mut literals)? {
 				Some(t) => tokens.push(t),
 				None => return Err(ZeroError::DecryptionError{
                     message: format!("No token dialect support for character {:?}", ch).into(),
@@ -52,7 +53,7 @@ impl<D: Dialect> Tokenizer<D> for String {
 			.filter(|t| match t { &Token::Whitespace => false, _ => true })
 			.collect::<Vec<_>>();
 
-		Ok(Tokens::new(dialect, stream))
+		Ok(Tokens::new(dialect, stream, literals))
 	}
 }
 
@@ -60,15 +61,17 @@ impl<D: Dialect> Tokenizer<D> for String {
 pub struct Tokens<'a, D: 'a + Dialect> {
 	pub dialect: &'a D,
 	pub tokens: Vec<Token>,
-	pub index: AtomicU32
+	pub index: AtomicU32,
+    pub literals: Vec<LiteralToken>,
 }
 
 impl<'a, D: 'a + Dialect> Tokens<'a, D> {
-	pub fn new(dialect: &'a D, tokens: Vec<Token>) -> Self {
+	pub fn new(dialect: &'a D, tokens: Vec<Token>, literals: Vec<LiteralToken>) -> Self {
 		Tokens {
 			dialect: dialect,
 			tokens: tokens,
-			index: AtomicU32::new(0)
+			index: AtomicU32::new(0),
+            literals: literals
 		}
 	}
 
@@ -136,6 +139,31 @@ impl<'a, D: 'a + Dialect> Tokens<'a, D> {
 			_ => false
 		}
 	}
+
+    fn consume_literal_null(&self) -> bool {
+        let ret = match self.peek() {
+            Some(&Token::Literal(i)) => {
+                match self.literals.get(i) {
+                    Some(t) => match t {
+                        &LiteralToken::LiteralNull(_) => true,
+                        _ => false
+                    },
+                    _ => false
+                }
+            },
+            _ => false
+        };
+
+        if ret {
+            self.next();
+        }
+
+        ret
+    }
+
+    fn get_literal(&self, i: usize) -> Option<&LiteralToken> {
+        self.literals.get(i)
+    }
 }
 
 #[derive(Debug,PartialEq,Clone)]
@@ -143,7 +171,7 @@ pub enum Token  {
 	Whitespace,
 	Keyword(String),
 	Identifier(String),
-	Literal(LiteralToken),
+	Literal(usize),
 	BoundParam(u32),
 	Operator(String),
 	Punctuator(String)
@@ -151,11 +179,11 @@ pub enum Token  {
 
 #[derive(Debug,PartialEq,Clone)]
 pub enum LiteralToken {
-    LiteralString(u32, String),
-    LiteralLong(u32, String),
-    LiteralDouble(u32, String),
-    LiteralBool(u32, String),
-    LiteralNull(u32)
+    LiteralString(usize, String),
+    LiteralLong(usize, String),
+    LiteralDouble(usize, String),
+    LiteralBool(usize, String),
+    LiteralNull(usize)
 }
 // Parser APIs
 pub trait Parser<D: Dialect> {
@@ -198,7 +226,7 @@ pub enum ASTNode {
 	SQLBinary{left: Box<ASTNode>, op: Operator, right: Box<ASTNode>},
 	SQLNested(Box<ASTNode>),
 	SQLUnary{operator: Operator, expr: Box<ASTNode>},
-	SQLLiteral(LiteralExpr),
+	SQLLiteral(usize),
 	SQLBoundParam(u32),
 	SQLAlias{expr: Box<ASTNode>, alias: Box<ASTNode>},
 	SQLExprList(Vec<ASTNode>),
@@ -244,14 +272,14 @@ pub enum ASTNode {
 	MySQLUse(Box<ASTNode>)
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum LiteralExpr {
-	LiteralLong(u32, u64),
-	LiteralBool(u32, bool),
-	LiteralDouble(u32, f64),
-	LiteralString(u32, String),
-    LiteralNull(u32)
-}
+//#[derive(Debug, PartialEq, Clone)]
+//pub enum LiteralExpr {
+//	LiteralLong(u32, u64),
+//	LiteralBool(u32, bool),
+//	LiteralDouble(u32, f64),
+//	LiteralString(u32, String),
+//    LiteralNull(u32)
+//}
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Operator {
@@ -414,6 +442,6 @@ impl<'a> Writer for SQLWriter<'a> {
 
 pub trait ASTVisitor {
 	fn visit_ast(&mut self, &ASTNode);
-	fn visit_ast_lit(&mut self, &LiteralExpr);
+//	fn visit_ast_lit(&mut self, &LiteralExpr);
 	fn visit_ast_operator(&mut self, &Operator);
 }

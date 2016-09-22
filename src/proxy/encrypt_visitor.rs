@@ -1,32 +1,50 @@
 use query::planner::{Rel, Rex, RelVisitor, TupleType, HasTupleType, Element};
-use query::{Operator, LiteralExpr};
+use query::{Operator, LiteralToken};
 use std::collections::HashMap;
 use encrypt::*;
 use error::ZeroError;
 use decimal::*;
 use std::str::FromStr;
 use chrono::*;
+use std::fmt::Debug;
 // TODO error: use of unstable library feature 'try_from' (see issue #33417)
 //use std::convert::TryFrom;
 
 #[derive(Debug)]
-pub struct EncryptVisitor {
+pub struct EncryptVisitor<'a>{
     // TODO this should be Option<Vec<u8>> for null handling
+    pub literal_tokens: &'a Vec<LiteralToken>,
 	pub valuemap: HashMap<u32, Vec<u8>>
 }
 
-impl EncryptVisitor {
+pub fn map_err_to_zero<E: Debug>(err: E) -> Box<ZeroError> {
+    ZeroError::EncryptionError {
+    message: format!("{:?}", err),
+    code: "1064".into()
+    }.into()
+}
+
+impl<'a> EncryptVisitor<'a> {
+
+
+
 	pub fn get_value_map(&self) -> &HashMap<u32, Vec<u8>> {
 		&self.valuemap
 	}
 
-    pub fn encrypt_literal(&mut self, lit: &LiteralExpr, el: &Element, sign: Option<&Operator>) -> Result<(), Box<ZeroError>> {
 
+
+    pub fn encrypt_literal(&mut self, index: &usize, el: &Element, sign: Option<&Operator>) -> Result<(), Box<ZeroError>> {
+
+        let lit = match self.literal_tokens.get(*index) {
+            Some(l) => l,
+            None => panic!("")
+        };
         // Handle null values
         // This will insert nothing into the value map
         // This may need to change if an encrypted null is not a real NULL
         match lit {
-            &LiteralExpr::LiteralNull(ref i ) => return Ok(()),
+            &LiteralToken::LiteralNull(ref i ) => return Ok(()),
             _ => {}
         }
 
@@ -34,13 +52,15 @@ impl EncryptVisitor {
         match el.data_type {
             NativeType::U64 => {
                 match lit {
-                    &LiteralExpr::LiteralLong(ref i, ref val) => {
+                    &LiteralToken::LiteralLong(ref i, ref v) => {
+
+                        let val = u64::from_str(v).map_err(map_err_to_zero)?;
                         match sign {
                             Some(&Operator::SUB) => return Err(ZeroError::EncryptionError {
                                 message: format!("Negative unary unsupported on unsigned numerics, column: {}.{}", el.name, el.relation).into(),
                                 code: "1064".into()
                             }.into()),
-                            _ => {self.valuemap.insert(i.clone(), val.encrypt(&el.encryption, &el.key)?);}
+                            _ => {self.valuemap.insert(i.clone() as u32, val.encrypt(&el.encryption, &el.key)?);}
                         }
 
                     },
@@ -52,8 +72,8 @@ impl EncryptVisitor {
             },
             NativeType::I64 => {
                 match lit {
-                    &LiteralExpr::LiteralLong(ref i, ref val) => {
-                        let v = match i64::from_str(&format!("{}", val)) {
+                    &LiteralToken::LiteralLong(ref i, ref val) => {
+                        let v = match i64::from_str(val) {
                             Ok(v) => v,
                             Err(e) => return Err(ZeroError::EncryptionError {
                                 message: format!("Failed to coerce {} to signed due to : {}", val, e).into(),
@@ -65,7 +85,7 @@ impl EncryptVisitor {
                             Some(&Operator::SUB) => (-v).encrypt(&el.encryption, &el.key)?,
                             _ => v.encrypt(&el.encryption, &el.key)?
                         };
-                        self.valuemap.insert(i.clone(), encrypted);
+                        self.valuemap.insert(i.clone() as u32, encrypted);
                     },
                     _ => return Err(ZeroError::EncryptionError {
                         message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
@@ -75,12 +95,13 @@ impl EncryptVisitor {
             },
             NativeType::F64 => {
                 match lit {
-                    &LiteralExpr::LiteralDouble(ref i, ref val) => {
+                    &LiteralToken::LiteralDouble(ref i, ref v) => {
+                        let val = f64::from_str(v).map_err(map_err_to_zero)?;
                         let encrypted = match sign {
                             Some(&Operator::SUB) => (-val).encrypt(&el.encryption, &el.key)?,
                             _ => val.encrypt(&el.encryption, &el.key)?
                         };
-                        self.valuemap.insert(i.clone(), encrypted);
+                        self.valuemap.insert(i.clone() as u32, encrypted);
                     },
                     _ => return Err(ZeroError::EncryptionError {
                         message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
@@ -90,9 +111,9 @@ impl EncryptVisitor {
             },
             NativeType::D128 => {
                 match lit {
-                    &LiteralExpr::LiteralDouble(ref i, ref val) => {
+                    &LiteralToken::LiteralDouble(ref i, ref val) => {
                         // TODO precision loss?
-                        let v = match d128::from_str(&val.to_string()) {
+                        let v = match d128::from_str(val) {
                             Ok(d) => d,
                             // Note: d128::from_str e is a ()
                             Err(e) => return Err(ZeroError::EncryptionError {
@@ -105,7 +126,7 @@ impl EncryptVisitor {
                             Some(&Operator::SUB) => (-v).encrypt(&el.encryption, &el.key)?,
                             _ => v.encrypt(&el.encryption, &el.key)?
                         };
-                        self.valuemap.insert(i.clone(), encrypted);
+                        self.valuemap.insert(i.clone() as u32, encrypted);
                     },
                     _ => return Err(ZeroError::EncryptionError {
                         message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
@@ -115,8 +136,9 @@ impl EncryptVisitor {
             },
             NativeType::BOOL => {
                 match lit {
-                    &LiteralExpr::LiteralBool(ref i, ref val) => {
-                        self.valuemap.insert(i.clone(), val.encrypt(&el.encryption, &el.key)?);
+                    &LiteralToken::LiteralBool(ref i, ref v) => {
+                        let val = bool::from_str(v).map_err(map_err_to_zero)?;
+                        self.valuemap.insert(i.clone() as u32, val.encrypt(&el.encryption, &el.key)?);
                     },
                     _ => return Err(ZeroError::EncryptionError {
                         message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
@@ -126,8 +148,8 @@ impl EncryptVisitor {
             },
             NativeType::Varchar(..) | NativeType::Char(..) => {
                 match lit {
-                    &LiteralExpr::LiteralString(ref i, ref val) => {
-                        self.valuemap.insert(i.clone(), val.clone().encrypt(&el.encryption, &el.key)?);
+                    &LiteralToken::LiteralString(ref i, ref val) => {
+                        self.valuemap.insert(i.clone() as u32, val.clone().encrypt(&el.encryption, &el.key)?);
                     },
                     _ => return Err(ZeroError::EncryptionError {
                         message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
@@ -137,7 +159,7 @@ impl EncryptVisitor {
             },
             NativeType::DATE => {
                 match lit {
-                    &LiteralExpr::LiteralString(ref i, ref val) => {
+                    &LiteralToken::LiteralString(ref i, ref val) => {
                         let v = match UTC.datetime_from_str(&format!("{} 00:00:00",val), "%Y-%m-%d %H:%M:%S") {
                             Ok(v) => v,
                             Err(e) => return Err(ZeroError::EncryptionError {
@@ -146,7 +168,7 @@ impl EncryptVisitor {
                             }.into())
                         };
 
-                        self.valuemap.insert(i.clone(), v.encrypt(&el.encryption, &el.key)?);
+                        self.valuemap.insert(i.clone() as u32, v.encrypt(&el.encryption, &el.key)?);
                     },
                     _ => return Err(ZeroError::EncryptionError {
                         message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
@@ -156,7 +178,7 @@ impl EncryptVisitor {
             },
             NativeType::DATETIME(..) => {
                 match lit {
-                    &LiteralExpr::LiteralString(ref i, ref val) => {
+                    &LiteralToken::LiteralString(ref i, ref val) => {
                         let v = match UTC.datetime_from_str(val, "%Y-%m-%d %H:%M:%S%.f") {
                             Ok(v) => v,
                             Err(e) => return Err(ZeroError::EncryptionError {
@@ -165,7 +187,7 @@ impl EncryptVisitor {
                             }.into())
                         };
 
-                        self.valuemap.insert(i.clone(), v.clone().encrypt(&el.encryption, &el.key)?);
+                        self.valuemap.insert(i.clone() as u32, v.clone().encrypt(&el.encryption, &el.key)?);
                     },
                     _ => return Err(ZeroError::EncryptionError {
                         message: format!("Invalid value {:?} for column {}.{}", lit, el.relation, el.name).into(),
@@ -185,7 +207,7 @@ impl EncryptVisitor {
 }
 
 
-impl RelVisitor for EncryptVisitor  {
+impl<'a> RelVisitor for EncryptVisitor<'a>  {
 	fn visit_rel(&mut self, rel: &Rel) -> Result<(),  Box<ZeroError>> {
 		match *rel {
 			Rel::Projection{box ref project, box ref input, ref tt} => {
@@ -232,10 +254,10 @@ impl RelVisitor for EncryptVisitor  {
 					(&Rex::RexExprList(ref c_list), &Rex::RexExprList(ref v_list)) => {
 						for (index, v) in v_list.iter().enumerate() {
 							match v {
-								&Rex::Literal(ref lit) => {
+								&Rex::Literal(ref i) => {
 									if let Rex::Identifier{ref id, ref el} = c_list[index] {
 										if el.encryption != EncryptionType::NA {
-                                            self.encrypt_literal(lit, el, None)?;
+                                            self.encrypt_literal(i, el, None)?;
 										}
 
 									} else {
@@ -246,10 +268,10 @@ impl RelVisitor for EncryptVisitor  {
                                     }
 								},
                                 // TODO swap this logic out with some evaluate()
-                                &Rex::RexUnary{ref operator, rex: box Rex::Literal(ref lit)} => {
+                                &Rex::RexUnary{ref operator, rex: box Rex::Literal(ref i)} => {
                                     if let Rex::Identifier{ref id, ref el} = c_list[index] {
                                         if el.encryption != EncryptionType::NA {
-                                            self.encrypt_literal(lit, el, Some(operator))?;
+                                            self.encrypt_literal(i, el, Some(operator))?;
                                         }
 
                                     } else {

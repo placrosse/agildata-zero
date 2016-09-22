@@ -22,7 +22,7 @@ impl <'d> Dialect for MySQLDialect<'d> {
 		k
     }
 
-	fn get_token(&self, chars: &mut Peekable<Chars>, keywords: &Vec<&'static str>) -> Result<Option<Token>, Box<ZeroError>> {
+	fn get_token(&self, chars: &mut Peekable<Chars>, keywords: &Vec<&'static str>, literals: &mut Vec<LiteralToken>) -> Result<Option<Token>, Box<ZeroError>> {
 		match chars.peek() {
 			Some(&ch) => match ch {
 				'`' => {
@@ -39,9 +39,9 @@ impl <'d> Dialect for MySQLDialect<'d> {
 
 					Ok(Some(Token::Identifier(text)))
 				},
-				_ => self.ansi.get_token(chars, keywords)
+				_ => self.ansi.get_token(chars, keywords, literals)
 			},
-			_ => self.ansi.get_token(chars, keywords)
+			_ => self.ansi.get_token(chars, keywords, literals)
 		}
 	}
 
@@ -327,9 +327,7 @@ impl<'d> MySQLDialect<'d> {
 			Some(&Token::Keyword(ref v)) | Some(&Token::Identifier(ref v)) => match &v.to_uppercase() as &str {
 				"NOT" => {
 					tokens.next();
-                    if let Some(&Token::Literal(LiteralToken::LiteralNull(_))) = tokens.peek() {
-                        tokens.next();
-//					if tokens.consume_keyword("NULL") {
+                    if tokens.consume_literal_null() {
 						Ok(Some(ASTNode::MySQLColumnQualifier(MySQLColumnQualifier::NotNull)))
 					} else {
                         Err(ZeroError::ParseError{
@@ -401,9 +399,12 @@ impl<'d> MySQLDialect<'d> {
 				}
 				_ => Ok(None)
 			},
-            Some(&Token::Literal(LiteralToken::LiteralNull(_))) => {
-                tokens.next();
-                Ok(Some(ASTNode::MySQLColumnQualifier(MySQLColumnQualifier::Null)))
+            Some(&Token::Literal(_)) => {
+                if tokens.consume_literal_null() {
+                    Ok(Some(ASTNode::MySQLColumnQualifier(MySQLColumnQualifier::Null)))
+                } else {
+                    Ok(None)
+                }
             },
 			_ => Ok(None)
 		}
@@ -525,19 +526,24 @@ impl<'d> MySQLDialect<'d> {
 		 {
 
 		if tokens.consume_punctuator("(") {
-			match tokens.peek() {
-				Some(&Token::Literal(LiteralToken::LiteralLong(_, ref v))) => {
-					tokens.next();
-					let ret = Ok(Some(u32::from_str(&v).unwrap()));
-					tokens.consume_punctuator(")");
-					ret
-				},
-				_ =>  Err(ZeroError::ParseError{
+            match tokens.peek() {
+                Some(&Token::Literal(index)) => match tokens.get_literal(index) {
+                    Some(&LiteralToken::LiteralLong(_, ref v)) => {
+                        tokens.next();
+                        let ret = Ok(Some(u32::from_str(&v).unwrap()));
+                        tokens.consume_punctuator(")");
+                        ret
+                    },
+                    t =>  Err(ZeroError::ParseError{
+                        message: format!("Expected LiteralLong token, received {:?}", t).into(),
+                        code: "1064".into()
+                    }.into())
+                },
+                _ =>  Err(ZeroError::ParseError{
                     message: format!("Expected LiteralLong token, received {:?}", tokens.peek()).into(),
                     code: "1064".into()
                 }.into())
-
-			}
+            }
 		} else {
 			Ok(None)
 		}
@@ -564,20 +570,23 @@ impl<'d> MySQLDialect<'d> {
 
 	}
 
-	fn parse_long<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<u32, Box<ZeroError>>
-		 {
-
-		match tokens.peek() {
-			Some(&Token::Literal(LiteralToken::LiteralLong(_, ref v))) => {
-				tokens.next();
-				Ok(u32::from_str(&v).unwrap())
-			},
-			_ =>  Err(ZeroError::ParseError{
+	fn parse_long<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<u32, Box<ZeroError>> {
+        match tokens.peek() {
+            Some(&Token::Literal(index)) => match tokens.get_literal(index) {
+                Some(&LiteralToken::LiteralLong(_, ref v)) => {
+                    tokens.next();
+                    Ok(u32::from_str(&v).unwrap())
+                },
+                t =>  Err(ZeroError::ParseError{
+                    message: format!("Expected LiteralLong token, received {:?}", t).into(),
+                    code: "1064".into()
+                }.into())
+            },
+            _ =>  Err(ZeroError::ParseError{
                 message: format!("Expected LiteralLong token, received {:?}", tokens.peek()).into(),
                 code: "1064".into()
             }.into())
-
-		}
+        }
 	}
 }
 

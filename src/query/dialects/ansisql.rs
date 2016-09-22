@@ -14,14 +14,12 @@ static KEYWORDS: &'static [&'static str] = &["SELECT", "FROM", "WHERE", "AND", "
     "FULL", "ON", "INSERT", "UPDATE", "SET", "VALUES", "INTO", "DELETE"];
 
 pub struct AnsiSQLDialect {
-	lit_index: AtomicU32,
 	bound_param_index: AtomicU32,
 }
 
 impl AnsiSQLDialect {
 
 	pub fn new() -> Self {AnsiSQLDialect{
-		lit_index: AtomicU32::new(0),
 		bound_param_index: AtomicU32::new(0),
 	}}
 }
@@ -34,7 +32,7 @@ impl Dialect for AnsiSQLDialect {
         k
     }
 
-	fn get_token(&self, chars: &mut Peekable<Chars>, keywords: &Vec<&'static str>) -> Result<Option<Token>, Box<ZeroError>> {
+	fn get_token(&self, chars: &mut Peekable<Chars>, keywords: &Vec<&'static str>, literals: &mut Vec<LiteralToken>) -> Result<Option<Token>, Box<ZeroError>> {
 		match chars.peek() {
 	        Some(&ch) => match ch {
 	            ' ' | '\t' | '\n' => {
@@ -82,9 +80,13 @@ impl Dialect for AnsiSQLDialect {
 	                }
 
 	                if text.as_str().contains('.') {
-						Ok(Some(Token::Literal(LiteralToken::LiteralDouble(self.lit_index.fetch_add(1, Ordering::SeqCst), text))))
+                        let index = literals.len();
+                        literals.push(LiteralToken::LiteralDouble(index, text));
+						Ok(Some(Token::Literal(index)))
 	                } else {
-						Ok(Some(Token::Literal(LiteralToken::LiteralLong(self.lit_index.fetch_add(1, Ordering::SeqCst), text))))
+                        let index = literals.len();
+                        literals.push(LiteralToken::LiteralLong(index, text));
+						Ok(Some(Token::Literal(index)))
 	                }
 	            },
 	            'a'...'z' | 'A'...'Z' => { // TODO this should really be any valid char for an identifier..
@@ -101,9 +103,15 @@ impl Dialect for AnsiSQLDialect {
 	                }
 
 	                if "true".eq_ignore_ascii_case(&text) || "false".eq_ignore_ascii_case(&text) {
-                        Ok(Some(Token::Literal(LiteralToken::LiteralBool(self.lit_index.fetch_add(1, Ordering::SeqCst), text))))
+                        let index = literals.len();
+                        literals.push(LiteralToken::LiteralBool(index, text));
+                        Ok(Some(Token::Literal(index)))
+
                     } else if "null".eq_ignore_ascii_case(&text) {
-                        Ok(Some(Token::Literal(LiteralToken::LiteralNull(self.lit_index.fetch_add(1, Ordering::SeqCst)))))
+                        let index = literals.len();
+                        literals.push(LiteralToken::LiteralNull(index));
+                        Ok(Some(Token::Literal(index)))
+
 	                } else if keywords.iter().position(|&r| r.eq_ignore_ascii_case(&text)).is_none() {
 	                    Ok(Some(Token::Identifier(text)))
 	                } else if "AND".eq_ignore_ascii_case(&text) || "OR".eq_ignore_ascii_case(&text) {
@@ -152,7 +160,10 @@ impl Dialect for AnsiSQLDialect {
 	                    }
 	                }
 
-					Ok(Some(Token::Literal(LiteralToken::LiteralString(self.lit_index.fetch_add(1, Ordering::SeqCst), s))))
+                    let index = literals.len();
+                    literals.push(LiteralToken::LiteralString(index, s));
+                    Ok(Some(Token::Literal(index)))
+
 	            },
 	            ',' | '(' | ')' => {
 	                chars.next();
@@ -184,29 +195,7 @@ impl Dialect for AnsiSQLDialect {
                         }.into())
 				},
 				&Token::BoundParam(ref i) => Ok(Some(ASTNode::SQLBoundParam(*i))),
-				&Token::Literal(ref v) => match v {
-					&LiteralToken::LiteralLong(i, ref value) => {
-						tokens.next();
-						Ok(Some(ASTNode::SQLLiteral(LiteralExpr::LiteralLong(i, u64::from_str(&value).unwrap()))))
-					},
-					&LiteralToken::LiteralBool(i, ref value) => {
-						tokens.next();
-						Ok(Some(ASTNode::SQLLiteral(LiteralExpr::LiteralBool(i, bool::from_str(&value).unwrap()))))
-					},
-					&LiteralToken::LiteralDouble(i, ref value) => {
-						tokens.next();
-						Ok(Some(ASTNode::SQLLiteral(LiteralExpr::LiteralDouble(i, f64::from_str(&value).unwrap()))))
-					},
-					&LiteralToken::LiteralString(i, ref value) => {
-                        tokens.next();
-                        Ok(Some(ASTNode::SQLLiteral(LiteralExpr::LiteralString(i, value.clone()))))
-                    },
-                    &LiteralToken::LiteralNull(i) => {
-                        tokens.next();
-                        Ok(Some(ASTNode::SQLLiteral(LiteralExpr::LiteralNull(i))))
-                    }
-					//_ => panic!("Unsupported literal {:?}", v)
-				},
+				&Token::Literal(ref index) => Ok(Some(ASTNode::SQLLiteral(index.clone()))),
 				&Token::Identifier(_) => {
                     let id = self.parse_identifier(tokens)?;
                     if tokens.consume_punctuator(&"(") {
@@ -713,9 +702,11 @@ impl AnsiSQLDialect {
 
 }
 
-pub struct AnsiSQLWriter{}
+pub struct AnsiSQLWriter<'a>{
+    pub literal_tokens: &'a Vec<LiteralToken>
+}
 
-impl ExprWriter for AnsiSQLWriter {
+impl<'a> ExprWriter for AnsiSQLWriter<'a> {
 	fn write(&self, writer: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, Box<ZeroError>> {
 		match node {
 			&ASTNode::SQLSelect{box ref expr_list, ref relation, ref selection, ref order, ref for_update} => {
@@ -800,24 +791,26 @@ impl ExprWriter for AnsiSQLWriter {
 
 			},
 			&ASTNode::SQLBoundParam(ref i) => builder.push_str("?"),
-			&ASTNode::SQLLiteral(ref lit) => match lit {
-				&LiteralExpr::LiteralLong(_, ref l) => {
-					write!(builder, " {}", l).unwrap()
-				},
-				&LiteralExpr::LiteralBool(_, ref b) => {
-					write!(builder, "{}", b).unwrap();
-				},
-				&LiteralExpr::LiteralDouble(_, ref d) => {
-					write!(builder, "{}", d).unwrap();
-				},
-				&LiteralExpr::LiteralString(_, ref s) => {
-					write!(builder, " '{}'", s).unwrap()
-				},
-                &LiteralExpr::LiteralNull(_) => {
-                    builder.push_str(" NULL");
-                }
-				//_ => panic!("Unsupported literal for writing {:?}", lit)
-			},
+			&ASTNode::SQLLiteral(index) => match self.literal_tokens.get(index) {
+                Some(lit) => match lit {
+                    &LiteralToken::LiteralLong(_, ref l) => {
+                        write!(builder, " {}", l).unwrap()
+                    },
+                    &LiteralToken::LiteralBool(_, ref b) => {
+                        write!(builder, "{}", b).unwrap();
+                    },
+                    &LiteralToken::LiteralDouble(_, ref d) => {
+                        write!(builder, "{}", d).unwrap();
+                    },
+                    &LiteralToken::LiteralString(_, ref s) => {
+                        write!(builder, " '{}'", s).unwrap()
+                    },
+                    &LiteralToken::LiteralNull(_) => {
+                        builder.push_str(" NULL");
+                    }
+                },
+                None => panic!("")
+            },
 			&ASTNode::SQLAlias{box ref expr, box ref alias} => {
 				writer._write(builder, expr)?;
 				builder.push_str(" AS");
@@ -876,7 +869,7 @@ impl ExprWriter for AnsiSQLWriter {
 	}
 }
 
-impl AnsiSQLWriter {
+impl<'a> AnsiSQLWriter<'a> {
 	fn _write_operator(&self, builder: &mut String, op: &Operator) {
         let op_text = match *op {
             Operator::ADD => "+",
