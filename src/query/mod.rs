@@ -144,6 +144,7 @@ pub enum Token  {
 	Keyword(String),
 	Identifier(String),
 	Literal(LiteralToken),
+	BoundParam(u32),
 	Operator(String),
 	Punctuator(String)
 }
@@ -187,7 +188,7 @@ impl<'a, D: Dialect> Parser<D> for Tokens<'a, D> {
 pub enum InsertMode {
 	INSERT,
 	IGNORE,
-	REPLACE,
+//	REPLACE,
 }
 
 #[derive(Debug, PartialEq)]
@@ -198,6 +199,7 @@ pub enum ASTNode {
 	SQLNested(Box<ASTNode>),
 	SQLUnary{operator: Operator, expr: Box<ASTNode>},
 	SQLLiteral(LiteralExpr),
+	SQLBoundParam(u32),
 	SQLAlias{expr: Box<ASTNode>, alias: Box<ASTNode>},
 	SQLExprList(Vec<ASTNode>),
     SQLOrderBy{expr: Box<ASTNode>, is_asc: bool},

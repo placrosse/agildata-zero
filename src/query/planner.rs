@@ -125,7 +125,7 @@ impl Rex {
             &Rex::RexNested(ref expr) => expr.get_element(),
             &Rex::RelationalExpr(ref rel) => {
                 let tt = rel.tt();
-                if (tt.elements.len() != 1) {
+                if tt.elements.len() != 1 {
                     return Err(ZeroError::EncryptionError {
                         message: format!("Subselects returning > 1 column currently unsupported").into(),
                         code: "1064".into()
@@ -667,7 +667,7 @@ mod tests {
     #[test]
     fn plan_unsupported() {
         let mut sql = String::from("SELECT COALESCE(id, first_name, 'foo') FROM users ");
-        let mut plan = parse_and_plan(sql);
+        let plan = parse_and_plan(sql);
 
 
         match plan {
