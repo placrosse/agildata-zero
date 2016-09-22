@@ -119,7 +119,7 @@ enum HandlerState {
     /// Expecting a COM_STMT_PREPARE response
     StmtPrepareResponse,
     /// Expecting column definitions for column and parameters as part of a COM_STMT_PREPARE response
-    StmtPrepareFieldPacket(Option<u16>, Option<u16>),
+    StmtPrepareFieldPacket(u16, Box<PStmt>, Option<u16>, Option<u16>),
     /// Expecting a COM_STMT_EXECUTE response
     StmtExecuteResponse,
     /// Expecting 1 or more field definitions as part of a COM_QUERY response
@@ -134,13 +134,21 @@ enum HandlerState {
     OkErrResponse,
 }
 
+#[derive(Debug,PartialEq)]
+struct PStmt {
+    param_types: Vec<u8>,
+    column_types: Vec<u8>,
+//    ast: Box<ASTNode>
+}
+
 struct ZeroHandler {
     config: Rc<Config>,
     provider: Rc<MySQLBackedSchemaProvider>,
     state: HandlerState,
     schema: Option<String>, // the current schema
     parsing_mode: ParsingMode,
-    tt: Option<TupleType>
+    tt: Option<TupleType>,
+//    stmt_map: HashMap<u16, Box<PStmt>>,
 }
 
 impl ZeroHandler {
@@ -311,16 +319,25 @@ impl PacketHandler for ZeroHandler {
                 //num_params (2) -- number of params
                 //reserved_1 (1) -- [00] filler
                 //warning_count (2) -- number of warnings
+                let stmt_id     = read_u16_le(&p.bytes[ 1.. 5]);
                 let num_columns = read_u16_le(&p.bytes[ 9..11]);
                 let num_params  = read_u16_le(&p.bytes[11..13]);
-                println!("StmtPrepareResponse: num_columns={}, num_params={}", num_columns, num_params);
+
+                let mut pstmt = PStmt {
+                    param_types: Vec::with_capacity(num_params as usize),
+                    column_types: Vec::with_capacity(num_columns as usize),
+                };
+
+                println!("StmtPrepareResponse: stmt_id={}, num_columns={}, num_params={}", stmt_id, num_columns, num_params);
                 (HandlerState::StmtPrepareFieldPacket(
+                    stmt_id,
+                    Box::new(pstmt),
                     if num_params  > 0 { Some(num_params)  } else { None },
                     if num_columns > 0 { Some(num_columns) } else { None }
                 ), Action::Forward)
             },
-            HandlerState::StmtPrepareFieldPacket(num_params, num_columns) => {
-                println!("StmtPrepareFieldPacket: num_columns={:?}, num_params={:?}", num_columns, num_params);
+            HandlerState::StmtPrepareFieldPacket(stmt_id, ref mut pstmt, num_params, num_columns) => {
+                println!("StmtPrepareFieldPacket: stmt_id={}, num_columns={:?}, num_params={:?}", stmt_id, num_columns, num_params);
 
                 println!("{:?}", &p.bytes);
                 
@@ -347,13 +364,26 @@ impl PacketHandler for ZeroHandler {
 
                 match num_params {
                     Some(n) => (HandlerState::StmtPrepareFieldPacket(
+                        stmt_id,
+                        Box::new(pstmt),
                         if n == 1 { None } else { Some(n-1) }, num_columns), Action::Forward),
                     None => match num_columns {
                         Some(n) => (HandlerState::StmtPrepareFieldPacket(
+                            stmt_id,
+                            Box::new(pstmt),
                             None, if n == 1 { None } else { Some(n-1) }), Action::Forward),
-                        None => (HandlerState::ExpectClientRequest, Action::Forward)
+                        None => {
+
+                            //TODO: store pstmt in map
+
+
+                            (HandlerState::ExpectClientRequest, Action::Forward)
+                        }
                     }
                 }
+
+
+
             },
             HandlerState::StmtExecuteResponse => {
                 print_packet_chars("StmtExecuteResponse", &p.bytes);
