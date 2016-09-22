@@ -1,7 +1,6 @@
 use super::super::ASTNode;
 use super::super::ASTNode::*;
 use super::super::Operator::*;
-use super::super::LiteralExpr::*;
 use super::super::JoinType::*;
 use super::super::UnionType::*;
 use super::super::{Tokenizer, Parser, SQLWriter, Writer, InsertMode};
@@ -29,7 +28,7 @@ fn select_wildcard() {
 
 	println!("{:#?}", parsed);
 
-	let ansi_writer = AnsiSQLWriter{};
+	let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
 	let writer = SQLWriter::new(vec![&ansi_writer]);
 	let rewritten = writer.write(&parsed).unwrap();
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
@@ -49,13 +48,13 @@ fn select_with_nulls() {
 		SQLSelect {
 			expr_list: Box::new(SQLExprList(vec![
 			    SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]},
-			    SQLLiteral(LiteralNull(0))
+			    SQLLiteral(0)
             ])),
 			relation: Some(Box::new(SQLIdentifier{id: String::from("foo"), parts: vec![String::from("foo")]})),
 			selection: Some(Box::new(SQLBinary {
 			    left: Box::new(SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]}),
 			    op: EQ,
-			    right: Box::new(SQLLiteral(LiteralNull(1)))
+			    right: Box::new(SQLLiteral(1))
 			})),
 			order: None,
 			for_update: false
@@ -65,7 +64,7 @@ fn select_with_nulls() {
 
     println!("{:#?}", parsed);
 
-    let ansi_writer = AnsiSQLWriter{};
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
     let writer = SQLWriter::new(vec![&ansi_writer]);
     let rewritten = writer.write(&parsed).unwrap();
     assert_eq!(format_sql(&rewritten), format_sql(&sql));
@@ -94,12 +93,12 @@ fn sqlparser() {
 				SQLExprList(vec![
 					SQLBinary {
 						left:  Box::new(SQLBinary{
-							left: Box::new(SQLLiteral(LiteralLong(0, 1_u64))),
+							left: Box::new(SQLLiteral(0)),
 							op: ADD,
-							right:  Box::new(SQLLiteral(LiteralLong(1, 1_u64)))
+							right:  Box::new(SQLLiteral(1))
 						}),
 						op: ADD,
-						right:  Box::new(SQLLiteral(LiteralLong(2, 1_u64)))
+						right:  Box::new(SQLLiteral(2))
 					},
 					SQLAlias{
 						expr:  Box::new(SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}),
@@ -107,13 +106,13 @@ fn sqlparser() {
 					},
 					SQLNested(
 						 Box::new(SQLBinary {
-							left:  Box::new(SQLLiteral(LiteralLong(3, 3_u64))),
+							left:  Box::new(SQLLiteral(3)),
 							op: MULT,
 							right:  Box::new(SQLNested(
 								 Box::new(SQLBinary{
-									left:  Box::new(SQLLiteral(LiteralLong(4, 1_u64))),
+									left:  Box::new(SQLLiteral(4)),
 									op: ADD,
-									right:  Box::new(SQLLiteral(LiteralLong(5, 2_u64)))
+									right:  Box::new(SQLLiteral(5))
 								})
 							))
 						})
@@ -121,7 +120,7 @@ fn sqlparser() {
 					SQLAlias{
 						expr:  Box::new(SQLUnary{
 							operator: SUB,
-							expr:  Box::new(SQLLiteral(LiteralLong(6, 1_u64)))
+							expr:  Box::new(SQLLiteral(6))
 						}),
 						alias:  Box::new(SQLIdentifier{id: String::from("unary"), parts: vec![String::from("unary")]})
 					},
@@ -172,13 +171,13 @@ fn sqlparser() {
 				left:  Box::new(SQLBinary{
 					left:  Box::new(SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}),
 					op: GT,
-					right:  Box::new(SQLLiteral(LiteralLong(7, 10_u64)))
+					right:  Box::new(SQLLiteral(7))
 				}),
 				op: AND,
 				right:  Box::new(SQLBinary{
 					left:  Box::new(SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]}),
 					op: EQ,
-					right:  Box::new(SQLLiteral(LiteralBool(8, true)))
+					right:  Box::new(SQLLiteral(8))
 				})
 			})),
 			order: Some( Box::new(SQLExprList(
@@ -209,7 +208,7 @@ fn sqlparser() {
 	);
 
 	println!("{:#?}", parsed);
-	let ansi_writer = AnsiSQLWriter{};
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
 	let writer = SQLWriter::new(vec![&ansi_writer]);
 	let rewritten = writer.write(&parsed).unwrap();
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
@@ -263,7 +262,7 @@ fn sql_join() {
 								selection: Some(Box::new(SQLBinary{
 									left: Box::new(SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}),
 									op: GT,
-									right: Box::new(SQLLiteral(LiteralLong(0, 0_u64)))
+									right: Box::new(SQLLiteral(0))
 								})),
 								order: None,
 								for_update: false
@@ -298,7 +297,7 @@ fn sql_join() {
 
 	println!("{:#?}", parsed);
 
-	let ansi_writer = AnsiSQLWriter{};
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
 	let writer = SQLWriter::new(vec![&ansi_writer]);
 	let rewritten = writer.write(&parsed).unwrap();
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
@@ -393,7 +392,7 @@ fn nasty() {
 
 	println!("{:#?}", parsed);
 
-	let ansi_writer = AnsiSQLWriter{};
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
 	let writer = SQLWriter::new(vec![&ansi_writer]);
 	let rewritten = writer.write(&parsed).unwrap();
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
@@ -427,41 +426,41 @@ fn select_comparisons() {
 								left: Box::new(SQLBinary {
 									left: id_boxed("a"),
 									op: GT,
-									right: Box::new(SQLLiteral(LiteralLong(0, 1)))
+									right: Box::new(SQLLiteral(0))
 								}),
 								op: AND,
 								right: Box::new(SQLBinary {
 									left: id_boxed("b"),
 									op: LT,
-									right: Box::new(SQLLiteral(LiteralLong(1, 2)))
+									right: Box::new(SQLLiteral(1))
 								})
 							}),
 							op: AND,
 							right: Box::new(SQLBinary {
 								left: id_boxed("c"),
 								op: NEQ,
-								right: Box::new(SQLLiteral(LiteralLong(2, 3)))
+								right: Box::new(SQLLiteral(2))
 							})
 						}),
 						op: AND,
 						right: Box::new(SQLBinary {
 							left: id_boxed("d"),
 							op: NEQ,
-							right: Box::new(SQLLiteral(LiteralLong(3, 4)))
+							right: Box::new(SQLLiteral(3))
 						})
 					}),
 					op: AND,
 					right: Box::new(SQLBinary {
 						left: id_boxed("e"),
 						op: GTEQ,
-						right: Box::new(SQLLiteral(LiteralLong(4, 5)))
+						right: Box::new(SQLLiteral(4))
 					})
 				}),
 				op: AND,
 				right: Box::new(SQLBinary {
 					left: id_boxed("f"),
 					op: LTEQ,
-					right: Box::new(SQLLiteral(LiteralLong(5, 5)))
+					right: Box::new(SQLLiteral(5))
 				})
 			})),
 			order: None,
@@ -472,7 +471,7 @@ fn select_comparisons() {
 
 	println!("{:#?}", parsed);
 
-	let ansi_writer = AnsiSQLWriter{};
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
 	let writer = SQLWriter::new(vec![&ansi_writer]);
 	let rewritten = writer.write(&parsed).unwrap();
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
@@ -501,8 +500,8 @@ fn insert() {
 			)),
 			values_list: Box::new(SQLExprList(
 				vec![
-					SQLLiteral(LiteralLong(0, 1_u64)),
-					SQLLiteral(LiteralDouble(1, 20.45_f64)),
+					SQLLiteral(0),
+					SQLLiteral(1),
 					SQLBoundParam(0)
 				]
 			))
@@ -512,7 +511,7 @@ fn insert() {
 
 	println!("{:#?}", parsed);
 
-	let ansi_writer = AnsiSQLWriter{};
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
 	let writer = SQLWriter::new(vec![&ansi_writer]);
 	let rewritten = writer.write(&parsed).unwrap();
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
@@ -552,19 +551,19 @@ fn update() {
 					SQLBinary{
 						left: Box::new(SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]}),
 						op: EQ,
-						right: Box::new(SQLLiteral(LiteralString(0, String::from("hello"))))
+						right: Box::new(SQLLiteral(0))
 					},
 					SQLBinary{
 						left: Box::new(SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]}),
 						op: EQ,
-						right: Box::new(SQLLiteral(LiteralLong(1, 12345_u64)))
+						right: Box::new(SQLLiteral(1))
 					}
 				]
 			)),
 			selection: Some(Box::new(SQLBinary{
 				left: Box::new(SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}),
 				op: GT,
-				right : Box::new(SQLLiteral(LiteralLong(2, 10_u64)))
+				right : Box::new(SQLLiteral(2))
 			}))
 		},
 		parsed
@@ -572,7 +571,7 @@ fn update() {
 
 	println!("{:#?}", parsed);
 
-	let ansi_writer = AnsiSQLWriter{};
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
 	let writer = SQLWriter::new(vec![&ansi_writer]);
 	let rewritten = writer.write(&parsed).unwrap();
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
@@ -597,14 +596,14 @@ fn update() {
 								left: Box::new(SQLIdentifier{id: String::from("w_ytd"), 
 										parts: vec![String::from("w_ytd")]}),
 								op: ADD,
-								right: Box::new(SQLLiteral(LiteralDouble(0, 2117.1_f64)))})}]
+								right: Box::new(SQLLiteral(0))})}]
 		)
 	),
 	selection: Some(Box::new(
 			SQLBinary {
 				left: Box::new(SQLIdentifier{id: String::from("w_id"), parts: vec![String::from("w_id")]}),
 				op: EQ,
-				right: Box::new(SQLLiteral(LiteralLong(1,1_u64)))
+				right: Box::new(SQLLiteral(1))
 			})
 	)
 	};
@@ -612,7 +611,7 @@ fn update() {
 	println!("{:#?}", parsed);
 	assert_eq!(upd, parsed);
 
-	let ansi_writer = AnsiSQLWriter{};
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
 	let writer = SQLWriter::new(vec![&ansi_writer]);
 	let rewritten = writer.write(&parsed).unwrap();
 
@@ -636,7 +635,7 @@ fn delete() {
 			selection: Some(Box::new(SQLBinary{
 				left: Box::new(SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}),
 				op: GT,
-				right : Box::new(SQLLiteral(LiteralLong(0, 10_u64)))
+				right : Box::new(SQLLiteral(0))
 			}))
 		},
 		parsed
@@ -644,7 +643,7 @@ fn delete() {
 
 	println!("{:#?}", parsed);
 
-	let ansi_writer = AnsiSQLWriter{};
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
 	let writer = SQLWriter::new(vec![&ansi_writer]);
 	let rewritten = writer.write(&parsed).unwrap();
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
@@ -678,7 +677,7 @@ fn select_function_calls() {
                             }
                         ),
                         op: EQ,
-                        right: Box::new(SQLLiteral(LiteralString(0,String::from("lowercase"))))
+                        right: Box::new(SQLLiteral(0))
                     })
             ),
 			order: None,
@@ -689,7 +688,7 @@ fn select_function_calls() {
 
     println!("{:#?}", parsed);
 
-    let ansi_writer = AnsiSQLWriter{};
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
     let writer = SQLWriter::new(vec![&ansi_writer]);
     let rewritten = writer.write(&parsed).unwrap();
     assert_eq!(format_sql(&rewritten), format_sql(&sql));
@@ -714,7 +713,7 @@ fn select_for_update() {
 			selection: Some(Box::new(SQLBinary {
 			    left: Box::new(SQLIdentifier{id: String::from("id"), parts: vec![String::from("id")]}),
 			    op: EQ,
-			    right: Box::new(SQLLiteral(LiteralLong(0, 1_u64)))
+			    right: Box::new(SQLLiteral(0))
 			})),
 			order: None,
 			for_update: true
@@ -724,7 +723,7 @@ fn select_for_update() {
 
     println!("{:#?}", parsed);
 
-    let ansi_writer = AnsiSQLWriter{};
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
     let writer = SQLWriter::new(vec![&ansi_writer]);
     let rewritten = writer.write(&parsed).unwrap();
     assert_eq!(format_sql(&rewritten), format_sql(&sql));

@@ -17,7 +17,7 @@ pub fn to_hex_string(bytes: &Vec<u8>) -> String {
 }
 
 pub struct LiteralReplacingWriter<'a> {
-    pub literals: &'a HashMap<u32, Vec<u8>>
+    pub encrypted_literals: &'a HashMap<u32, Vec<u8>>
 }
 
 impl<'a> ExprWriter for LiteralReplacingWriter<'a> {
@@ -30,7 +30,7 @@ impl<'a> ExprWriter for LiteralReplacingWriter<'a> {
             &ASTNode::SQLUnary{ref operator, expr: box ASTNode::SQLLiteral(i)} => {
                 // This value was encrypted as a signed value, so do not write the unary...
                 let index = i as u32;
-                if self.literals.contains_key(&index as &u32) {
+                if self.encrypted_literals.contains_key(&index as &u32) {
                   self.optionally_write_literal(&index as &u32, builder)
                 } else {
                   Ok(false)
@@ -43,7 +43,7 @@ impl<'a> ExprWriter for LiteralReplacingWriter<'a> {
 
 impl<'a> LiteralReplacingWriter<'a> {
 	fn optionally_write_literal(&self, index: &u32, builder: &mut String) -> Result<bool, Box<ZeroError>> {
-		match self.literals.get(index) {
+		match self.encrypted_literals.get(index) {
 			Some(value) => {
 				write!(builder, "X'{}'", to_hex_string(value)).unwrap();
 				Ok(true)
@@ -227,14 +227,15 @@ mod tests {
 			sex VARCHAR(50)
 		)");
 
-		let parsed = sql.tokenize(&dialect).unwrap().parse().unwrap();
+        let tokens = sql.tokenize(&dialect).unwrap();
+		let parsed = tokens.parse().unwrap();
 
 		let translator = CreateTranslatingWriter {
 			config: &config,
 			schema: &schema
 		};
         let mysql = MySQLWriter{};
-        let ansi = AnsiSQLWriter{};
+        let ansi = AnsiSQLWriter{literal_tokens: &tokens.literals};
 
 		let writer = SQLWriter::new(vec![&translator, &mysql, &ansi]);
 

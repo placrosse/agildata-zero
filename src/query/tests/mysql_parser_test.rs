@@ -1,6 +1,5 @@
 use super::super::ASTNode;
 use super::super::ASTNode::*;
-use super::super::LiteralExpr::*;
 use super::super::MySQLKeyDef::*;
 use super::super::MySQLDataType::*;
 use super::super::MySQLColumnQualifier::*;
@@ -205,7 +204,7 @@ fn create_numeric() {
 
 	println!("{:#?}", parsed);
 
-	let ansi_writer = AnsiSQLWriter{};
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
 	let mysql_writer = MySQLWriter{};
 	let writer = SQLWriter::new(vec![&mysql_writer, &ansi_writer]);
 	let rewritten = writer.write(&parsed).unwrap();
@@ -293,7 +292,7 @@ fn create_temporal() {
 
 	println!("{:#?}", parsed);
 
-	let ansi_writer = AnsiSQLWriter{};
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
 	let mysql_writer = MySQLWriter{};
 	let writer = SQLWriter::new(vec![&mysql_writer, &ansi_writer]);
 	let rewritten = writer.write(&parsed).unwrap();
@@ -476,9 +475,9 @@ fn create_character() {
 		        MySQLColumnDef {
 		            column: Box::new(SQLIdentifier{id: String::from("z"), parts: vec![String::from("z")]}),
 		            data_type: Box::new(MySQLDataType(Enum {values: Box::new(SQLExprList(vec![
-		                        SQLLiteral(LiteralString(11,String::from("val1"))),
-		                        SQLLiteral(LiteralString(12,String::from("val2"))),
-		                        SQLLiteral(LiteralString(13,String::from("val3")))
+		                        SQLLiteral(11),
+		                        SQLLiteral(12),
+		                        SQLLiteral(13)
 		                    ]
 		                ))
 		            })),
@@ -487,9 +486,9 @@ fn create_character() {
 		        MySQLColumnDef {
 		            column: Box::new(SQLIdentifier{id: String::from("aa"), parts: vec![String::from("aa")]}),
 		            data_type: Box::new(MySQLDataType(Set {values: Box::new(SQLExprList(vec![
-		                        SQLLiteral(LiteralString(14,String::from("val1"))),
-		                        SQLLiteral(LiteralString(15,String::from("val2"))),
-		                        SQLLiteral(LiteralString(16,String::from("val3")))
+		                        SQLLiteral(14),
+		                        SQLLiteral(15),
+		                        SQLLiteral(16)
 		                    ]
 		                ))
 		            })),
@@ -514,7 +513,7 @@ fn create_character() {
 
 	println!("{:#?}", parsed);
 
-	let ansi_writer = AnsiSQLWriter{};
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
 	let mysql_writer = MySQLWriter{};
 	let writer = SQLWriter::new(vec![&mysql_writer, &ansi_writer]);
 	let rewritten = writer.write(&parsed).unwrap();
@@ -571,7 +570,7 @@ fn create_column_qualifiers() {
 		            qualifiers: Some(vec![
 		                    MySQLColumnQualifier(Signed),
 		                    MySQLColumnQualifier(NotNull),
-		                    MySQLColumnQualifier(Default(Box::new(SQLLiteral(LiteralLong(4,123456789)))))
+		                    MySQLColumnQualifier(Default(Box::new(SQLLiteral(4))))
 		                ]
 		            )
 		        },
@@ -581,8 +580,8 @@ fn create_column_qualifiers() {
 		            qualifiers: Some(vec![
 		                    MySQLColumnQualifier(Unsigned),
 		                    MySQLColumnQualifier(Null),
-		                    MySQLColumnQualifier(Default(Box::new(SQLLiteral(LiteralNull(6))))), // TODO should be literal null ?
-							MySQLColumnQualifier(Comment(Box::new(SQLLiteral(LiteralString(7,String::from("Some Comment"))))))
+		                    MySQLColumnQualifier(Default(Box::new(SQLLiteral(6)))),
+							MySQLColumnQualifier(Comment(Box::new(SQLLiteral(7))))
 		                ]
 		            )
 		        },
@@ -604,7 +603,7 @@ fn create_column_qualifiers() {
 
 	println!("{:#?}", parsed);
 
-	let ansi_writer = AnsiSQLWriter{};
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
 	let mysql_writer = MySQLWriter{};
 	let writer = SQLWriter::new(vec![&mysql_writer, &ansi_writer]);
 	let rewritten = writer.write(&parsed).unwrap();
@@ -690,7 +689,7 @@ fn create_tail_keys() {
 
 	println!("{:#?}", parsed);
 
-	let ansi_writer = AnsiSQLWriter{};
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
 	let mysql_writer = MySQLWriter{};
 	let writer = SQLWriter::new(vec![&mysql_writer, &ansi_writer]);
 	let rewritten = writer.write(&parsed).unwrap();
@@ -765,7 +764,7 @@ fn create_tail_constraints() {
 		parsed
 	);
 
-	let ansi_writer = AnsiSQLWriter{};
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
 	let mysql_writer = MySQLWriter{};
 	let writer = SQLWriter::new(vec![&mysql_writer, &ansi_writer]);
 	let rewritten = writer.write(&parsed).unwrap();
@@ -809,14 +808,14 @@ fn create_table_options() {
 			table_options: vec![
 		        ASTNode::MySQLTableOption(super::super::MySQLTableOption::Engine(Box::new(SQLIdentifier{id: String::from("InnoDB"), parts: vec![String::from("InnoDB")]}))),
 		        ASTNode::MySQLTableOption(super::super::MySQLTableOption::Charset(Box::new(SQLIdentifier{id: String::from("utf8"), parts: vec![String::from("utf8")]}))),
-		        ASTNode::MySQLTableOption(super::super::MySQLTableOption::Comment(Box::new(SQLLiteral(LiteralString(1,String::from("Table Comment")))))),
-				ASTNode::MySQLTableOption(super::super::MySQLTableOption::AutoIncrement(Box::new(SQLLiteral(LiteralLong(2,12345_u64)))))
+		        ASTNode::MySQLTableOption(super::super::MySQLTableOption::Comment(Box::new(SQLLiteral(1)))),
+				ASTNode::MySQLTableOption(super::super::MySQLTableOption::AutoIncrement(Box::new(SQLLiteral(2))))
 		    ]
 		},
 		parsed
 	);
 
-	let ansi_writer = AnsiSQLWriter{};
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
 	let mysql_writer = MySQLWriter{};
 	let writer = SQLWriter::new(vec![&mysql_writer, &ansi_writer]);
 	let rewritten = writer.write(&parsed).unwrap();
@@ -846,7 +845,7 @@ fn test_integration() {
 
 	println!("{:#?}", parsed);
 
-	let ansi_writer = AnsiSQLWriter{};
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
 	let mysql_writer = MySQLWriter{};
 	let writer = SQLWriter::new(vec![&mysql_writer, &ansi_writer]);
 	let rewritten = writer.write(&parsed).unwrap();

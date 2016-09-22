@@ -630,7 +630,7 @@ impl ZeroHandler {
                     &None => {}
                 }
 
-                let lit_writer = LiteralReplacingWriter { literals: &encrypt_vis.get_value_map() };
+                let lit_writer = LiteralReplacingWriter { encrypted_literals: &encrypt_vis.get_value_map() };
                 let s = match self.schema {
                     Some(ref s) => s.clone(),
                     None => String::from("") // TODO

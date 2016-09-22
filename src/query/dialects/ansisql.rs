@@ -194,8 +194,14 @@ impl Dialect for AnsiSQLDialect {
                             code: "1064".into()
                         }.into())
 				},
-				&Token::BoundParam(ref i) => Ok(Some(ASTNode::SQLBoundParam(*i))),
-				&Token::Literal(ref index) => Ok(Some(ASTNode::SQLLiteral(index.clone()))),
+				&Token::BoundParam(ref i) => {
+                    tokens.next();
+                    Ok(Some(ASTNode::SQLBoundParam(*i)))
+                },
+				&Token::Literal(ref index) => {
+                    tokens.next();
+                    Ok(Some(ASTNode::SQLLiteral(index.clone())))
+                },
 				&Token::Identifier(_) => {
                     let id = self.parse_identifier(tokens)?;
                     if tokens.consume_punctuator(&"(") {

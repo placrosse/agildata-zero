@@ -448,7 +448,7 @@ mod tests {
 	use std::collections::HashMap;
 	use query::dialects::ansisql::*;
 	use query::dialects::mysqlsql::*;
-	use query::{Tokenizer, Parser, SQLWriter, Writer, ASTNode};
+	use query::{Tokenizer, Parser, SQLWriter, Writer, ASTNode, LiteralToken};
 	use query::planner::{Planner, RelVisitor, Rel, SchemaProvider, TableMeta, ColumnMeta};
 	use encrypt::{EncryptionType, NativeType};
 	use std::rc::Rc;
@@ -459,18 +459,20 @@ mod tests {
 	fn test_rel_visitor() {
         let sql = String::from("SELECT id, first_name, last_name, ssn, age, sex FROM users WHERE first_name = 'Frodo'");
 		let res = parse_and_plan(sql).unwrap();
-		let parsed = res.0;
-		let plan = res.1;
+        let literals = res.0;
+        let parsed = res.1;
+        let plan = res.2;
 
 		let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
 		let mut encrypt_vis = EncryptVisitor {
-			valuemap: value_map
+			valuemap: value_map,
+            literal_tokens: &literals
 		};
 
 		encrypt_vis.visit_rel(&plan).unwrap();
 
-		let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
-		let ansi_writer = AnsiSQLWriter{};
+		let lit_writer = LiteralReplacingWriter{ encrypted_literals: &encrypt_vis.get_value_map()};
+        let ansi_writer = AnsiSQLWriter{literal_tokens: &literals};
 
 		let writer = SQLWriter::new(vec![&lit_writer, &ansi_writer]);
 
@@ -486,18 +488,20 @@ mod tests {
 
 		let sql = String::from("UPDATE users SET id = id + 100, first_name = 'NewName' WHERE id = 1 AND first_name = 'Janis'");
 		let res = parse_and_plan(sql).unwrap();
-		let parsed = res.0;
-		let plan = res.1;
+        let literals = res.0;
+		let parsed = res.1;
+		let plan = res.2;
 
         let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
 		let mut encrypt_vis = EncryptVisitor {
-			valuemap: value_map
+			valuemap: value_map,
+            literal_tokens: &literals
 		};
 
 		encrypt_vis.visit_rel(&plan).unwrap();
 
-		let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
-		let ansi_writer = AnsiSQLWriter{};
+		let lit_writer = LiteralReplacingWriter{ encrypted_literals: &encrypt_vis.get_value_map()};
+        let ansi_writer = AnsiSQLWriter{literal_tokens: &literals};
 
 		let writer = SQLWriter::new(vec![&lit_writer, &ansi_writer]);
 
@@ -514,18 +518,20 @@ mod tests {
 
 		let sql = String::from("INSERT INTO users (id, first_name, last_name, ssn, age, sex) VALUES(1, 'Janis', 'Joplin', '123456789', 27, 'F')");
 		let res = parse_and_plan(sql).unwrap();
-		let parsed = res.0;
-		let plan = res.1;
+        let literals = res.0;
+        let parsed = res.1;
+        let plan = res.2;
 
         let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
 		let mut encrypt_vis = EncryptVisitor {
-			valuemap: value_map
+			valuemap: value_map,
+            literal_tokens: &literals
 		};
 
 		encrypt_vis.visit_rel(&plan).unwrap();
 
-		let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
-		let ansi_writer = AnsiSQLWriter{};
+		let lit_writer = LiteralReplacingWriter{ encrypted_literals: &encrypt_vis.get_value_map()};
+        let ansi_writer = AnsiSQLWriter{literal_tokens: &literals};
 
 		let writer = SQLWriter::new(vec![&lit_writer, &ansi_writer]);
 
@@ -543,18 +549,20 @@ mod tests {
          FROM users AS l
          JOIN user_purchases AS r ON l.id = r.user_id");
 		let res = parse_and_plan(sql).unwrap();
- 		let parsed = res.0;
- 		let plan = res.1;
+        let literals = res.0;
+        let parsed = res.1;
+        let plan = res.2;
 
         let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
 		let mut encrypt_vis = EncryptVisitor {
-			valuemap: value_map
+			valuemap: value_map,
+            literal_tokens: &literals
 		};
 
 		encrypt_vis.visit_rel(&plan).unwrap();
 
-		let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
-		let ansi_writer = AnsiSQLWriter{};
+		let lit_writer = LiteralReplacingWriter{ encrypted_literals: &encrypt_vis.get_value_map()};
+        let ansi_writer = AnsiSQLWriter{literal_tokens: &literals};
 
 		let writer = SQLWriter::new(vec![&lit_writer, &ansi_writer]);
 
@@ -569,18 +577,20 @@ mod tests {
     fn test_relvis_func_calls() {
         let sql = String::from("SELECT COUNT(id) FROM users");
         let res = parse_and_plan(sql).unwrap();
-        let parsed = res.0;
-        let plan = res.1;
+        let literals = res.0;
+        let parsed = res.1;
+        let plan = res.2;
 
         let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
         let mut encrypt_vis = EncryptVisitor {
-            valuemap: value_map
+            valuemap: value_map,
+            literal_tokens: &literals
         };
 
         encrypt_vis.visit_rel(&plan).unwrap();
 
-        let lit_writer = LiteralReplacingWriter{literals: &encrypt_vis.get_value_map()};
-        let ansi_writer = AnsiSQLWriter{};
+        let lit_writer = LiteralReplacingWriter{ encrypted_literals: &encrypt_vis.get_value_map()};
+        let ansi_writer = AnsiSQLWriter{literal_tokens: &literals};
 
         let writer = SQLWriter::new(vec![&lit_writer, &ansi_writer]);
 
@@ -598,11 +608,15 @@ mod tests {
 		let mut sql = String::from("SELECT l.id, r.id, l.first_name, r.user_id
 		 FROM users AS l
 		 JOIN user_purchases AS r ON l.id = r.item_code");
-		let mut plan = parse_and_plan(sql).unwrap().1;
+        let res = parse_and_plan(sql).unwrap();
+        let literals = res.0;
+        let parsed = res.1;
+        let mut plan = res.2;
 
         let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
 		let mut encrypt_vis = EncryptVisitor {
-			valuemap: value_map
+			valuemap: value_map,
+            literal_tokens: &literals
 		};
 
         assert_eq!(encrypt_vis.visit_rel(&plan).err().unwrap().to_string(), String::from("Unsupported operation:  l.id [NA, U64] EQ r.item_code [AES, U64]"));
@@ -611,7 +625,7 @@ mod tests {
 		sql = String::from("SELECT l.id, r.id, l.first_name, r.user_id
 		 FROM users AS l
 		 JOIN user_purchases AS r ON l.id > r.user_id");
-		plan = parse_and_plan(sql).unwrap().1;
+		plan = parse_and_plan(sql).unwrap().2;
 
 		assert_eq!(encrypt_vis.visit_rel(&plan).is_ok(), true);
 
@@ -619,15 +633,15 @@ mod tests {
 		sql = String::from("SELECT l.id, r.id, l.first_name, r.user_id
 		 FROM users AS l
 		 JOIN user_purchases AS r ON l.age > r.item_code");
-		plan = parse_and_plan(sql).unwrap().1;
+		plan = parse_and_plan(sql).unwrap().2;
 		assert_eq!(encrypt_vis.visit_rel(&plan).err().unwrap().to_string(), String::from("Unsupported operation:  l.age [AES, U64] GT r.item_code [AES, U64]"));
 
         sql = String::from("SELECT id FROM users WHERE id = (SELECT first_name FROM users)");
-        plan = parse_and_plan(sql).unwrap().1;
+        plan = parse_and_plan(sql).unwrap().2;
         assert_eq!(encrypt_vis.visit_rel(&plan).err().unwrap().to_string(), String::from("Unsupported operation:  users.id [NA, U64] EQ users.first_name [AES, Varchar(50)]"));
 
         sql = String::from("SELECT id FROM users WHERE id = (SELECT id, first_name FROM users)");
-        plan = parse_and_plan(sql).unwrap().1;
+        plan = parse_and_plan(sql).unwrap().2;
         assert_eq!(encrypt_vis.visit_rel(&plan).err().unwrap().to_string(), String::from("Subselects returning > 1 column currently unsupported"));
 
     }
@@ -638,11 +652,14 @@ mod tests {
         let sql = String::from("SELECT id FROM users WHERE first_name = (SELECT first_name FROM users)
             AND age = (SELECT age FROM users) AND id = (SELECT id FROM users)");
         let res = parse_and_plan(sql).unwrap();
-        let plan = res.1;
+        let literals = res.0;
+        let parsed = res.1;
+        let plan = res.2;
 
         let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
         let mut encrypt_vis = EncryptVisitor {
-            valuemap: value_map
+            valuemap: value_map,
+            literal_tokens: &literals
         };
 
         encrypt_vis.visit_rel(&plan).unwrap();
@@ -654,11 +671,14 @@ mod tests {
 
         let sql = String::from("SELECT id FROM users WHERE id = NULL AND first_name = NULL");
         let res = parse_and_plan(sql).unwrap();
-        let plan = res.1;
+        let literals = res.0;
+        let parsed = res.1;
+        let plan = res.2;
 
         let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
         let mut encrypt_vis = EncryptVisitor {
-            valuemap: value_map
+            valuemap: value_map,
+            literal_tokens: &literals
         };
 
         encrypt_vis.visit_rel(&plan).unwrap();
@@ -669,29 +689,33 @@ mod tests {
 
         let sql = String::from("INSERT INTO users  (id, first_name, last_name, ssn, age, sex) VALUES(NULL, null, null, NULL, null, NULL)");
         let res = parse_and_plan(sql).unwrap();
-        let plan = res.1;
+        let literals = res.0;
+        let parsed = res.1;
+        let plan = res.2;
 
         let value_map: HashMap<u32, Vec<u8>> = HashMap::new();
         let mut encrypt_vis = EncryptVisitor {
-            valuemap: value_map
+            valuemap: value_map,
+            literal_tokens: &literals
         };
 
         encrypt_vis.visit_rel(&plan).unwrap();
     }
 
-	fn parse_and_plan(sql: String) -> Result<(ASTNode, Rel), Box<ZeroError>> {
+	fn parse_and_plan(sql: String) -> Result<(Vec<LiteralToken>, ASTNode, Rel), Box<ZeroError>> {
 		let provider = DummyProvider{};
 
 		let ansi = AnsiSQLDialect::new();
 		let dialect = MySQLDialect::new(&ansi);
 
-		let parsed = sql.tokenize(&dialect)?.parse()?;
+        let tokens = sql.tokenize(&dialect)?;
+		let parsed = tokens.parse()?;
 
 		let s = String::from("zero");
 		let default_schema = Some(&s);
 		let planner = Planner::new(default_schema, Rc::new(provider));
 		let plan = planner.sql_to_rel(&parsed)?.unwrap();
-		Ok((parsed, plan))
+		Ok((tokens.literals, parsed, plan))
 
 	}
 
