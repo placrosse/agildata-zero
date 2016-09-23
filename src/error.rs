@@ -5,10 +5,10 @@ use std::result;
 use std::sync;
 use std::error::Error;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ZeroError {
 
-    IoError(io::Error),
+//    IoError(io::Error),
     EncryptionError {message: String, code: String},
     DecryptionError {message: String, code: String},
     ParseError{message: String, code: String},
@@ -28,7 +28,7 @@ impl ZeroError{
 impl Error for ZeroError {
     fn description(&self) -> &str {
         match *self {
-            ZeroError::IoError(_) => "I/O Error",
+//            ZeroError::IoError(_) => "I/O Error",
             ZeroError::EncryptionError{..} => "Encryption error",
             ZeroError::DecryptionError{..} => "Decryption error",
             ZeroError::ParseError{..} => "Parse error",
@@ -39,7 +39,7 @@ impl Error for ZeroError {
 
     fn cause(&self) -> Option<&Error> {
         match *self {
-            ZeroError::IoError(ref err) => Some(err),
+//            ZeroError::IoError(ref err) => Some(err),
             _ => None
         }
     }
@@ -54,7 +54,7 @@ impl fmt::Display for ZeroError {
             ZeroError::DecryptionError{ref message, ref code} =>  {write!(f, "{}", message)},
             ZeroError::ParseError{ref message, ref code}  =>  {write!(f, "{}", message)},
             ZeroError::SchemaError{ref message, ref code}  =>  {write!(f, "{}", message)},
-            ZeroError::IoError(ref err) => write!(f, "IOError {{ {} }}", err),
+//            ZeroError::IoError(ref err) => write!(f, "IOError {{ {} }}", err),
         }
     }
 }

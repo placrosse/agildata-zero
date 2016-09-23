@@ -26,6 +26,7 @@ use super::schema_provider::MySQLBackedSchemaProvider;
 use super::writers::*;
 
 use super::statement_cache::*;
+use super::physical_planner::*;
 
 use query::{Tokenizer, Parser, Writer, SQLWriter, ASTNode, LiteralToken};
 use query::dialects::mysqlsql::*;
@@ -550,8 +551,113 @@ impl ZeroHandler {
         Action::Forward
     }
 
-    fn get_physical_plan(&mut self, query: String) -> Result<PhysPlanResult, Box<ZeroError>> {
-        panic!("NOT IMPLEMENTED")
+    fn get_physical_plan(&mut self, query: String) -> PhysPlanResult {
+        let ansi = AnsiSQLDialect::new();
+        let dialect = MySQLDialect::new(&ansi);
+
+        match query.tokenize(&dialect) {
+            Ok(tokens) => {
+                match self.stmt_cache.get(&tokens.tokens) {
+                    // We've cached this before, return cached plan
+                    Some(p) => PhysPlanResult{literals: tokens.literals, physical_plan: p},
+                    // This is new sql
+                    None => {
+                        match tokens.parse() {
+                            Ok(parsed) => {
+                                // Intercept use and set connection schema
+                                match parsed {
+                                    ASTNode::MySQLUse(box ASTNode::SQLIdentifier{id: ref schema, ..}) => {
+                                        self.schema = Some(schema.clone())
+                                    },
+                                    _ => {}
+                                };
+
+                                // create the logical plan
+                                let s = match self.schema {
+                                    Some(ref s) => Some(s),
+                                    None => None
+                                };
+                                let planner = Planner::new(s, self.provider.clone());
+                                match planner.sql_to_rel(&parsed) {
+                                    // If plan OK, continue
+                                    Ok(logical_plan) => {
+                                        let phys_planner = PhysicalPlanner{};
+                                        let physical_plan = phys_planner.plan(logical_plan.unwrap(), parsed); // TODO get rid of planner return option
+
+                                        PhysPlanResult{
+                                            literals: tokens.literals,
+                                            physical_plan: self.stmt_cache.put(tokens.tokens, physical_plan)
+                                        }
+                                    },
+                                    // If error, store a failure plan, return error
+                                    Err(e) => {
+                                        let err = Box::new(ZeroError::ParseError {
+                                            message: format!("Failed to plan query {}, due to {:?}", query, e),
+                                            code: "1064".into()
+                                        });
+
+                                        self.stmt_cache.put(tokens.tokens, PhysicalPlan::Error(err.clone()));
+                                        PhysPlanResult{literals: vec![], physical_plan: Rc::new(PhysicalPlan::Error(err))}
+
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                debug!("Failed to parse with: {}", e);
+                                match self.parsing_mode {
+
+                                    // If strict mode...
+                                    ParsingMode::Strict => {
+                                        let q = query.to_uppercase();
+
+                                        // Allow passthrough for inconsequential SQL
+                                        if q.starts_with("SET") || q.starts_with("SHOW") || q.starts_with("BEGIN")
+                                            || q.starts_with("COMMIT") || q.starts_with("ROLLBACK") {
+                                            debug!("In Strict mode, allowing use of SET and SHOW");
+                                            PhysPlanResult{literals: vec![], physical_plan: Rc::new(PhysicalPlan::Passthrough)}
+                                        } else {
+                                            // Otherwise, cache this plan-to-fail, return error
+                                            error!("FAILED TO PARSE QUERY {}", query);
+                                            let err = Box::new(ZeroError::ParseError {
+                                                message: format!("Failed to parse query {}, due to {:?}", query, e),
+                                                code: "1064".into()
+                                            });
+
+                                            self.stmt_cache.put(tokens.tokens, PhysicalPlan::Error(err.clone()));
+
+                                            PhysPlanResult{literals: vec![], physical_plan: Rc::new(PhysicalPlan::Error(err))}
+                                        }
+                                    },
+                                    // If permissive, .. passthrough
+                                    ParsingMode::Permissive => {
+                                        debug!("In Passive mode, falling through to MySQL");
+                                        PhysPlanResult{literals: vec![], physical_plan: Rc::new(PhysicalPlan::Passthrough)}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+            },
+            Err(e) => {
+                debug!("Failed to tokenize with: {}", e);
+                match self.parsing_mode {
+                    ParsingMode::Strict => {
+                        let err = Box::new(ZeroError::ParseError {
+                            message: format!("Failed to tokenize with: {}", e),
+                            code: "1064".into()
+                        });
+                        PhysPlanResult{literals: vec![], physical_plan: Rc::new(PhysicalPlan::Error(err))}
+                    },
+                    ParsingMode::Permissive => {
+                        debug!("In Passive mode, falling through to MySQL");
+                        PhysPlanResult{literals: vec![], physical_plan: Rc::new(PhysicalPlan::Passthrough)}
+                    }
+                }
+            }
+        }
+
     }
 
     fn parse_query(&mut self, query: String) -> Result<(Option<Vec<LiteralToken>>, Option<ASTNode>), Box<ZeroError>> {
