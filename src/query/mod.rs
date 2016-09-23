@@ -67,17 +67,6 @@ pub struct Tokens<'a, D: 'a + Dialect> {
     pub literals: Vec<LiteralToken>,
 }
 
-impl<'a, D: 'a + Dialect> Hash for Tokens<'a, D> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.tokens.hash(state);
-    }
-}
-
-pub fn get_token_hash<T: Hash>(t: &T) -> u64 {
-    let mut s = SipHasher::new();
-    t.hash(&mut s);
-    s.finish()
-}
 
 impl<'a, D: 'a + Dialect> Tokens<'a, D> {
 	pub fn new(dialect: &'a D, tokens: Vec<Token>, literals: Vec<LiteralToken>) -> Self {
@@ -180,7 +169,7 @@ impl<'a, D: 'a + Dialect> Tokens<'a, D> {
     }
 }
 
-#[derive(Debug,PartialEq,Clone, Hash)]
+#[derive(Debug,PartialEq, Eq, Clone, Hash)]
 pub enum Token  {
 	Whitespace,
 	Keyword(String),

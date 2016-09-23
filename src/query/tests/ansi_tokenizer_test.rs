@@ -55,7 +55,5 @@ fn complex_tokenize() {
 		],
         tokens.tokens
     );
-
-    println!("TOKEN HASH {}", get_token_hash(&tokens))
-
+    
 }

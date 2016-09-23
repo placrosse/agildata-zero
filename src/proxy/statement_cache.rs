@@ -2,6 +2,7 @@ use std::sync::Mutex;
 use std::rc::Rc;
 use std::collections::HashMap;
 use encrypt::{NativeType, EncryptionType};
+use query::Token;
 
 #[derive(Debug, PartialEq)]
 pub enum ValueType {
@@ -30,7 +31,7 @@ pub enum PhysicalPlan {
 }
 
 struct StatementCache {
-    cache: Mutex<HashMap<u64, Rc<PhysicalPlan>>>
+    cache: Mutex<HashMap<Vec<Token>, Rc<PhysicalPlan>>>
 }
 
 impl StatementCache {
@@ -40,7 +41,7 @@ impl StatementCache {
         }
     }
 
-    pub fn get(&self, key: &u64) -> Option<Rc<PhysicalPlan>> {
+    pub fn get(&self, key: &Vec<Token>) -> Option<Rc<PhysicalPlan>> {
         let data = self.cache.lock().unwrap();
 
         match data.get(key) {
@@ -49,7 +50,7 @@ impl StatementCache {
         }
     }
 
-    pub fn put(&self, key: u64, ep: PhysicalPlan) {
+    pub fn put(&self, key: Vec<Token>, ep: PhysicalPlan) {
         let mut data = self.cache.lock().unwrap();
 
         data.insert(key, Rc::new(ep));
