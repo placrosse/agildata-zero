@@ -12,7 +12,7 @@ pub enum ValueType {
     COLUMN
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct EncryptionPlan {
     pub data_type: NativeType,
     pub encryption: EncryptionType,

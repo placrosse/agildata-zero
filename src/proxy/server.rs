@@ -153,7 +153,7 @@ struct ZeroHandler {
     state: HandlerState,
     schema: Option<String>, // the current schema
     parsing_mode: ParsingMode,
-    tt: Option<TupleType>,
+    tt: Option<Vec<EncryptionPlan>>,
     stmt_map: HashMap<u16, Box<PStmt>>,
     stmt_cache: Rc<StatementCache>
 }
@@ -301,7 +301,7 @@ impl PacketHandler for ZeroHandler {
                                 // expect 0 or more result rows
                                 // expect result set terminator
 
-                                (Some(HandlerState::ComQueryFieldPacket(AtomicU32::new(tt.elements.len() as u32))), Action::Forward)
+                                (Some(HandlerState::ComQueryFieldPacket(AtomicU32::new(tt.len() as u32))), Action::Forward)
                             },
                             None => {
                                 (Some(HandlerState::ForwardAll), Action::Forward)
@@ -499,6 +499,8 @@ impl ZeroHandler {
         debug!("COM_QUERY : {}", parse_string(&p.bytes[5..]));
         self.state = HandlerState::ComQueryResponse;
 
+        self.tt = None;
+
         let physical_plan = self.get_physical_plan(parse_string(&p.bytes[5..]));
 
         match physical_plan.physical_plan.as_ref() {
@@ -516,13 +518,7 @@ impl ZeroHandler {
                         packet.push(0x03); // COM_QUERY request packet type
                         packet.extend_from_slice(slice);
 
-                        // TODO
-//                        match plan {
-//                            None => {self.tt = None;},
-//                            Some(p) => {
-//                                self.tt = Some(p.tt().clone()); //TODO: don't clone
-//                            }
-//                        }
+                        self.tt = Some(p.projection.clone());
 
                         Action::Mutate(Packet { bytes: packet })
                     },
@@ -699,45 +695,45 @@ impl ZeroHandler {
                 let mut r = MySQLPacketParser::new(&p.bytes);
                 let mut wtr: Vec<u8> = vec![];
 
-                for i in 0..tt.elements.len() {
-                    debug!("decrypt element {} : {:?}", i, &tt.elements[i]);
+                for i in 0..tt.len() {
+                    debug!("decrypt element {} : {:?}", i, &tt[i]);
 
-                    let value = match &tt.elements[i].encryption {
+                    let value = match &tt[i].encryption {
                         &EncryptionType::NA => r.read_lenenc_string(),
-                        encryption @ _ => match &tt.elements[i].data_type {
+                        encryption @ _ => match &tt[i].data_type {
                             &NativeType::U64 => {
-                                let res = try!(u64::decrypt(&r.read_bytes().unwrap(), &encryption, &tt.elements[i].key));
+                                let res = try!(u64::decrypt(&r.read_bytes().unwrap(), &encryption, &tt[i].key.unwrap()));
                                 Some(format!("{}", res))
                             },
                             &NativeType::I64 => {
-                                let res = try!(i64::decrypt(&r.read_bytes().unwrap(), &encryption, &tt.elements[i].key));
+                                let res = try!(i64::decrypt(&r.read_bytes().unwrap(), &encryption, &tt[i].key.unwrap()));
                                 Some(format!("{}", res))
                             },
                             &NativeType::Varchar(_) | &NativeType::Char(_) => { // TODO enforce length
-                                let res = try!(String::decrypt(&r.read_bytes().unwrap(), &encryption, &tt.elements[i].key));
+                                let res = try!(String::decrypt(&r.read_bytes().unwrap(), &encryption, &tt[i].key.unwrap()));
                                 Some(res)
                             },
                             &NativeType::BOOL => {
                                 debug!("try decrypt bool");
-                                let res = bool::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt.elements[i].key)?;
+                                let res = bool::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt[i].key.unwrap())?;
                                 debug!("FINISH decrypt bool");
                                 Some(format!("{}", res))
                             },
                             &NativeType::D128 => {
-                                let res = d128::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt.elements[i].key)?;
+                                let res = d128::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt[i].key.unwrap())?;
                                 Some(format!("{}", res))
                             },
                             &NativeType::F64 => {
-                                let res = f64::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt.elements[i].key)?;
+                                let res = f64::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt[i].key.unwrap())?;
                                 Some(format!("{}", res))
                             },
                             &NativeType::DATE => {
 
-                                let res = DateTime::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt.elements[i].key)?;
+                                let res = DateTime::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt[i].key.unwrap())?;
                                 Some(res.date().format("%Y-%m-%d").to_string())
                             },
                             &NativeType::DATETIME(ref fsp) => {
-                                let res = DateTime::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt.elements[i].key)?;
+                                let res = DateTime::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt[i].key.unwrap())?;
                                 let fmt = match fsp {
                                     &0 => "%Y-%m-%d %H:%M:%S",
                                     &1 => "%Y-%m-%d %H:%M:%S%.1f",
@@ -747,8 +743,7 @@ impl ZeroHandler {
                                     &5 => "%Y-%m-%d %H:%M:%S%.5f",
                                     &6 => "%Y-%m-%d %H:%M:%S%.6f",
                                     _ => return Err(ZeroError::EncryptionError {
-                                        message: format!("Invalid fractional second precision {}, column: {}.{}",
-                                                         fsp, &tt.elements[i].relation, &tt.elements[i].name).into(),
+                                        message: format!("Invalid fractional second precision {}", fsp).into(),
                                         code: "1064".into()
                                     }.into())
                                 };
