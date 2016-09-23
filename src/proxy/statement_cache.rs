@@ -18,10 +18,15 @@ pub struct EncryptionPlan {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct PhysicalPlan {
+pub struct PPlan {
     literals: Vec<EncryptionPlan>,
     params: Vec<EncryptionPlan>,
     result: Vec<EncryptionPlan>
+}
+
+pub enum PhysicalPlan {
+    Plan(PPlan),
+    Error{message: String, code: String}
 }
 
 struct StatementCache {
