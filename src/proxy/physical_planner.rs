@@ -1,4 +1,4 @@
-use query::planner::Rel;
+use query::planner::{Rel, Rex, TupleType, Element, HasTupleType};
 use encrypt::{NativeType, EncryptionType};
 use query::{Token, ASTNode, LiteralToken};
 use error::ZeroError;
@@ -74,10 +74,96 @@ impl PhysicalPlanner {
     }
 
     fn plan_rel(&self, rel: &Rel, builder: &mut PhysicalPlanBuilder) -> Result<(), Box<ZeroError>> {
-        panic!("NOT IMPLEMENTED")
+        match *rel {
+            Rel::Projection{box ref project, box ref input, ref tt} => {
+                self.plan_rex(project, builder, tt)?;
+                self.plan_rel(input, builder)?;
+            },
+            Rel::Selection{box ref expr, box ref input} => {
+                self.plan_rex(expr, builder, input.tt())?;
+                self.plan_rel(input, builder)?;
+            },
+            Rel::TableScan{..} => {},
+            Rel::Join{box ref left, box ref right, ref on_expr, ref tt, ..} => {
+                self.plan_rel(left, builder)?;
+                self.plan_rel(right, builder)?;
+                match on_expr {
+                    &Some(box ref o) => self.plan_rex(o, builder, tt)?,
+                    &None => {}
+                }
+            },
+            Rel::AliasedRel{box ref input, ..} => self.plan_rel(input, builder)?,
+            Rel::Dual{..} => {},
+            Rel::Update{ref table, box ref set_stmts, ref selection, ref tt} => {
+                match set_stmts {
+                    &Rex::RexExprList(ref list) => {
+                        for e in list.iter() {
+                            self.plan_rex(e, builder, tt);
+                        }
+                    },
+                    _ => {}
+                }
+                match selection {
+                    &Some(box ref s) => self.plan_rex(s, builder, tt)?,
+                    &None => {}
+                }
+            },
+            Rel::Delete{ref table, ref selection, ref tt} => {
+                match selection {
+                    &Some(box ref s) => self.plan_rex(s, builder, tt)?,
+                    &None => {}
+                }
+            },
+            Rel::Insert{ref table, box ref columns, box ref values, ..} => {
+                panic!("Unsupported INSERT")
+//                match (columns, values) {
+//                    (&Rex::RexExprList(ref c_list), &Rex::RexExprList(ref v_list)) => {
+//                        for (index, v) in v_list.iter().enumerate() {
+//                            match v {
+//                                &Rex::Literal(ref i) => {
+//                                    if let Rex::Identifier{ref id, ref el} = c_list[index] {
+//                                        if el.encryption != EncryptionType::NA {
+//                                            self.encrypt_literal(i, el, None)?;
+//                                        }
+//
+//                                    } else {
+//                                        return Err(ZeroError::EncryptionError{
+//                                            message: format!("Expected identifier at column list index {}, received {:?}", index, c_list[index]).into(),
+//                                            code: "1064".into()
+//                                        }.into())
+//                                    }
+//                                },
+//                                // TODO swap this logic out with some evaluate()
+//                                &Rex::RexUnary{ref operator, rex: box Rex::Literal(ref i)} => {
+//                                    if let Rex::Identifier{ref id, ref el} = c_list[index] {
+//                                        if el.encryption != EncryptionType::NA {
+//                                            self.encrypt_literal(i, el, Some(operator))?;
+//                                        }
+//
+//                                    } else {
+//                                        return Err(ZeroError::EncryptionError{
+//                                            message: format!("Expected identifier at column list index {}, received {:?}", index, c_list[index]).into(),
+//                                            code: "1064".into()
+//                                        }.into())
+//                                    }
+//                                },
+//                                _ => {}
+//                            }
+//                        }
+//                    },
+//                    _ => return Err(ZeroError::EncryptionError{
+//                        message: format!("Unsupported INSERT syntax").into(),
+//                        code: "1064".into()
+//                    }.into())
+//                }
+            }
+            //_ => return Err(format!("Unsupported rel {:?}", rel))
+        }
+
+        Ok(())
     }
 
-    fn plan_rex(&self, rel: &Rel, builder: &mut PhysicalPlanBuilder) -> Result<(), Box<ZeroError>>  {
+    fn plan_rex(&self, rel: &Rex, builder: &mut PhysicalPlanBuilder, tt: &TupleType) -> Result<(), Box<ZeroError>>  {
         panic!("NOT IMPLEMENTED")
     }
 }
