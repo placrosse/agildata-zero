@@ -50,7 +50,10 @@ pub struct Element {
 pub enum Rex {
     //Alias { name: String, expr: Box<Rex> },
     Identifier { id: Vec<String>, el: Element },
+    /// literal value with index
     Literal(usize),
+    /// bound parameter with index
+    BoundParam(usize),
     BinaryExpr{left: Box<Rex>, op: Operator, right: Box<Rex>},
     RelationalExpr(Rel),
     RexExprList(Vec<Rex>),

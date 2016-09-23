@@ -14,7 +14,8 @@ pub enum ValueType {
 pub struct EncryptionPlan {
     data_type: NativeType,
     encryption: EncryptionType,
-    value_type: ValueType
+    key: [u8; 32]
+//    value_type: ValueType
 }
 
 #[derive(Debug, PartialEq)]
@@ -58,6 +59,14 @@ impl PhysicalPlanBuilder {
             }
         )
     }
+
+    fn push_literal(&mut self, e: EncryptionPlan) {
+        self.literals.push(e);
+    }
+
+    fn push_param(&mut self, e: EncryptionPlan) {
+        self.params.push(e);
+    }
 }
 
 pub struct PhysicalPlanner {}
@@ -75,16 +84,16 @@ impl PhysicalPlanner {
 
     fn plan_rel(&self, rel: &Rel, builder: &mut PhysicalPlanBuilder) -> Result<(), Box<ZeroError>> {
         match *rel {
-            Rel::Projection{box ref project, box ref input, ref tt} => {
+            Rel::Projection { box ref project, box ref input, ref tt } => {
                 self.plan_rex(project, builder, tt)?;
                 self.plan_rel(input, builder)?;
             },
-            Rel::Selection{box ref expr, box ref input} => {
+            Rel::Selection { box ref expr, box ref input } => {
                 self.plan_rex(expr, builder, input.tt())?;
                 self.plan_rel(input, builder)?;
             },
-            Rel::TableScan{..} => {},
-            Rel::Join{box ref left, box ref right, ref on_expr, ref tt, ..} => {
+            Rel::TableScan { .. } => {},
+            Rel::Join { box ref left, box ref right, ref on_expr, ref tt, .. } => {
                 self.plan_rel(left, builder)?;
                 self.plan_rel(right, builder)?;
                 match on_expr {
@@ -92,9 +101,9 @@ impl PhysicalPlanner {
                     &None => {}
                 }
             },
-            Rel::AliasedRel{box ref input, ..} => self.plan_rel(input, builder)?,
-            Rel::Dual{..} => {},
-            Rel::Update{ref table, box ref set_stmts, ref selection, ref tt} => {
+            Rel::AliasedRel { box ref input, .. } => self.plan_rel(input, builder)?,
+            Rel::Dual { .. } => {},
+            Rel::Update { ref table, box ref set_stmts, ref selection, ref tt } => {
                 match set_stmts {
                     &Rex::RexExprList(ref list) => {
                         for e in list.iter() {
@@ -108,19 +117,54 @@ impl PhysicalPlanner {
                     &None => {}
                 }
             },
-            Rel::Delete{ref table, ref selection, ref tt} => {
+            Rel::Delete { ref table, ref selection, ref tt } => {
                 match selection {
                     &Some(box ref s) => self.plan_rex(s, builder, tt)?,
                     &None => {}
                 }
             },
-            Rel::Insert{ref table, box ref columns, box ref values, ..} => {
-                panic!("Unsupported INSERT")
-//                match (columns, values) {
-//                    (&Rex::RexExprList(ref c_list), &Rex::RexExprList(ref v_list)) => {
-//                        for (index, v) in v_list.iter().enumerate() {
-//                            match v {
-//                                &Rex::Literal(ref i) => {
+            Rel::Insert { ref table, box ref columns, box ref values, .. } => {
+                panic!("Unsupported INSERT");
+                match (columns, values) {
+                    ( & Rex::RexExprList( ref c_list), & Rex::RexExprList( ref v_list)) => {
+                        let mut it = c_list.iter().zip(v_list.iter());
+                        while let Some((ref column_expr, ref value_expr)) = it.next() {
+                            match *column_expr {
+                                &Rex::Identifier { ref el, .. } => {
+                                    match *value_expr {
+                                        &Rex::Literal(i) => {
+                                            builder.push_literal(EncryptionPlan {
+                                                data_type: el.data_type.clone(),
+                                                encryption: el.encryption.clone(),
+                                                key: el.key.clone()
+                                            });
+                                        },
+                                        &Rex::BoundParam(i) => {
+                                            builder.push_param(EncryptionPlan {
+                                                data_type: el.data_type.clone(),
+                                                encryption: el.encryption.clone(),
+                                                key: el.key.clone()
+                                            });
+                                        },
+                                        _ => return Err(ZeroError::EncryptionError {
+                                            message: format!("Unsupported expression for INSERT value expression: {:?}", *value_expr).into(),
+                                            code: "1064".into()
+                                        }.into())
+                                    }
+                                },
+                                _ => return Err(ZeroError::EncryptionError {
+                                    message: format!("Unsupported expression for INSERT column name: {:?}", *column_expr).into(),
+                                    code: "1064".into()
+                                }.into())
+                            }
+                        }
+                    },
+                    _ => {}
+                }
+            }
+        }
+        Ok(())
+    }
 //                                    if let Rex::Identifier{ref id, ref el} = c_list[index] {
 //                                        if el.encryption != EncryptionType::NA {
 //                                            self.encrypt_literal(i, el, None)?;
@@ -156,12 +200,12 @@ impl PhysicalPlanner {
 //                        code: "1064".into()
 //                    }.into())
 //                }
-            }
-            //_ => return Err(format!("Unsupported rel {:?}", rel))
-        }
-
-        Ok(())
-    }
+//            }
+//            //_ => return Err(format!("Unsupported rel {:?}", rel))
+//        }
+//
+//        Ok(())
+//    }
 
     fn plan_rex(&self, rel: &Rex, builder: &mut PhysicalPlanBuilder, tt: &TupleType) -> Result<(), Box<ZeroError>>  {
         panic!("NOT IMPLEMENTED")
