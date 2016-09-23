@@ -43,6 +43,7 @@ pub enum NativeType {
 
 	// Unknown
 	NULL,
+	UNKNOWN
 }
 
 impl NativeType {
