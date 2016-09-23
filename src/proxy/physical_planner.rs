@@ -124,7 +124,6 @@ impl PhysicalPlanner {
                 }
             },
             Rel::Insert { ref table, box ref columns, box ref values, .. } => {
-                panic!("Unsupported INSERT");
                 match (columns, values) {
                     ( & Rex::RexExprList( ref c_list), & Rex::RexExprList( ref v_list)) => {
                         let mut it = c_list.iter().zip(v_list.iter());
