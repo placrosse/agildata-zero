@@ -131,31 +131,20 @@ impl PhysicalPlanner {
                         while let Some((ref column_expr, ref value_expr)) = it.next() {
                             match *column_expr {
                                 &Rex::Identifier { ref el, .. } => {
+
+                                    let enc_plan = EncryptionPlan {
+                                        data_type: el.data_type.clone(),
+                                        encryption: el.encryption.clone(),
+                                        key: el.key.clone()
+                                    };
+
                                     match *value_expr {
-                                        &Rex::Literal(i) => {
-                                            builder.push_literal(EncryptionPlan {
-                                                data_type: el.data_type.clone(),
-                                                encryption: el.encryption.clone(),
-                                                key: el.key.clone()
-                                            });
-                                        },
-                                        &Rex::BoundParam(i) => {
-                                            builder.push_param(EncryptionPlan {
-                                                data_type: el.data_type.clone(),
-                                                encryption: el.encryption.clone(),
-                                                key: el.key.clone()
-                                            });
-                                        },
-                                        _ => return Err(ZeroError::EncryptionError {
-                                            message: format!("Unsupported expression for INSERT value expression: {:?}", *value_expr).into(),
-                                            code: "1064".into()
-                                        }.into())
+                                        &Rex::Literal(i) => builder.push_literal(enc_plan),
+                                        &Rex::BoundParam(i) => builder.push_param(enc_plan),
+                                        _ => return self.zero_error("1064", format!("Unsupported expression for INSERT value expression: {:?}", *value_expr))
                                     }
                                 },
-                                _ => return Err(ZeroError::EncryptionError {
-                                    message: format!("Unsupported expression for INSERT column name: {:?}", *column_expr).into(),
-                                    code: "1064".into()
-                                }.into())
+                                _ => return self.zero_error("1064", format!("Unsupported expression for INSERT column name: {:?}", *column_expr)),
                             }
                         }
                     },
@@ -165,6 +154,14 @@ impl PhysicalPlanner {
         }
         Ok(())
     }
+
+    fn zero_error(&self, code: &'static str, msg: String) -> Result<(), Box<ZeroError>> {
+        Err(ZeroError::EncryptionError {
+            message: msg,
+            code: code.into()
+        }.into())
+    }
+
 //                                    if let Rex::Identifier{ref id, ref el} = c_list[index] {
 //                                        if el.encryption != EncryptionType::NA {
 //                                            self.encrypt_literal(i, el, None)?;
