@@ -2,7 +2,7 @@ use std::sync::Mutex;
 use std::rc::Rc;
 use std::collections::HashMap;
 use encrypt::{NativeType, EncryptionType};
-use query::Token;
+use query::{Token, ASTNode};
 
 #[derive(Debug, PartialEq)]
 pub enum ValueType {
@@ -22,7 +22,8 @@ pub struct EncryptionPlan {
 pub struct PPlan {
     literals: Vec<EncryptionPlan>,
     params: Vec<EncryptionPlan>,
-    result: Vec<EncryptionPlan>
+    result: Vec<EncryptionPlan>,
+    ast: ASTNode
 }
 
 pub enum PhysicalPlan {

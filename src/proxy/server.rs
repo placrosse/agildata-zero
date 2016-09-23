@@ -480,6 +480,11 @@ pub fn print_packet_chars(msg: &'static str, buf: &[u8]) {
 //    println!("]");
 }
 
+struct PhysPlanResult {
+    literals: Vec<LiteralToken>,
+    physical_plan: Rc<PhysicalPlan>
+}
+
 impl ZeroHandler {
 
     fn process_init_db(&mut self, p:&Packet) -> Action {
@@ -545,6 +550,9 @@ impl ZeroHandler {
         Action::Forward
     }
 
+    fn get_physical_plan(&mut self, query: String) -> Result<PhysPlanResult, Box<ZeroError>> {
+        panic!("NOT IMPLEMENTED")
+    }
 
     fn parse_query(&mut self, query: String) -> Result<(Option<Vec<LiteralToken>>, Option<ASTNode>), Box<ZeroError>> {
 
