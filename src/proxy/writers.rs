@@ -1,12 +1,18 @@
 // use super::super::parser::sql_writer::*;
 // use super::super::parser::sql_parser::{SQLExpr, LiteralExpr, DataType};
-use query::{Writer, ExprWriter, ASTNode, MySQLColumnQualifier};
+use query::{Writer, ExprWriter, ASTNode, MySQLColumnQualifier, LiteralToken, Token};
 use query::MySQLDataType::*;
 use std::collections::HashMap;
 use std::fmt::Write;
 use config::*;
 use encrypt::*;
 use error::ZeroError;
+use super::physical_planner::{EncryptionPlan};
+use decimal::*;
+use std::fmt::Debug;
+use std::str::FromStr;
+use chrono::UTC;
+use chrono::offset::TimeZone;
 
 
 pub fn to_hex_string(bytes: &Vec<u8>) -> String {
@@ -14,6 +20,183 @@ pub fn to_hex_string(bytes: &Vec<u8>) -> String {
                                .map(|b| format!("{:02X}", b))
                                .collect();
   strs.join("")
+}
+
+pub fn map_err_to_zero<E: Debug>(err: E) -> Box<ZeroError> {
+    ZeroError::EncryptionError {
+        message: format!("{:?}", err),
+        code: "1064".into()
+    }.into()
+}
+
+
+pub struct LiteralEncryptionWriter<'a> {
+    pub literals: &'a Vec<LiteralToken>,
+    pub literal_plans: &'a HashMap<usize, EncryptionPlan>
+}
+
+impl<'a> ExprWriter for LiteralEncryptionWriter<'a> {
+    fn write(&self, _: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, Box<ZeroError>> {
+        match node {
+            &ASTNode::SQLLiteral(i) => {
+                let lit = self.literals.get(i).unwrap();
+                let plan = self.literal_plans.get(&i).unwrap();
+
+                match plan.encryption {
+                    EncryptionType::NA => Ok(false),
+                    _ => {
+                        let key = plan.key.unwrap();
+                        let encrypted = match plan.data_type {
+                            NativeType::U64 => {
+                                match lit {
+                                    &LiteralToken::LiteralLong(ref i, ref v) => {
+
+                                        let val = u64::from_str(v).map_err(map_err_to_zero)?;
+                                        val.encrypt(&plan.encryption, &key)?
+
+                                    },
+                                    _ => return Err(ZeroError::EncryptionError {
+                                        message: format!("Invalid value {:?} expected type {:?}", lit, plan.data_type).into(),
+                                        code: "1064".into()
+                                    }.into())
+                                }
+                            },
+                            NativeType::I64 => {
+                                return Err(ZeroError::EncryptionError {
+                                    message: format!("Signed numerics currently unsupported").into(),
+                                    code: "1064".into()
+                                }.into())
+                                // TODO reimplement
+//                                match lit {
+//                                    &LiteralToken::LiteralLong(ref i, ref val) => {
+//                                        let v = match i64::from_str(val) {
+//                                            Ok(v) => v,
+//                                            Err(e) => return Err(ZeroError::EncryptionError {
+//                                                message: format!("Failed to coerce {} to signed due to : {}", val, e).into(),
+//                                                code: "1064".into()
+//                                            }.into())
+//                                        };
+//
+//                                        let encrypted = match sign {
+//                                            Some(&Operator::SUB) => (-v).encrypt(&plan.encryption, &plan.key)?,
+//                                            _ => v.encrypt(&plan.encryption, &plan.key)?
+//                                        };
+//                                         encrypted
+//                                    },
+//                                    _ => return Err(ZeroError::EncryptionError {
+//                                        message: format!("Invalid value {:?} for column {}.{}", lit, plan.relation, plan.name).into(),
+//                                        code: "1064".into()
+//                                    }.into())
+//                                }
+                            },
+                            NativeType::F64 => {
+                                match lit {
+                                    &LiteralToken::LiteralDouble(ref i, ref v) => {
+                                        let val = f64::from_str(v).map_err(map_err_to_zero)?;
+                                        val.encrypt(&plan.encryption, &key)?
+                                    },
+                                    _ => return Err(ZeroError::EncryptionError {
+                                        message: format!("Invalid value {:?} expected type {:?}", lit, plan.data_type).into(),
+                                        code: "1064".into()
+                                    }.into())
+                                }
+                            },
+                            NativeType::D128 => {
+                                match lit {
+                                    &LiteralToken::LiteralDouble(ref i, ref val) => {
+                                        let v = match d128::from_str(val) {
+                                            Ok(d) => d,
+                                            // Note: d128::from_str e is a ()
+                                            Err(e) => return Err(ZeroError::EncryptionError {
+                                                message: format!("Failed to coerce {} to d128", val).into(),
+                                                code: "1064".into()
+                                            }.into())
+                                        };
+
+                                        v.encrypt(&plan.encryption, &key)?
+                                    },
+                                    _ => return Err(ZeroError::EncryptionError {
+                                        message: format!("Invalid value {:?} expected type {:?}", lit, plan.data_type).into(),
+                                        code: "1064".into()
+                                    }.into())
+                                }
+                            },
+                            NativeType::BOOL => {
+                                match lit {
+                                    &LiteralToken::LiteralBool(ref i, ref v) => {
+                                        let val = bool::from_str(v).map_err(map_err_to_zero)?;
+                                        val.encrypt(&plan.encryption, &key)?
+                                    },
+                                    _ => return Err(ZeroError::EncryptionError {
+                                        message: format!("Invalid value {:?} expected type {:?}", lit, plan.data_type).into(),
+                                        code: "1064".into()
+                                    }.into())
+                                }
+                            },
+                            NativeType::Varchar(..) | NativeType::Char(..) => {
+                                match lit {
+                                    &LiteralToken::LiteralString(ref i, ref val) => {
+                                        val.clone().encrypt(&plan.encryption, &key)?
+                                    },
+                                    _ => return Err(ZeroError::EncryptionError {
+                                        message: format!("Invalid value {:?} expected type {:?}", lit, plan.data_type).into(),
+                                        code: "1064".into()
+                                    }.into())
+                                }
+                            },
+                            NativeType::DATE => {
+                                match lit {
+                                    &LiteralToken::LiteralString(ref i, ref val) => {
+                                        let v = match UTC.datetime_from_str(&format!("{} 00:00:00",val), "%Y-%m-%d %H:%M:%S") {
+                                            Ok(v) => v,
+                                            Err(e) => return Err(ZeroError::EncryptionError {
+                                                message: format!("Failed to coerce {} to date due to {}", val, e).into(),
+                                                code: "1064".into()
+                                            }.into())
+                                        };
+
+                                        v.encrypt(&plan.encryption, &key)?
+                                    },
+                                    _ => return Err(ZeroError::EncryptionError {
+                                        message: format!("Invalid value {:?} expected type {:?}", lit, plan.data_type).into(),
+                                        code: "1064".into()
+                                    }.into())
+                                }
+                            },
+                            NativeType::DATETIME(..) => {
+                                match lit {
+                                    &LiteralToken::LiteralString(ref i, ref val) => {
+                                        let v = match UTC.datetime_from_str(val, "%Y-%m-%d %H:%M:%S%.f") {
+                                            Ok(v) => v,
+                                            Err(e) => return Err(ZeroError::EncryptionError {
+                                                message: format!("Failed to coerce {} to DATETIME due to {}", val, e).into(),
+                                                code: "1064".into()
+                                            }.into())
+                                        };
+
+                                        v.clone().encrypt(&plan.encryption, &key)?
+                                    },
+                                    _ => return Err(ZeroError::EncryptionError {
+                                        message: format!("Invalid value {:?} expected type {:?}", lit, plan.data_type).into(),
+                                        code: "1064".into()
+                                    }.into())
+                                }
+                            },
+                            _ => return Err(ZeroError::EncryptionError {
+                                message: format!("Unsupported encryption {:?} for data type {:?}", plan.encryption, plan.data_type).into(),
+                                code: "1064".into()
+                            }.into())
+                        };
+
+                        write!(builder, "X'{}'", to_hex_string(&encrypted)).unwrap();
+                        Ok(true)
+                    }
+                }
+
+            },
+            _ => Ok(false)
+        }
+    }
 }
 
 pub struct LiteralReplacingWriter<'a> {

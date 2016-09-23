@@ -14,18 +14,18 @@ pub enum ValueType {
 
 #[derive(Debug, PartialEq)]
 pub struct EncryptionPlan {
-    data_type: NativeType,
-    encryption: EncryptionType,
-    key: Option<[u8; 32]>
+    pub data_type: NativeType,
+    pub encryption: EncryptionType,
+    pub key: Option<[u8; 32]>
 //    value_type: ValueType
 }
 
 #[derive(Debug, PartialEq)]
 pub struct PPlan {
-    literals: HashMap<usize, EncryptionPlan>,
-    params: HashMap<usize, EncryptionPlan>,
-    projection: Vec<EncryptionPlan>,
-    ast: ASTNode
+    pub literals: HashMap<usize, EncryptionPlan>,
+    pub params: HashMap<usize, EncryptionPlan>,
+    pub projection: Vec<EncryptionPlan>,
+    pub ast: ASTNode
 }
 
 #[derive(Debug)]
