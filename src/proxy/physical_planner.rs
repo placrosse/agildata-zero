@@ -22,7 +22,7 @@ pub struct EncryptionPlan {
 pub struct PPlan {
     literals: Vec<EncryptionPlan>,
     params: Vec<EncryptionPlan>,
-    result: Vec<EncryptionPlan>,
+    projection: Vec<EncryptionPlan>,
     ast: ASTNode
 }
 
@@ -35,7 +35,7 @@ pub enum PhysicalPlan {
 pub struct PhysicalPlanBuilder {
     literals: Vec<EncryptionPlan>,
     params: Vec<EncryptionPlan>,
-    result: Vec<EncryptionPlan>
+    projection: Vec<EncryptionPlan>
 }
 
 impl PhysicalPlanBuilder {
@@ -44,7 +44,7 @@ impl PhysicalPlanBuilder {
         PhysicalPlanBuilder {
             literals: Vec::new(),
             params: Vec::new(),
-            result: Vec::new()
+            projection: Vec::new()
         }
     }
 
@@ -54,7 +54,7 @@ impl PhysicalPlanBuilder {
             PPlan {
                 literals: self.literals,
                 params: self.params,
-                result: self.result,
+                projection: self.projection,
                 ast: ast
             }
         )
@@ -66,6 +66,10 @@ impl PhysicalPlanBuilder {
 
     fn push_param(&mut self, e: EncryptionPlan) {
         self.params.push(e);
+    }
+
+    fn push_projection(&mut self, e: EncryptionPlan) {
+        self.projection.push(e);
     }
 }
 
@@ -87,6 +91,18 @@ impl PhysicalPlanner {
             Rel::Projection { box ref project, box ref input, ref tt } => {
                 self.plan_rex(project, builder, tt)?;
                 self.plan_rel(input, builder)?;
+
+                // push projection encryption types into builder
+                for el in tt.elements.iter() {
+
+                    let enc_plan = EncryptionPlan {
+                        data_type: el.data_type.clone(),
+                        encryption: el.encryption.clone(),
+                        key: el.key.clone()
+                    };
+
+                    builder.push_projection(enc_plan);
+                }
             },
             Rel::Selection { box ref expr, box ref input } => {
                 self.plan_rex(expr, builder, input.tt())?;
@@ -149,7 +165,7 @@ impl PhysicalPlanner {
                     },
                     _ => {}
                 }
-            }
+            },
         }
         Ok(())
     }
@@ -203,8 +219,14 @@ impl PhysicalPlanner {
 //        Ok(())
 //    }
 
-    fn plan_rex(&self, rel: &Rex, builder: &mut PhysicalPlanBuilder, tt: &TupleType) -> Result<(), Box<ZeroError>>  {
-        panic!("NOT IMPLEMENTED")
+    fn plan_rex(&self, rex: &Rex, builder: &mut PhysicalPlanBuilder, tt: &TupleType) -> Result<(), Box<ZeroError>>  {
+        //panic!("NOT IMPLEMENTED")
+        match rex {
+            &Rex::Literal(i) => {
+                Ok(())
+            },
+            _ => return self.zero_error("1064", format!("Unsupported rex type: {:?}", rex)),
+        }
     }
 }
 
