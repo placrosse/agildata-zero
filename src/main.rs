@@ -88,6 +88,7 @@ fn main() {
     let config = config::parse_config(&opt.cfg);
     let config = Rc::new(config);
     let provider = proxy::schema_provider::MySQLBackedSchemaProvider::new(config.clone());
-    proxy::server::Proxy::run(config, Rc::new(provider));
+    let stmt_cache = proxy::statement_cache::StatementCache::new();
+    proxy::server::Proxy::run(config, Rc::new(provider), Rc::new(stmt_cache));
 
 }

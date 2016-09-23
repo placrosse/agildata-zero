@@ -25,6 +25,8 @@ use super::encrypt_visitor::EncryptVisitor;
 use super::schema_provider::MySQLBackedSchemaProvider;
 use super::writers::*;
 
+use super::statement_cache::*;
+
 use query::{Tokenizer, Parser, Writer, SQLWriter, ASTNode, LiteralToken};
 use query::dialects::mysqlsql::*;
 use query::dialects::ansisql::*;
@@ -43,7 +45,7 @@ pub struct Proxy {
 
 impl Proxy {
 
-    pub fn run(config: Rc<Config>, provider: Rc<MySQLBackedSchemaProvider>) {
+    pub fn run(config: Rc<Config>, provider: Rc<MySQLBackedSchemaProvider>, stmt_cache: Rc<StatementCache>) {
 
         //env_logger::init().unwrap();
 
@@ -83,12 +85,13 @@ impl Proxy {
 
             let c = config.clone();
             let p = provider.clone();
+            let s = stmt_cache.clone();
 
             // create a future to serve requests
             let future = TcpStream::connect(&mysql_addr, &handle).and_then(move |mysql| {
                 Ok((socket, mysql))
             }).and_then(move |(client, server)| {
-                Pipe::new(Rc::new(client), Rc::new(server), ZeroHandler::new(c,p))
+                Pipe::new(Rc::new(client), Rc::new(server), ZeroHandler::new(c,p, s))
             });
 
             // tell the tokio reactor to run the future
@@ -152,11 +155,12 @@ struct ZeroHandler {
     parsing_mode: ParsingMode,
     tt: Option<TupleType>,
     stmt_map: HashMap<u16, Box<PStmt>>,
+    stmt_cache: Rc<StatementCache>
 }
 
 impl ZeroHandler {
 
-    fn new(config: Rc<Config>, provider: Rc<MySQLBackedSchemaProvider>) -> Self {
+    fn new(config: Rc<Config>, provider: Rc<MySQLBackedSchemaProvider>, stmt_cache: Rc<StatementCache>) -> Self {
 
         let parsing_mode = determine_parsing_mode(&config.get_parsing_config().props.get("mode").unwrap());
 
@@ -168,6 +172,7 @@ impl ZeroHandler {
             parsing_mode: parsing_mode,
             tt: None,
             stmt_map: HashMap::new(),
+            stmt_cache: stmt_cache
         }
     }
 

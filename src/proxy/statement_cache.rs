@@ -30,7 +30,7 @@ pub enum PhysicalPlan {
     Error{message: String, code: String}
 }
 
-struct StatementCache {
+pub struct StatementCache {
     cache: Mutex<HashMap<Vec<Token>, Rc<PhysicalPlan>>>
 }
 
