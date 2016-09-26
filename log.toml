@@ -26,5 +26,5 @@ appenders = ["file"]
 additive = true
 
 [loggers."agildata_zero::proxy::server"]
-level = "warn"
+level = "debug"
 

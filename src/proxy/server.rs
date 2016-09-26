@@ -125,13 +125,13 @@ enum HandlerState {
     /// Expecting a COM_STMT_PREPARE response
     StmtPrepareResponse(Rc<PhysicalPlan>),
     /// Expecting column definitions for column and parameters as part of a COM_STMT_PREPARE response
-    StmtPrepareFieldPacket(u16, Box<PStmt>, AtomicU32, AtomicU32, Rc<PhysicalPlan>),
+    StmtPrepareFieldPacket(u16, Box<PStmt>, AtomicU32, AtomicU32),
     /// Expecting a COM_STMT_EXECUTE response
-    StmtExecuteResponse(Rc<PhysicalPlan>),
+    StmtExecuteResponse(Box<PStmt>),
     /// Expecting 1 or more field definitions as part of a COM_QUERY response
-    StmtExecuteFieldPacket(usize, Rc<PhysicalPlan>),
+    StmtExecuteFieldPacket(usize, Box<PStmt>),
     /// Binary result row
-    StmtExecuteResultRow(Rc<PhysicalPlan>),
+    StmtExecuteResultRow(Box<PStmt>),
     /// Instructs the packet handler to ignore all further result rows (due to an earlier error)
     IgnoreFurtherResults,
     /// Forward any further packets
@@ -145,6 +145,8 @@ struct PStmt {
     param_types: Vec<u8>,
     column_types: Vec<u8>,
     plan: Rc<PhysicalPlan>,
+    /// does the result set need to be decrypted?
+    decrypt_result_set: bool,
 }
 
 struct ZeroHandler {
@@ -299,11 +301,14 @@ impl PacketHandler for ZeroHandler {
                     }
                 }
             },
-            HandlerState::ComQueryFieldPacket(ref mut n) => if n.load(Ordering::SeqCst) == 1 {
-                (Some(HandlerState::ExpectResultRow), Action::Forward)
-            } else {
-                n.fetch_sub(1, Ordering::SeqCst);
-                (None, Action::Forward)
+            HandlerState::ComQueryFieldPacket(ref mut n) => {
+                if n.load(Ordering::SeqCst) == 1 {
+                    (Some(HandlerState::ExpectResultRow), Action::Forward)
+                } else {
+                    n.fetch_sub(1, Ordering::SeqCst);
+                    //TODO: need to rewrite field packet to change data type for encrypted columns
+                    (None, Action::Forward)
+                }
             },
             HandlerState::ExpectResultRow => match p.bytes[4] {
                 0x00 | 0xfe | 0xff => (Some(HandlerState::ExpectClientRequest), Action::Forward),
@@ -335,10 +340,23 @@ impl PacketHandler for ZeroHandler {
                 let num_columns = read_u16_le(&p.bytes[ 9..11]);
                 let num_params  = read_u16_le(&p.bytes[11..13]);
 
+                // determine if the result set contains any encrypted columns
+                let decrypt_result_set = match plan.as_ref() {
+                    &PhysicalPlan::Plan(ref p) => {
+                        p.projection.iter().filter(|e| match e.encryption {
+                            EncryptionType::AES => true,
+                            EncryptionType::OPE => true,
+                            EncryptionType::NA => false,
+                        }).count() > 0
+                    },
+                    _ => false
+                };
+
                 let mut pstmt = PStmt {
                     param_types: Vec::with_capacity(num_params as usize),
                     column_types: Vec::with_capacity(num_columns as usize),
-                    plan: plan.clone()
+                    plan: plan.clone(),
+                    decrypt_result_set: decrypt_result_set
                 };
 
                 debug!("StmtPrepareResponse: stmt_id={}, num_columns={}, num_params={}",
@@ -348,11 +366,10 @@ impl PacketHandler for ZeroHandler {
                     Box::new(pstmt),
                     AtomicU32::new(num_params as u32),
                     AtomicU32::new(num_columns as u32),
-                    plan.clone(),
                 )), Action::Forward)
             },
             HandlerState::StmtPrepareFieldPacket(stmt_id, ref mut pstmt, ref mut num_params,
-                                                 ref mut num_columns, ref plan) => {
+                                                 ref mut num_columns) => {
 
                 debug!("StmtPrepareFieldPacket {:?}", &p.bytes);
 
@@ -399,14 +416,14 @@ impl PacketHandler for ZeroHandler {
                     (None, Action::Forward)
                 }
             },
-            HandlerState::StmtExecuteResponse(ref plan) => {
+            HandlerState::StmtExecuteResponse(ref pstmt) => {
                 print_packet_chars("StmtExecuteResponse", &p.bytes);
                 match p.bytes[4] {
                     0x00 | 0xfe | 0xff => (Some(HandlerState::ExpectClientRequest), Action::Forward),
                     _ => {
                         let mut r = MySQLPacketParser::new(&p.bytes);
                         let col_count = r.read_len();
-                        (Some(HandlerState::StmtExecuteFieldPacket(col_count, plan.clone())), Action::Forward)
+                        (Some(HandlerState::StmtExecuteFieldPacket(col_count, pstmt.clone())), Action::Forward)
                     },
                 }
             },
@@ -414,6 +431,7 @@ impl PacketHandler for ZeroHandler {
                 print_packet_chars("StmtExecuteFieldPacket", &p.bytes);
                 if col_count > 1 {
                     col_count = col_count - 1;
+                    //TODO: rewrite field packet based on plan
                     (None, Action::Forward)
                 } else {
                     (Some(HandlerState::StmtExecuteResultRow(plan.clone())), Action::Forward)
@@ -423,7 +441,9 @@ impl PacketHandler for ZeroHandler {
                 print_packet_chars("StmtExecuteResultRow", &p.bytes);
                 match p.bytes[4] {
                     0xfe | 0xff => (Some(HandlerState::ExpectClientRequest), Action::Forward),
-                    0x00 => (None, Action::Forward),
+                    0x00 => {
+                        (None, Action::Forward)
+                    },
                     _ => panic!("invalid packet type {:?} for StmtExecuteResultRow", p.bytes[4])
                 }
             },
@@ -537,7 +557,7 @@ impl ZeroHandler {
         match self.stmt_map.get(&stmt_id) {
             Some(ref pstmt) => {
                 debug!("Executing with {:?}", pstmt);
-                self.state = HandlerState::StmtExecuteResponse(pstmt.plan.clone());
+                self.state = HandlerState::StmtExecuteResponse((*pstmt).clone());
                 Action::Forward
             },
             None => {
