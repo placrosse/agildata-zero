@@ -437,12 +437,60 @@ impl PacketHandler for ZeroHandler {
                     (Some(HandlerState::StmtExecuteResultRow(plan.clone())), Action::Forward)
                 }
             },
-            HandlerState::StmtExecuteResultRow(ref plan) => {
+            HandlerState::StmtExecuteResultRow(ref pstmt) => {
                 print_packet_chars("StmtExecuteResultRow", &p.bytes);
                 match p.bytes[4] {
                     0xfe | 0xff => (Some(HandlerState::ExpectClientRequest), Action::Forward),
                     0x00 => {
-                        (None, Action::Forward)
+                        if pstmt.decrypt_result_set {
+                            match pstmt.plan.as_ref() {
+                                &PhysicalPlan::Plan(ref pp) => {
+                                    let cc = pstmt.column_types.len();
+
+                                    let mut r = MySQLPacketParser::new(&p.bytes);
+
+                                    let mut w = MySQLPacketWriter::new(512); // TODO: use sensible size
+
+                                    //TODO: this could be calculated once at planning time
+                                    let null_bitmap_len = (cc + 7 + 2) / 8;
+
+                                    w.write_bytes(&p.bytes[4..4+null_bitmap_len+1]);
+                                    r.skip(null_bitmap_len);
+
+                                    for i in 0..cc {
+
+                                        //TODO: handle null values based on bitmap
+
+                                        let ref encryption = pp.projection[i].encryption;
+
+//                                        match pp.projection[i].data_type {
+//                                            NativeType::Varchar(len) => {
+//
+//                                                // note that unwrap() is safe here since result rows never contain null strings
+//                                                let v : String = r.read_lenenc_string().unwrap();
+//
+//                                                let res = match encryption {
+//                                                    EncryptionType::AES =>
+//                                                        try!(String::decrypt(&v, &encryption, &self.tt[i].key.unwrap())),
+//                                                    _ => v
+//                                                };
+//
+//                                                w.write_lenenc_string(v);
+//                                            },
+//                                            _ => {
+//                                                panic!("no support for {:?}", pp.projection[i].data_type);
+//                                            }
+//                                        }
+                                    }
+
+                                    (None, Action::Mutate(w.to_packet()))
+                                },
+                                _ => (None, Action::Forward)
+                            }
+
+                        } else {
+                            (None, Action::Forward)
+                        }
                     },
                     _ => panic!("invalid packet type {:?} for StmtExecuteResultRow", p.bytes[4])
                 }
@@ -823,6 +871,31 @@ fn create_error_from_err(e: Box<ZeroError>) -> Action {
 
 fn parse_string(bytes: &[u8]) -> String {
     String::from_utf8(bytes.to_vec()).expect("Invalid UTF-8")
+}
+
+pub struct MySQLPacketWriter {
+    bytes: Vec<u8>
+}
+
+impl MySQLPacketWriter {
+
+    pub fn new(len: usize) -> Self {
+        MySQLPacketWriter { bytes: Vec::with_capacity(len) }
+    }
+
+    pub fn write_bytes(&mut self, b: &[u8]) {
+        //TODO:
+    }
+
+    pub fn write_lenenc_string(&mut self, s: String) {
+        //TODO:
+    }
+
+    pub fn to_packet(&self) -> Packet {
+        //TODO: there is more to it than this ... need header
+        Packet { bytes: self.bytes.clone() }
+    }
+
 }
 
 pub struct MySQLPacketParser<'a> {
