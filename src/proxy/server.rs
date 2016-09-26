@@ -573,7 +573,7 @@ impl ZeroHandler {
                                     // If plan OK, continue
                                     Ok(logical_plan) => {
                                         let phys_planner = PhysicalPlanner{};
-                                        let physical_plan = phys_planner.plan(logical_plan, parsed);
+                                        let physical_plan = phys_planner.plan(logical_plan, parsed, &tokens.literals);
 
 
                                         PhysPlanResult{

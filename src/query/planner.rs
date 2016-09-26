@@ -1,5 +1,5 @@
 use std::error::Error;
-use super::{ASTNode, Operator, JoinType};
+use super::{ASTNode, Operator, JoinType, LiteralToken};
 use encrypt::EncryptionType;
 //use config::*;
 use encrypt::NativeType;
@@ -134,6 +134,27 @@ impl Rex {
                 message: format!("Unsupported Rex to Element : {:?}", self).into(),
                 code: "1064".into()
             }.into())
+        }
+    }
+
+    pub fn to_readable(&self, literals: &Vec<LiteralToken>) -> String {
+        match *self {
+            Rex::Identifier{ref id, ..} => id.join("."),
+            Rex::Literal(ref index) => format!("{}", literals.get(index.clone()).unwrap().to_readable()),
+            Rex::BoundParam(_) => "?".into(),
+            Rex::BinaryExpr{box ref left, ref op, box ref right} => {
+                format!("{} {} {}", left.to_readable(literals), op.to_readable(), right.to_readable(literals))
+            },
+            Rex::RelationalExpr(ref rel) => {panic!("HERE")},
+            Rex::RexExprList(ref list) => list.iter().map(|e| e.to_readable(literals)).collect::<Vec<String>>().join(", "),
+            Rex::RexUnary{ref operator, box ref rex} => format!("{}{}", operator.to_readable(), rex.to_readable(literals)),
+            Rex::RexFunctionCall{ref name, ref args} => {
+                format!("{}({})",
+                    name,
+                    args.iter().map(|e| e.to_readable(literals)).collect::<Vec<String>>().join(", ")
+                )
+            },
+            Rex::RexNested(box ref expr) => format!("({})", expr.to_readable(literals))
         }
     }
 }

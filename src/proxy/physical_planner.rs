@@ -79,21 +79,21 @@ impl PhysicalPlanBuilder {
 pub struct PhysicalPlanner {}
 
 impl PhysicalPlanner {
-    pub fn plan(&self, logical: Rel, ast: ASTNode) -> PhysicalPlan {
+    pub fn plan(&self, logical: Rel, ast: ASTNode, literals: &Vec<LiteralToken>) -> PhysicalPlan {
         let mut builder = PhysicalPlanBuilder::new();
 
-        match self.plan_rel(&logical, &mut builder) {
+        match self.plan_rel(&logical, &mut builder, literals) {
             Ok(()) => builder.build(ast),
             Err(e) => PhysicalPlan::Error(e)
         }
 
     }
 
-    fn plan_rel(&self, rel: &Rel, builder: &mut PhysicalPlanBuilder) -> Result<(), Box<ZeroError>> {
+    fn plan_rel(&self, rel: &Rel, builder: &mut PhysicalPlanBuilder, literals: &Vec<LiteralToken>) -> Result<(), Box<ZeroError>> {
         match *rel {
             Rel::Projection { box ref project, box ref input, ref tt } => {
-                self.plan_rex(project, builder, tt)?;
-                self.plan_rel(input, builder)?;
+                self.plan_rex(project, builder, tt, literals)?;
+                self.plan_rel(input, builder, literals)?;
 
                 // push projection encryption types into builder
                 for el in tt.elements.iter() {
@@ -108,37 +108,37 @@ impl PhysicalPlanner {
                 }
             },
             Rel::Selection { box ref expr, box ref input } => {
-                self.plan_rex(expr, builder, input.tt())?;
-                self.plan_rel(input, builder)?;
+                self.plan_rex(expr, builder, input.tt(), literals)?;
+                self.plan_rel(input, builder, literals)?;
             },
             Rel::TableScan { .. } => {},
             Rel::Join { box ref left, box ref right, ref on_expr, ref tt, .. } => {
-                self.plan_rel(left, builder)?;
-                self.plan_rel(right, builder)?;
+                self.plan_rel(left, builder, literals)?;
+                self.plan_rel(right, builder, literals)?;
                 match on_expr {
-                    &Some(box ref o) => self.plan_rex(o, builder, tt)?,
+                    &Some(box ref o) => self.plan_rex(o, builder, tt, literals)?,
                     &None => {}
                 }
             },
-            Rel::AliasedRel { box ref input, .. } => self.plan_rel(input, builder)?,
+            Rel::AliasedRel { box ref input, .. } => self.plan_rel(input, builder, literals)?,
             Rel::Dual { .. } => {},
             Rel::Update { ref table, box ref set_stmts, ref selection, ref tt } => {
                 match set_stmts {
                     &Rex::RexExprList(ref list) => {
                         for e in list.iter() {
-                            self.plan_rex(e, builder, tt);
+                            self.plan_rex(e, builder, tt, literals);
                         }
                     },
                     _ => {}
                 }
                 match selection {
-                    &Some(box ref s) => self.plan_rex(s, builder, tt)?,
+                    &Some(box ref s) => self.plan_rex(s, builder, tt, literals)?,
                     &None => {}
                 }
             },
             Rel::Delete { ref table, ref selection, ref tt } => {
                 match selection {
-                    &Some(box ref s) => self.plan_rex(s, builder, tt)?,
+                    &Some(box ref s) => self.plan_rex(s, builder, tt, literals)?,
                     &None => {}
                 }
             },
@@ -146,6 +146,8 @@ impl PhysicalPlanner {
                 match (columns, values) {
                     ( & Rex::RexExprList( ref c_list), & Rex::RexExprList( ref v_list)) => {
                         let mut it = c_list.iter().zip(v_list.iter());
+
+                        // create encryption plans for insert values reconciled to column list
                         while let Some((ref column_expr, ref value_expr)) = it.next() {
                             match *column_expr {
                                 &Rex::Identifier { ref el, .. } => {
@@ -181,15 +183,17 @@ impl PhysicalPlanner {
         }.into()
     }
 
-    fn plan_rex(&self, rex: &Rex, builder: &mut PhysicalPlanBuilder, tt: &TupleType) -> Result<(), Box<ZeroError>>  {
-        match self.get_encryption_scheme(rex, builder, &mut None) {
+    fn plan_rex(&self, rex: &Rex, builder: &mut PhysicalPlanBuilder, tt: &TupleType, literals: &Vec<LiteralToken>) -> Result<(), Box<ZeroError>>  {
+        match self.get_encryption_scheme(rex, builder, &mut None, literals) {
             Ok(_) => Ok(()),
             Err(e) => Err(e)
         }
     }
 
-    fn get_encryption_scheme(&self, rex: &Rex, builder: &mut PhysicalPlanBuilder, potentials: &mut Option<PotentialsBuilder>) -> Result<EncScheme, Box<ZeroError>> {
+    /// Visit rex expressions, attempt to reconcile to supported operations and encryption plans for literals and bound params
+    fn get_encryption_scheme(&self, rex: &Rex, builder: &mut PhysicalPlanBuilder, potentials: &mut Option<PotentialsBuilder>, literals: &Vec<LiteralToken>) -> Result<EncScheme, Box<ZeroError>> {
         match *rex {
+            // Encryption plan of the column identifier
             Rex::Identifier{ref el, ..} => match el.encryption {
                 EncryptionType::NA => Ok(EncScheme::Unencrypted),
                 _ => Ok(EncScheme::Encrypted(
@@ -198,11 +202,14 @@ impl PhysicalPlanner {
                     el.key.clone()
                 ))
             },
+            // Potential of the literal value
             Rex::Literal(ref i) => {
+                // Add self to the list of potentially encryptable values
                 if let Some(ref mut p) = *potentials {
                     p.put_literal(i);
                 }
 
+                // Add a default unencrypted plan
                 // set a default
                 let enc_plan = EncryptionPlan {
                     data_type: NativeType::UNKNOWN,
@@ -213,12 +220,14 @@ impl PhysicalPlanner {
 
                 Ok(EncScheme::Potential)
             },
+            // Potential of the bound parameter value
             Rex::BoundParam(ref i) => {
+                // Add self to the list of potentially encryptable params
                 if let Some(ref mut p) = *potentials {
                     p.put_param(i);
                 }
 
-                // set a default
+                // Add a default unencrypted plan
                 let enc_plan = EncryptionPlan {
                     data_type: NativeType::UNKNOWN,
                     encryption: EncryptionType::NA,
@@ -228,43 +237,56 @@ impl PhysicalPlanner {
 
                 Ok(EncScheme::Potential)
             },
-            Rex::RexNested(box ref expr) => self.get_encryption_scheme(expr, builder, potentials),
+            // Delegate to the scheme of the enclosed expression
+            Rex::RexNested(box ref expr) => self.get_encryption_scheme(expr, builder, potentials, literals),
             Rex::RexExprList(ref list) => {
                 for e in list {
-                    self.get_encryption_scheme(e, builder, potentials)?;
+                    self.get_encryption_scheme(e, builder, potentials, literals)?;
                 }
                 Ok(EncScheme::Inconsequential)
             },
+            // Evaluate binary
             Rex::BinaryExpr{box ref left, ref op, box ref right} => {
 
+                // Build up a list of potential literals and params on both sides
                 let mut potentials_builder = Some(PotentialsBuilder::new());
-                let l = self.get_encryption_scheme(left, builder, &mut potentials_builder)?;
-                let r = self.get_encryption_scheme(right, builder, &mut potentials_builder)?;
+                let l = self.get_encryption_scheme(left, builder, &mut potentials_builder, literals)?;
+                let r = self.get_encryption_scheme(right, builder, &mut potentials_builder, literals)?;
 
                 match *op {
+                    // If AND||OR, the resolved uncryption scheme is unimportant
                     Operator::AND | Operator::OR => Ok(EncScheme::Inconsequential),
+                    // Equality comparisons
                     Operator::EQ | Operator::NEQ => {
                         match (l, r) {
+                            // An eq between two encrypted columns...
                             (EncScheme::Encrypted (ref le, ref ldt, ref lk ), EncScheme::Encrypted ( ref re, ref rdt, ref rk )) => {
+                                // If both do not share the same encryption, data type, and key, fail
                                 if !(le == re && ldt == rdt && lk == rk) {
                                     Err(self.zero_error(
                                         "1064",
-                                        format!("Unsupported operation between columns of differing encryption and type, expr: {:?}", *rex)
+                                        format!("Unsupported operation between columns of differing encryption and type, expr: {}", rex.to_readable(literals))
                                     ))
                                 } else {
+                                    // The operation is legal
                                     Ok(EncScheme::Inconsequential)
                                 }
                             },
+                            // An eq between two unencrypted columns, legal
                             (EncScheme::Unencrypted, EncScheme::Unencrypted) => Ok(EncScheme::Inconsequential),
+                            // An eq between an unencrypted and encrypted column, illegal
                             (EncScheme::Unencrypted, EncScheme::Encrypted(..)) | (EncScheme::Encrypted(..), EncScheme::Unencrypted) => {
                                 Err(self.zero_error(
                                     "1064",
-                                    format!("Unsupported operation between columns of differing encryption and type, expr: {:?}", *rex)
+                                    format!("Unsupported operation between encrypted and unencrypted columns: {}", rex.to_readable(literals))
                                 ))
                             },
+                            // Catch all eq between an unencrypted column and any other expression, legal, allow to delegate to dbms
                             (EncScheme::Unencrypted, _) | (_, EncScheme::Unencrypted) => Ok(EncScheme::Inconsequential), // OK
+                            // EQ between an encrypted column and potentially encryptable expressions, e.g a = 1, a = (1), etc
                             (EncScheme::Encrypted(ref e, ref dt, ref k), EncScheme::Potential) | (EncScheme::Potential, EncScheme::Encrypted(ref e, ref dt, ref k)) => {
 
+                                // Assign encryption plans for all literals and params contained within
                                 let ps = potentials_builder.unwrap().build();
                                 for p in ps.params {
                                     let enc_plan = EncryptionPlan {
@@ -288,22 +310,26 @@ impl PhysicalPlanner {
 
                                 Ok(EncScheme::Inconsequential)
                             },
+                            // Anything else, default to unsupported
                             _ => {
                                 Err(self.zero_error(
                                     "1064",
-                                    format!("Unsupported expr: {:?}", *rex)
+                                    format!("Unsupported expr: {}", rex.to_readable(literals))
                                 ))
                             }
                         }
                     },
+                    // Non eq comparisons and arithmetic
                     _ => {
                         match (l, r) {
+                            // If either side contains an encrypted column, fail
                             (EncScheme::Encrypted(..), _) | (_, EncScheme::Encrypted(..)) => {
                                 Err(self.zero_error(
                                     "1064",
-                                    format!("Unsupported operator with encrypted column: {:?}", *op)
+                                    format!("Unsupported operation on encrypted column: {}", rex.to_readable(literals))
                                 ))
                             },
+                            // Otherwise delegate to mysql
                             _ => Ok(EncScheme::UnencryptedOperation)
                         }
 
@@ -313,7 +339,7 @@ impl PhysicalPlanner {
             },
             _ => Err(self.zero_error(
                 "1064",
-                format!("Unsupported expr: {:?}", *rex)
+                format!("Unsupported expr: {}", rex.to_readable(literals))
             ))
         }
 
@@ -390,7 +416,7 @@ mod tests {
         let plan = res.2;
 
         let planner = PhysicalPlanner{};
-        let pplan = planner.plan(plan, parsed);
+        let pplan = planner.plan(plan, parsed, &literals);
 
         match pplan {
             PhysicalPlan::Plan(p) => {
@@ -422,7 +448,7 @@ mod tests {
         let plan = res.2;
 
         let planner = PhysicalPlanner{};
-        let pplan = planner.plan(plan, parsed);
+        let pplan = planner.plan(plan, parsed, &literals);
 
         match pplan {
             PhysicalPlan::Plan(p) => {
@@ -430,15 +456,103 @@ mod tests {
                 assert_eq!(0, p.params.len());
                 assert_eq!(3, p.projection.len());
 
-//                let lit = p.literals.get(&(0 as usize)).unwrap();
-//                assert_eq!(NativeType::UNKNOWN, lit.data_type);
-//                assert_eq!(EncryptionType::NA, lit.encryption);
-//                assert_eq!(None, lit.key);
-//
-//                let lit = p.literals.get(&(1 as usize)).unwrap();
-//                assert_eq!(NativeType::Varchar(50), lit.data_type);
-//                assert_eq!(EncryptionType::AES, lit.encryption);
-//                assert_eq!(true, lit.key.is_some());
+                let lit = p.literals.get(&(0 as usize)).unwrap();
+                assert_eq!(NativeType::UNKNOWN, lit.data_type);
+                assert_eq!(EncryptionType::NA, lit.encryption);
+                assert_eq!(None, lit.key);
+
+                let lit = p.literals.get(&(1 as usize)).unwrap();
+                assert_eq!(NativeType::UNKNOWN, lit.data_type);
+                assert_eq!(EncryptionType::NA, lit.encryption);
+                assert_eq!(None, lit.key);
+
+                let lit = p.literals.get(&(2 as usize)).unwrap();
+                assert_eq!(NativeType::Varchar(50), lit.data_type);
+                assert_eq!(EncryptionType::AES, lit.encryption);
+                assert_eq!(true, lit.key.is_some());
+
+                let lit = p.literals.get(&(3 as usize)).unwrap();
+                assert_eq!(NativeType::UNKNOWN, lit.data_type);
+                assert_eq!(EncryptionType::NA, lit.encryption);
+                assert_eq!(None, lit.key);
+
+                let lit = p.literals.get(&(4 as usize)).unwrap();
+                assert_eq!(NativeType::UNKNOWN, lit.data_type);
+                assert_eq!(EncryptionType::NA, lit.encryption);
+                assert_eq!(None, lit.key);
+            },
+            _ => panic!("TEST FAIL")
+        }
+    }
+
+    #[test]
+    fn test_physical_plan_illegal_operations() {
+        // Eq between encrypted = unencrypted
+        let mut sql = String::from("SELECT id FROM users WHERE id = first_name");
+        let mut res = parse_and_plan(sql).unwrap();
+        let mut literals = res.0;
+        let mut parsed = res.1;
+        let mut plan = res.2;
+
+        let planner = PhysicalPlanner{};
+        let mut pplan = planner.plan(plan, parsed, &literals);
+
+        match pplan {
+            PhysicalPlan::Error(box ZeroError::EncryptionError{message, ..}) => {
+                assert_eq!(
+                String::from("Unsupported operation between encrypted and unencrypted columns: id = first_name"),
+                message)
+            },
+            _ => panic!("TEST FAIL")
+        }
+
+        sql = String::from("SELECT id FROM users WHERE age = age + 10");
+        res = parse_and_plan(sql).unwrap();
+        literals = res.0;
+        parsed = res.1;
+        plan = res.2;
+
+        pplan = planner.plan(plan, parsed, &literals);
+
+        match pplan {
+            PhysicalPlan::Error(box ZeroError::EncryptionError{message, ..}) => {
+                assert_eq!(
+                String::from("Unsupported operation on encrypted column: age + 10"),
+                message)
+            },
+            _ => panic!("TEST FAIL")
+        }
+
+        sql = String::from("SELECT id FROM users WHERE age > 10");
+        res = parse_and_plan(sql).unwrap();
+        literals = res.0;
+        parsed = res.1;
+        plan = res.2;
+
+        pplan = planner.plan(plan, parsed, &literals);
+
+        match pplan {
+            PhysicalPlan::Error(box ZeroError::EncryptionError{message, ..}) => {
+                assert_eq!(
+                String::from("Unsupported operation on encrypted column: age > 10"),
+                message)
+            },
+            _ => panic!("TEST FAIL")
+        }
+
+        sql = String::from("SELECT id FROM users WHERE age = first_name");
+        res = parse_and_plan(sql).unwrap();
+        literals = res.0;
+        parsed = res.1;
+        plan = res.2;
+
+        pplan = planner.plan(plan, parsed, &literals);
+
+        match pplan {
+            PhysicalPlan::Error(box ZeroError::EncryptionError{message, ..}) => {
+                assert_eq!(
+                String::from("Unsupported operation between columns of differing encryption and type, expr: age = first_name"),
+                message)
             },
             _ => panic!("TEST FAIL")
         }
