@@ -123,15 +123,15 @@ enum HandlerState {
     // Expecting a COM_QUERY result row
     ExpectResultRow,
     /// Expecting a COM_STMT_PREPARE response
-    StmtPrepareResponse,
+    StmtPrepareResponse(Rc<PhysicalPlan>),
     /// Expecting column definitions for column and parameters as part of a COM_STMT_PREPARE response
-    StmtPrepareFieldPacket(u16, Box<PStmt>, AtomicU32, AtomicU32),
+    StmtPrepareFieldPacket(u16, Box<PStmt>, AtomicU32, AtomicU32, Rc<PhysicalPlan>),
     /// Expecting a COM_STMT_EXECUTE response
-    StmtExecuteResponse,
+    StmtExecuteResponse(Rc<PhysicalPlan>),
     /// Expecting 1 or more field definitions as part of a COM_QUERY response
-    StmtExecuteFieldPacket(usize),
-    // Binary result row
-    StmtExecuteResultRow,
+    StmtExecuteFieldPacket(usize, Rc<PhysicalPlan>),
+    /// Binary result row
+    StmtExecuteResultRow(Rc<PhysicalPlan>),
     /// Instructs the packet handler to ignore all further result rows (due to an earlier error)
     IgnoreFurtherResults,
     /// Forward any further packets
@@ -140,11 +140,11 @@ enum HandlerState {
     OkErrResponse,
 }
 
-#[derive(Debug,PartialEq,Clone)]
+#[derive(Debug,Clone)]
 struct PStmt {
     param_types: Vec<u8>,
     column_types: Vec<u8>,
-//    ast: Box<ASTNode>
+    plan: Rc<PhysicalPlan>,
 }
 
 struct ZeroHandler {
@@ -252,16 +252,14 @@ impl PacketHandler for ZeroHandler {
                     match self.stmt_map.get(&stmt_id) {
                         Some(ref pstmt) => {
                             debug!("Executing with {:?}", pstmt);
-
+                            self.state = HandlerState::StmtExecuteResponse(pstmt.plan.clone());
+                            Action::Forward
                         },
                         None => {
                             debug!("No statement in map for id {}", stmt_id);
+                            create_error(format!("No statement in map for id {}", stmt_id))
                         }
                     }
-
-
-                    self.state = HandlerState::StmtExecuteResponse;
-                    Action::Forward
                 },
                 Ok(PacketType::ComStmtClose) => {
                     // no response for this statement
@@ -341,7 +339,7 @@ impl PacketHandler for ZeroHandler {
                 0x00 | 0xfe | 0xff => (Some(HandlerState::ExpectClientRequest), Action::Forward),
                 _ => (None, Action::Forward)
             },
-            HandlerState::StmtPrepareResponse => {
+            HandlerState::StmtPrepareResponse(ref plan) => {
                 print_packet_chars("StmtPrepareResponse", &p.bytes);
                 // COM_STMT_PREPARE_OK
                 //status (1) -- [00] OK
@@ -357,17 +355,21 @@ impl PacketHandler for ZeroHandler {
                 let mut pstmt = PStmt {
                     param_types: Vec::with_capacity(num_params as usize),
                     column_types: Vec::with_capacity(num_columns as usize),
+                    plan: plan.clone()
                 };
 
-                debug!("StmtPrepareResponse: stmt_id={}, num_columns={}, num_params={}", stmt_id, num_columns, num_params);
+                debug!("StmtPrepareResponse: stmt_id={}, num_columns={}, num_params={}",
+                       stmt_id, num_columns, num_params);
                 (Some(HandlerState::StmtPrepareFieldPacket(
                     stmt_id,
                     Box::new(pstmt),
                     AtomicU32::new(num_params as u32),
                     AtomicU32::new(num_columns as u32),
+                    plan.clone(),
                 )), Action::Forward)
             },
-            HandlerState::StmtPrepareFieldPacket(stmt_id, ref mut pstmt, ref mut num_params, ref mut num_columns) => {
+            HandlerState::StmtPrepareFieldPacket(stmt_id, ref mut pstmt, ref mut num_params,
+                                                 ref mut num_columns, ref plan) => {
 
                 debug!("StmtPrepareFieldPacket {:?}", &p.bytes);
 
@@ -414,27 +416,27 @@ impl PacketHandler for ZeroHandler {
                     (None, Action::Forward)
                 }
             },
-            HandlerState::StmtExecuteResponse => {
+            HandlerState::StmtExecuteResponse(ref plan) => {
                 print_packet_chars("StmtExecuteResponse", &p.bytes);
                 match p.bytes[4] {
                     0x00 | 0xfe | 0xff => (Some(HandlerState::ExpectClientRequest), Action::Forward),
                     _ => {
                         let mut r = MySQLPacketParser::new(&p.bytes);
                         let col_count = r.read_len();
-                        (Some(HandlerState::StmtExecuteFieldPacket(col_count)), Action::Forward)
+                        (Some(HandlerState::StmtExecuteFieldPacket(col_count, plan.clone())), Action::Forward)
                     },
                 }
             },
-            HandlerState::StmtExecuteFieldPacket(mut col_count) => {
+            HandlerState::StmtExecuteFieldPacket(mut col_count, ref plan) => {
                 print_packet_chars("StmtExecuteFieldPacket", &p.bytes);
                 if col_count > 1 {
                     col_count = col_count - 1;
                     (None, Action::Forward)
                 } else {
-                    (Some(HandlerState::StmtExecuteResultRow), Action::Forward)
+                    (Some(HandlerState::StmtExecuteResultRow(plan.clone())), Action::Forward)
                 }
             },
-            HandlerState::StmtExecuteResultRow => {
+            HandlerState::StmtExecuteResultRow(ref plan) => {
                 print_packet_chars("StmtExecuteResultRow", &p.bytes);
                 match p.bytes[4] {
                     0xfe | 0xff => (Some(HandlerState::ExpectClientRequest), Action::Forward),
@@ -480,6 +482,7 @@ pub fn print_packet_chars(msg: &'static str, buf: &[u8]) {
 //    println!("]");
 }
 
+#[derive(Debug)]
 struct PhysPlanResult {
     literals: Vec<LiteralToken>,
     physical_plan: Rc<PhysicalPlan>
@@ -536,9 +539,9 @@ impl ZeroHandler {
 
     fn process_com_stmt_prepare(&mut self, p:&Packet) -> Action {
         debug!("COM_STMT_PREPARE : {}", parse_string(&p.bytes[5..]));
-        self.state = HandlerState::StmtPrepareResponse;
-        let query = parse_string(&p.bytes[5..]);
-
+        let plan = self.get_physical_plan(parse_string(&p.bytes[5..]));
+        //TODO: rewrite query if it contains literals
+        self.state = HandlerState::StmtPrepareResponse(plan.physical_plan);
         Action::Forward
     }
 
