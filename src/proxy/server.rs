@@ -454,7 +454,7 @@ impl PacketHandler for ZeroHandler {
                                     //TODO: this could be calculated once at planning time
                                     let null_bitmap_len = (cc + 7 + 2) / 8;
 
-                                    w.write_bytes(&p.bytes[4..4+null_bitmap_len+1]); //TODO: check math here
+                                    w.write_bytes(&p.bytes[4..4+null_bitmap_len]); //TODO: check math here
                                     r.skip(null_bitmap_len);
 
                                     // iterate over each column's data
@@ -470,13 +470,16 @@ impl PacketHandler for ZeroHandler {
                                                     // note that unwrap() is safe here since result rows never contain null strings
                                                     let v : String = r.read_lenenc_string().unwrap();
 
-//                                                    let res = match encryption {
-//                                                        EncryptionType::AES =>
-//                                                            try!(String::decrypt(&v, &encryption, &self.tt[i].key.unwrap())),
-//                                                        _ => v
-//                                                    };
+                                                    let res = match encryption {
+                                                        &EncryptionType::AES =>
+                                                            match String::decrypt(v.as_bytes(), &encryption, &pp.projection[i].key.unwrap()) {
+                                                                Ok(v) => v,
+                                                                Err(e) => return create_error(format!("Decryption error {}", e))
+                                                            },
+                                                        _ => v
+                                                    };
 
-                                                    w.write_lenenc_string(v);
+                                                    w.write_lenenc_string(res);
                                                 },
                                                 _ => {
                                                     panic!("no support for {:?}", pp.projection[i].data_type);
