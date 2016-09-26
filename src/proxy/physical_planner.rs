@@ -456,7 +456,7 @@ mod tests {
         let s = String::from("zero");
         let default_schema = Some(&s);
         let planner = Planner::new(default_schema, Rc::new(provider));
-        let plan = planner.sql_to_rel(&parsed)?.unwrap();
+        let plan = planner.sql_to_rel(&parsed)?;
         Ok((tokens.literals, parsed, plan))
 
     }
