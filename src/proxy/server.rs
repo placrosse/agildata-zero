@@ -454,33 +454,35 @@ impl PacketHandler for ZeroHandler {
                                     //TODO: this could be calculated once at planning time
                                     let null_bitmap_len = (cc + 7 + 2) / 8;
 
-                                    w.write_bytes(&p.bytes[4..4+null_bitmap_len+1]);
+                                    w.write_bytes(&p.bytes[4..4+null_bitmap_len+1]); //TODO: check math here
                                     r.skip(null_bitmap_len);
 
+                                    // iterate over each column's data
                                     for i in 0..cc {
 
-                                        //TODO: handle null values based on bitmap
+                                        // only process non-null values
+                                        if p.bytes[5+i] == 0_u8 {
 
-                                        let ref encryption = pp.projection[i].encryption;
+                                            let ref encryption = pp.projection[i].encryption;
 
-//                                        match pp.projection[i].data_type {
-//                                            NativeType::Varchar(len) => {
-//
-//                                                // note that unwrap() is safe here since result rows never contain null strings
-//                                                let v : String = r.read_lenenc_string().unwrap();
-//
-//                                                let res = match encryption {
-//                                                    EncryptionType::AES =>
-//                                                        try!(String::decrypt(&v, &encryption, &self.tt[i].key.unwrap())),
-//                                                    _ => v
-//                                                };
-//
-//                                                w.write_lenenc_string(v);
-//                                            },
-//                                            _ => {
-//                                                panic!("no support for {:?}", pp.projection[i].data_type);
-//                                            }
-//                                        }
+                                            match pp.projection[i].data_type {
+                                                NativeType::Varchar(len) => {
+                                                    // note that unwrap() is safe here since result rows never contain null strings
+                                                    let v : String = r.read_lenenc_string().unwrap();
+
+//                                                    let res = match encryption {
+//                                                        EncryptionType::AES =>
+//                                                            try!(String::decrypt(&v, &encryption, &self.tt[i].key.unwrap())),
+//                                                        _ => v
+//                                                    };
+
+                                                    w.write_lenenc_string(v);
+                                                },
+                                                _ => {
+                                                    panic!("no support for {:?}", pp.projection[i].data_type);
+                                                }
+                                            }
+                                        }
                                     }
 
                                     (None, Action::Mutate(w.to_packet()))
