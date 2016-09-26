@@ -39,8 +39,15 @@ impl<'a> ExprWriter for LiteralEncryptionWriter<'a> {
     fn write(&self, _: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, Box<ZeroError>> {
         match node {
             &ASTNode::SQLLiteral(i) => {
+                let lit = self.literals.get(i).unwrap();
+                match lit {
+                    &LiteralToken::LiteralNull(_) => {
+                        builder.push_str("NULL");
+                        return Ok(true)
+                    },
+                    _ => {}
+                }
                 if self.literal_plans.contains_key(&i) {
-                    let lit = self.literals.get(i).unwrap();
                     let plan = self.literal_plans.get(&i).unwrap();
 
                     match plan.encryption {
