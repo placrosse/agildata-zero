@@ -177,9 +177,9 @@ impl ZeroHandler {
     }
 
 
-    fn plan(&self, parsed: &Option<ASTNode>) -> Result<Option<Rel>, Box<ZeroError>> {
+    fn plan(&self, parsed: &Option<ASTNode>) -> Result<Rel, Box<ZeroError>> {
         match parsed {
-            &None => Ok(None),
+            &None => panic!("Illegal"), // TODO why an option?
             &Some(ref sql) => {
                 let foo = match self.schema {
                     Some(ref s) => Some(s),
@@ -572,22 +572,9 @@ impl ZeroHandler {
                                 match planner.sql_to_rel(&parsed) {
                                     // If plan OK, continue
                                     Ok(logical_plan) => {
-                                        let physical_plan = match logical_plan {
-                                            Some(log) => {
-                                                let phys_planner = PhysicalPlanner{};
-                                                phys_planner.plan(log, parsed) // TODO get rid of planner return option
+                                        let phys_planner = PhysicalPlanner{};
+                                        let physical_plan = phys_planner.plan(logical_plan, parsed);
 
-                                            },
-                                            None => {
-                                                // i.e. CREATE TABLE
-                                                PhysicalPlan::Plan(PPlan{
-                                                    literals: HashMap::new(),
-                                                    params: HashMap::new(),
-                                                    projection: Vec::new(),
-                                                    ast: parsed
-                                                })
-                                            }
-                                        };
 
                                         PhysPlanResult{
                                             literals: tokens.literals,

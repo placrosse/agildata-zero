@@ -149,6 +149,7 @@ pub enum Rel {
     Insert {table: String, columns: Box<Rex>, values: Box<Rex>, tt: TupleType},
 	Update {table: String, set_stmts: Box<Rex>, selection: Option<Box<Rex>>, tt: TupleType},
 	Delete {table: String, selection: Option<Box<Rex>>, tt: TupleType},
+    MySQLCreateTable // TODO really implement to handle defaults, etc
 }
 
 pub trait HasTupleType {
@@ -167,6 +168,7 @@ impl HasTupleType for Rel {
             Rel::Join { ref tt, ..} => tt,
             Rel::Update { ref tt, ..} => tt,
             Rel::Delete { ref tt, ..} => tt,
+            Rel::MySQLCreateTable => panic!("No tuple type")
         }
     }
 }
@@ -259,13 +261,7 @@ impl<'a> Planner<'a> {
             },
             &ASTNode::SQLNested(box ref expr) => Ok(Rex::RexNested(Box::new(self.sql_to_rex(expr, tt)?))),
             &ASTNode::SQLSelect{..} | &ASTNode::SQLUnion{..} => {
-                match self.sql_to_rel(sql)? {
-                    Some(rel) => Ok(Rex::RelationalExpr(rel)),
-                    None => Err(ZeroError::ParseError{
-                        message: format!("Illegal state, relational expresssion cannot be null: {:?}", sql).into(),
-                        code: "1064".into()
-                    }.into())
-                }
+                Ok(Rex::RelationalExpr(self.sql_to_rel(sql)?))
             },
             _ => Err(ZeroError::ParseError{
                 message: format!("Unsupported expr {:?}", sql).into(),
@@ -274,19 +270,13 @@ impl<'a> Planner<'a> {
         }
     }
 
-    pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Option<Rel>, Box<ZeroError>> {
+    pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Rel, Box<ZeroError>> {
         match *sql {
             ASTNode::SQLSelect { box ref expr_list, ref relation, ref selection, ref order, ref for_update } => {
 
-                let relation = match relation {
+                let mut input = match relation {
                     &Some(box ref r) => self.sql_to_rel(r)?,
-                    &None => Some(Rel::Dual { tt: TupleType { elements: vec![] } })
-                };
-
-                let mut input = if let Some(r) = relation {
-                    r
-                } else {
-                    return Ok(None)
+                    &None => Rel::Dual { tt: TupleType { elements: vec![] } }
                 };
 
                 match selection {
@@ -299,65 +289,51 @@ impl<'a> Planner<'a> {
 
                 let project_list = self.sql_to_rex(expr_list, &input.tt() )?;
                 let project_tt = reconcile_tt(&project_list)?;
-                Ok(Some(Rel::Projection {
+                Ok(Rel::Projection {
                     project: Box::new(project_list),
                     input: Box::new(input),
                     tt: project_tt
-                }))
+                })
             },
             ASTNode::SQLInsert {box ref table, box ref column_list, box ref values_list, .. } => {
                 match self.sql_to_rel(table)? {
-                    Some(Rel::TableScan {table, tt}) => {
-                        Ok(Some(Rel::Insert{
+                    Rel::TableScan {table, tt} => {
+                        Ok(Rel::Insert{
                             table: table,
                             columns: Box::new(self.sql_to_rex(column_list, &tt)?),
                             values: Box::new(self.sql_to_rex(values_list, &tt)?),
                             tt: tt
-                        }))
+                        })
                     },
-                    Some(other) => return Err(ZeroError::ParseError{
+                    other @ _ => return Err(ZeroError::ParseError{
                         message: format!("Unsupported table relation for INSERT {:?}", other).into(),
                         code: "1064".into()
                     }.into()),
-                    None => return Ok(None)
                 }
             },
             ASTNode::SQLJoin{box ref left, ref join_type, box ref right, ref on_expr} => {
                 let left_rel = self.sql_to_rel(left)?;
                 let right_rel = self.sql_to_rel(right)?;
 
-                match (left_rel, right_rel) {
-                    //Both relations we control
-                    (Some(l), Some(r)) => {
-                        let mut merged: Vec<Element> = Vec::new();
-                        merged.extend(l.tt().elements.clone());
-                        merged.extend(r.tt().elements.clone());
+                let mut merged: Vec<Element> = Vec::new();
+                merged.extend(left_rel.tt().elements.clone());
+                merged.extend(right_rel.tt().elements.clone());
 
-                        let merged_tt = TupleType::new(merged);
+                let merged_tt = TupleType::new(merged);
 
-                        let on_rex = match on_expr {
-                            &Some(box ref o) => Some(Box::new(self.sql_to_rex(o, &merged_tt)?)),
-                            &None => None
-                        };
+                let on_rex = match on_expr {
+                    &Some(box ref o) => Some(Box::new(self.sql_to_rex(o, &merged_tt)?)),
+                    &None => None
+                };
 
-                        Ok(Some(Rel::Join{
-                            left: Box::new(l),
-                            join_type: join_type.clone(),
-                            right: Box::new(r),
-                            on_expr: on_rex,
-                            tt: merged_tt
-                        }))
-                    },
-                    // Neither relation we control
-                    (None, None) => Ok(None),
-                    // Mismatch
-                    (Some(_), None) | (None, Some(_)) => {
-                        Err(ZeroError::ParseError {
-                            message: format!("Unsupported: Mismatch join between encrypted and unencrypted relations").into(),
-                            code: "1064".into()
-                        }.into())
-                    }
-                }
+                Ok(Rel::Join{
+                    left: Box::new(left_rel),
+                    join_type: join_type.clone(),
+                    right: Box::new(right_rel),
+                    on_expr: on_rex,
+                    tt: merged_tt
+                })
+
             },
             ASTNode::SQLAlias{box ref expr, box ref alias} => {
 
@@ -370,18 +346,13 @@ impl<'a> Planner<'a> {
                         }.into())
                 };
 
-                match input {
-                    Some(i) => {
-                        let tt = TupleType::new(i.tt().elements.iter().map(|e| Element{
-                            name: e.name.clone(), encryption: e.encryption.clone(), key: e.key.clone(),
-                            data_type: e.data_type.clone(), relation: a.clone(),
-                            p_name: e.p_name.clone(), p_relation: Some(e.relation.clone())
-                        }).collect());
+                let tt = TupleType::new(input.tt().elements.iter().map(|e| Element{
+                    name: e.name.clone(), encryption: e.encryption.clone(), key: e.key.clone(),
+                    data_type: e.data_type.clone(), relation: a.clone(),
+                    p_name: e.p_name.clone(), p_relation: Some(e.relation.clone())
+                }).collect());
 
-                        Ok(Some(Rel::AliasedRel{alias: a, input: Box::new(i), tt: tt}))
-                    },
-                    None => Ok(None) // TODO expected behaviour?
-                }
+                Ok(Rel::AliasedRel{alias: a, input: Box::new(input), tt: tt})
             },
             ASTNode::SQLIdentifier { ref id, ref parts } => {
 
@@ -402,7 +373,7 @@ impl<'a> Planner<'a> {
                                 })
                                 .collect()
                         );
-                        Ok(Some(Rel::TableScan { table: table_name.clone(), tt: tt }))
+                        Ok(Rel::TableScan { table: table_name.clone(), tt: tt })
                     },
                     None =>  Err(ZeroError::ParseError {
                         message: format!("Invalid table {}.{}", table_schema.unwrap(), table_name).into(),
@@ -410,48 +381,45 @@ impl<'a> Planner<'a> {
                     }.into())
                 }
             },
-            ASTNode::MySQLCreateTable{..} => Ok(None), // Dont need to plan this yet...
+            ASTNode::MySQLCreateTable{..} => Ok(Rel::MySQLCreateTable),
 
             ASTNode::SQLUpdate{ box ref table, box ref assignments, ref selection } => {
-
-				match self.sql_to_rel(table)? {
-                    Some(Rel::TableScan {table, tt}) => {
-
-                        Ok(Some(Rel::Update{ 
-                        			table: table, 
-                        			set_stmts: Box::new(self.sql_to_rex(assignments, &tt)?), 
-                        			selection: match selection {
-				                            &Some(box ref expr) => Some(Box::new(self.sql_to_rex(expr, &tt)?)),
-				                            &None => None
-				                        }, 
-                        			tt: tt}))
-                    },
-                    Some(other) => return Err(ZeroError::ParseError{
-                        message: format!("Unsupported table relation for UPDATE {:?}", other).into(),
+                let (table, tt) = match self.sql_to_rel(table)? {
+                    Rel::TableScan{table, tt} => (table, tt),
+                    o @ _ => return Err(ZeroError::ParseError {
+                        message: format!("Invalid rel for SQLUpdate table {:?}", o).into(),
                         code: "1064".into()
-                    }.into()),
-                    None => Ok(None)
-                }
+                    }.into())
+                };
+
+                Ok(Rel::Update{
+                    table: table,
+                    set_stmts: Box::new(self.sql_to_rex(assignments, &tt)?),
+                    selection: match selection {
+                        &Some(box ref expr) => Some(Box::new(self.sql_to_rex(expr, &tt)?)),
+                        &None => None
+                    },
+                    tt: tt})
+
             },
             ASTNode::SQLDelete{ box ref table, ref selection } => {
 
-                match self.sql_to_rel(table)? {
-                    Some(Rel::TableScan {table, tt}) => {
-
-                        Ok(Some(Rel::Delete {
-                            table: table,
-                            selection: match selection {
-                                &Some(box ref expr) => Some(Box::new(self.sql_to_rex(expr, &tt)?)),
-                                &None => None
-                            },
-                            tt: tt}))
-                    },
-                    Some(other) => return Err(ZeroError::ParseError{
-                        message: format!("Unsupported table relation for DELETE {:?}", other).into(),
+                let (table, tt) = match self.sql_to_rel(table)? {
+                    Rel::TableScan{table, tt} => (table, tt),
+                    o @ _ => return Err(ZeroError::ParseError {
+                        message: format!("Invalid rel for SQLDelete table {:?}", o).into(),
                         code: "1064".into()
-                    }.into()),
-                    None => Ok(None)
-                }
+                    }.into())
+                };
+
+                Ok(Rel::Delete {
+                    table: table,
+                    selection: match selection {
+                        &Some(box ref expr) => Some(Box::new(self.sql_to_rex(expr, &tt)?)),
+                        &None => None
+                    },
+                    tt: tt})
+
             },
 
             _ => Err(ZeroError::ParseError {

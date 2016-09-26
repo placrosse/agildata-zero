@@ -169,6 +169,7 @@ impl PhysicalPlanner {
                     _ => {}
                 }
             },
+            Rel::MySQLCreateTable => {} // TODO eventually build plans for Defaults, etc
         }
         Ok(())
     }
