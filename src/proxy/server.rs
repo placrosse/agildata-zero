@@ -175,21 +175,6 @@ impl ZeroHandler {
             stmt_cache: stmt_cache
         }
     }
-
-
-    fn plan(&self, parsed: &Option<ASTNode>) -> Result<Rel, Box<ZeroError>> {
-        match parsed {
-            &None => panic!("Illegal"), // TODO why an option?
-            &Some(ref sql) => {
-                let foo = match self.schema {
-                    Some(ref s) => Some(s),
-                    None => None
-                };
-                let planner = Planner::new(foo, self.provider.clone());
-                planner.sql_to_rel(sql)
-            }
-        }
-    }
 }
 
 fn determine_parsing_mode(mode: &String) -> ParsingMode {
@@ -680,6 +665,8 @@ impl ZeroHandler {
                             ]);
 
         let rewritten = writer.write(&physical_plan.ast).unwrap();
+
+        debug!("Rewritten query: {}", rewritten);
         Ok(Some(rewritten))
 
     }
