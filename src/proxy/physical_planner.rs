@@ -311,6 +311,12 @@ impl PhysicalPlanner {
 
                 }
             },
+            Rex::RexFunctionCall { ref name, ref args } => {
+                for arg in args {
+                    self.get_encryption_scheme(&arg, builder, potentials);
+                }
+                Ok(EncScheme::Inconsequential)
+            },
             _ => Err(self.zero_error(
                 "1064",
                 format!("Unsupported expr: {:?}", *rex)

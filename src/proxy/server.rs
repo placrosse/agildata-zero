@@ -540,7 +540,7 @@ impl PacketHandler for ZeroHandler {
 
                                         let is_null = (null_byte & null_bitmask) > 0;
 
-                                        println!("column {} type={:?} null={}", i, pstmt.column_types[i], is_null);
+                                        debug!("column {} type={:?} null={}", i, pstmt.column_types[i], is_null);
 
                                         // only process non-null values
                                         if !is_null {
@@ -554,6 +554,16 @@ impl PacketHandler for ZeroHandler {
                                                 ProtocolBinary::Short    => copy(&mut r, &mut w, 2),
                                                 ProtocolBinary::Long     => copy(&mut r, &mut w, 4),
                                                 ProtocolBinary::LongLong => copy(&mut r, &mut w, 8),
+
+                                                // unencrypted float types
+                                                ProtocolBinary::Float    => copy(&mut r, &mut w, 4),
+                                                ProtocolBinary::Double   => copy(&mut r, &mut w, 8),
+
+                                                ProtocolBinary::DateTime | ProtocolBinary::Timestamp | ProtocolBinary::Date => {
+                                                    let len = r.read_byte().unwrap();
+                                                    w.bytes.push(len);
+                                                    copy(&mut r, &mut w, len as usize)
+                                                },
 
                                                 // unencrypted string types
                                                 ProtocolBinary::Varchar | ProtocolBinary::Enum | ProtocolBinary::Set |
@@ -614,7 +624,7 @@ impl PacketHandler for ZeroHandler {
             },
             _ => {
                 print_packet_chars("Unexpected server response", &p.bytes);
-                println!("Unsupported state {:?}", self.state);
+                debug!("Unsupported state {:?}", self.state);
                 (Some(HandlerState::ExpectClientRequest), Action::Forward)
             }
 
@@ -689,7 +699,7 @@ fn copy(r: &mut MySQLPacketParser, w: &mut MySQLPacketWriter, n: usize) {
 
 fn decrypt_aes(e: &EncryptionPlan, v: Vec<u8>) -> Result<Vec<u8>, Box<ZeroError>> {
 
-    println!("decrypt_aes()");
+    debug!("decrypt_aes()");
 
     match &e.data_type {
         &NativeType::U64 => {
