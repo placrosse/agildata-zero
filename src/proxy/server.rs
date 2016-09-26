@@ -531,8 +531,19 @@ impl PacketHandler for ZeroHandler {
                                     // iterate over each column's data
                                     for i in 0..cc {
 
+                                        let offset = 2;
+                                        let null_bitmap_byte = (i + offset) / 8;
+                                        let null_bitmap_bit = ((i + offset) % 8) as u8;
+
+                                        let null_byte = p.bytes[5+null_bitmap_byte];
+                                        let null_bitmask = 1_u8 << null_bitmap_bit;
+
+                                        let is_null = (null_byte & null_bitmask) > 0;
+
+                                        println!("column {} type={:?} null={}", i, pstmt.column_types[i], is_null);
+
                                         // only process non-null values
-                                        if /*p.bytes[5+i] == 0_u8*/ true {
+                                        if !is_null {
 
                                             let ref encryption = pp.projection[i].encryption;
 
@@ -545,10 +556,9 @@ impl PacketHandler for ZeroHandler {
                                                 ProtocolBinary::LongLong => copy(&mut r, &mut w, 8),
 
                                                 // unencrypted string types
-                                                ProtocolBinary::Varchar | ProtocolBinary::String | ProtocolBinary::VarString |
-                                                ProtocolBinary::Enum | ProtocolBinary::Set |
+                                                ProtocolBinary::Varchar | ProtocolBinary::Enum | ProtocolBinary::Set |
                                                 ProtocolBinary::Geometry | ProtocolBinary::Bit | ProtocolBinary::Decimal |
-                                                ProtocolBinary::NewDecimal |
+                                                ProtocolBinary::NewDecimal | ProtocolBinary::String | ProtocolBinary::VarString |
                                                 ProtocolBinary::LongBlob |
                                                 ProtocolBinary::MediumBlob | ProtocolBinary::Blob | ProtocolBinary::TinyBlob => {
                                                     // note that unwrap() is safe here since result rows never contain null strings
