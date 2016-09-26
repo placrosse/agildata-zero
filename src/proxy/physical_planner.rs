@@ -317,6 +317,43 @@ impl PhysicalPlanner {
                 }
                 Ok(EncScheme::Inconsequential)
             },
+            Rex::RelationalExpr(ref rel) => {
+
+                // TODO this can be improved
+                // SELECT 1, a, 'foo' FROM foo WHERE a = (SELECT MAX(1) FROM foo)
+                let mut sub_builder = PhysicalPlanBuilder::new();
+                self.plan_rel(rel, &mut sub_builder);
+
+                let sub_plan = match sub_builder.build(ASTNode::SQLLiteral(0)) {
+                    PhysicalPlan::Plan(p) => p,
+                    _ => panic!("")
+                };
+
+                for (i, lp) in sub_plan.literals {
+                    builder.push_literal(i, lp);
+                }
+                for (i, pp) in sub_plan.params {
+                    builder.push_param(i, pp);
+                }
+
+
+                if sub_plan.projection.len() == 1 {
+                    let e = &sub_plan.projection[0];
+                    match e.encryption {
+                        EncryptionType::NA => Ok(EncScheme::Unencrypted),
+                        _ => Ok(EncScheme::Encrypted(
+                            e.encryption.clone(),
+                            e.data_type.clone(),
+                            e.key.unwrap().clone()
+                        ))
+                    }
+                } else {
+                    Err(self.zero_error(
+                        "1064",
+                        "Subselects with > 1 projected column, unsupported".into()
+                    ))
+                }
+            },
             _ => Err(self.zero_error(
                 "1064",
                 format!("Unsupported expr: {:?}", *rex)
