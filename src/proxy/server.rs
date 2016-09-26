@@ -183,6 +183,10 @@ pub enum ProtocolBinary {
     Geometry = 0xff,
 }
 
+trait MySQLEncoder {
+    fn encode(&self) -> Vec<u8>;
+}
+
 struct ZeroHandler {
     config: Rc<Config>,
     provider: Rc<MySQLBackedSchemaProvider>,
@@ -265,7 +269,7 @@ impl PacketHandler for ZeroHandler {
             r.skip(23); // reserved
             let username = r.read_c_string().unwrap(); // username
             debug!("user: {}", username);
-            let auth_response = r.read_bytes().unwrap(); // auth-response
+            let auth_response = r.read_lenenc_bytes().unwrap(); // auth-response
             debug!("auth_response: {:?}", auth_response);
 
             if let Some(schema) = r.read_c_string() {
@@ -520,46 +524,48 @@ impl PacketHandler for ZeroHandler {
                                     //TODO: this could be calculated once at planning time
                                     let null_bitmap_len = (cc + 7 + 2) / 8;
 
-                                    w.write_bytes(&p.bytes[4..4+null_bitmap_len]); //TODO: check math here
+                                    w.write_bytes(&p.bytes[4..4+null_bitmap_len+1]); //TODO: check math here
 
-                                    r.skip(null_bitmap_len);
+                                    r.skip(null_bitmap_len+1);
 
                                     // iterate over each column's data
                                     for i in 0..cc {
 
                                         // only process non-null values
-                                        if p.bytes[5+i] == 0_u8 {
+                                        if /*p.bytes[5+i] == 0_u8*/ true {
 
                                             let ref encryption = pp.projection[i].encryption;
 
                                             match pstmt.column_types[i] {
 
-                                                // integral types
+                                                // unencrypted integral types
                                                 ProtocolBinary::Tiny     => copy(&mut r, &mut w, 1),
                                                 ProtocolBinary::Short    => copy(&mut r, &mut w, 2),
                                                 ProtocolBinary::Long     => copy(&mut r, &mut w, 4),
                                                 ProtocolBinary::LongLong => copy(&mut r, &mut w, 8),
 
-                                                // string types
+                                                // unencrypted string types
                                                 ProtocolBinary::Varchar | ProtocolBinary::String | ProtocolBinary::VarString |
-                                                ProtocolBinary::Enum | ProtocolBinary::Set | ProtocolBinary::LongBlob |
-                                                ProtocolBinary::MediumBlob | ProtocolBinary::Blob | ProtocolBinary::TinyBlob |
+                                                ProtocolBinary::Enum | ProtocolBinary::Set |
                                                 ProtocolBinary::Geometry | ProtocolBinary::Bit | ProtocolBinary::Decimal |
-                                                ProtocolBinary::NewDecimal => {
-
+                                                ProtocolBinary::NewDecimal |
+                                                ProtocolBinary::LongBlob |
+                                                ProtocolBinary::MediumBlob | ProtocolBinary::Blob | ProtocolBinary::TinyBlob => {
                                                     // note that unwrap() is safe here since result rows never contain null strings
-                                                    let v : String = r.read_lenenc_string().unwrap();
+                                                    let v = r.read_lenenc_bytes().unwrap();
 
-                                                    let res = match encryption {
-                                                        &EncryptionType::AES =>
-                                                            match String::decrypt(v.as_bytes(), &encryption, &pp.projection[i].key.unwrap()) {
-                                                                Ok(v) => v,
-                                                                Err(e) => return create_error(format!("Decryption error {}", e))
-                                                            },
-                                                        _ => v
-                                                    };
+                                                    match encryption {
+                                                        &EncryptionType::AES => {
+                                                            match decrypt_aes(&pp.projection[i], v) {
+                                                                Ok(d) => w.write_bytes(&d),
+                                                                Err(e) => panic!("TBD")
+                                                            }
+                                                        },
+                                                        _ => {
+                                                            w.write_bytes(&v.encode());
+                                                        }
+                                                    }
 
-                                                    w.write_lenenc_string(res);
                                                 },
                                                 _ => {
                                                     panic!("no support for {:?}", pstmt.column_types[i]);
@@ -568,7 +574,11 @@ impl PacketHandler for ZeroHandler {
                                         }
                                     }
 
-                                    (None, Action::Mutate(w.to_packet()))
+                                    let new_packet = w.build(p.bytes[3]);
+
+                                    print_packet_chars("Decrypted packet", &new_packet.bytes);
+
+                                    (None, Action::Mutate(new_packet))
                                 },
                                 _ => {
                                     debug!("could not decrypt results because no plan");
@@ -613,8 +623,116 @@ impl PacketHandler for ZeroHandler {
 
 }
 
+impl MySQLEncoder for u64 {
+    fn encode(&self) -> Vec<u8> {
+        let mut v : Vec<u8> = Vec::with_capacity(8);
+        v.write_u64::<LittleEndian>(*self);
+        v
+    }
+}
+
+impl MySQLEncoder for String {
+    fn encode(&self) -> Vec<u8> {
+        // convert string to bytes
+        let mut v : Vec<u8> = Vec::from(self.as_bytes());
+        let l = v.len();
+
+        if l < 0xfc {
+            v.insert(0, l as u8);
+            v
+        } else {
+            //TODO: add support for 3 and 4 byte lengths!!
+            let mut h : Vec<u8> = Vec::with_capacity(2);
+            h.push(0xfc);
+            h.write_u16::<LittleEndian>(l as u16);
+            h.extend_from_slice(&v);
+            h
+        }
+    }
+}
+
+impl MySQLEncoder for Vec<u8> {
+    fn encode(&self) -> Vec<u8> {
+        // convert string to bytes
+        let mut v : Vec<u8> = vec![];
+        v.extend_from_slice(&self);
+        let l = v.len();
+
+        if l < 0xfc {
+            v.insert(0, l as u8);
+            v
+        } else {
+            //TODO: add support for 3 and 4 byte lengths!!
+            let mut h : Vec<u8> = Vec::with_capacity(2);
+            h.push(0xfc);
+            h.write_u16::<LittleEndian>(l as u16);
+            h.extend_from_slice(&v);
+            h
+        }
+    }
+}
+
 fn copy(r: &mut MySQLPacketParser, w: &mut MySQLPacketWriter, n: usize) {
-    //TODO:
+    w.write_bytes(&r.payload[r.pos..r.pos+n]);
+    r.skip(n);
+}
+
+fn decrypt_aes(e: &EncryptionPlan, v: Vec<u8>) -> Result<Vec<u8>, Box<ZeroError>> {
+
+    println!("decrypt_aes()");
+
+    match &e.data_type {
+        &NativeType::U64 => {
+            let n = try!(u64::decrypt(&v, &e.encryption, &e.key.unwrap()));
+            Ok(n.encode())
+        },
+        //                                                                &NativeType::I64 => {
+        //                                                                    let res = try!(i64::decrypt(&r.read_bytes().unwrap(), &encryption, &tt[i].key.unwrap()));
+        //                                                                    Some(format!("{}", res))
+        //                                                                },
+        &NativeType::Varchar(_) | &NativeType::Char(_) => { // TODO enforce length
+            let s = try!(String::decrypt(&v, &e.encryption, &e.key.unwrap()));
+            Ok(s.encode())
+        },
+        //                                                                &NativeType::BOOL => {
+        //                                                                    debug!("try decrypt bool");
+        //                                                                    let res = bool::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt[i].key.unwrap())?;
+        //                                                                    debug!("FINISH decrypt bool");
+        //                                                                    Some(format!("{}", res))
+        //                                                                },
+        //                                                                &NativeType::D128 => {
+        //                                                                    let res = d128::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt[i].key.unwrap())?;
+        //                                                                    Some(format!("{}", res))
+        //                                                                },
+        //                                                                &NativeType::F64 => {
+        //                                                                    let res = f64::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt[i].key.unwrap())?;
+        //                                                                    Some(format!("{}", res))
+        //                                                                },
+        //                                                                &NativeType::DATE => {
+        //
+        //                                                                    let res = DateTime::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt[i].key.unwrap())?;
+        //                                                                    Some(res.date().format("%Y-%m-%d").to_string())
+        //                                                                },
+        //                                                                &NativeType::DATETIME(ref fsp) => {
+        //                                                                    let res = DateTime::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt[i].key.unwrap())?;
+        //                                                                    let fmt = match fsp {
+        //                                                                        &0 => "%Y-%m-%d %H:%M:%S",
+        //                                                                        &1 => "%Y-%m-%d %H:%M:%S%.1f",
+        //                                                                        &2 => "%Y-%m-%d %H:%M:%S%.2f",
+        //                                                                        &3 => "%Y-%m-%d %H:%M:%S%.3f",
+        //                                                                        &4 => "%Y-%m-%d %H:%M:%S%.4f",
+        //                                                                        &5 => "%Y-%m-%d %H:%M:%S%.5f",
+        //                                                                        &6 => "%Y-%m-%d %H:%M:%S%.6f",
+        //                                                                        _ => return Err(ZeroError::EncryptionError {
+        //                                                                            message: format!("Invalid fractional second precision {}", fsp).into(),
+        //                                                                            code: "1064".into()
+        //                                                                        }.into())
+        //                                                                    };
+        //                                                                    Some(res.format(fmt).to_string())
+        //
+        //                                                                }
+        native_type @ _ => panic!("Native type {:?} not implemented", native_type)
+    }
 }
 
 
@@ -871,38 +989,38 @@ impl ZeroHandler {
                         &EncryptionType::NA => r.read_lenenc_string(),
                         encryption @ _ => match &tt[i].data_type {
                             &NativeType::U64 => {
-                                let res = try!(u64::decrypt(&r.read_bytes().unwrap(), &encryption, &tt[i].key.unwrap()));
+                                let res = try!(u64::decrypt(&r.read_lenenc_bytes().unwrap(), &encryption, &tt[i].key.unwrap()));
                                 Some(format!("{}", res))
                             },
                             &NativeType::I64 => {
-                                let res = try!(i64::decrypt(&r.read_bytes().unwrap(), &encryption, &tt[i].key.unwrap()));
+                                let res = try!(i64::decrypt(&r.read_lenenc_bytes().unwrap(), &encryption, &tt[i].key.unwrap()));
                                 Some(format!("{}", res))
                             },
                             &NativeType::Varchar(_) | &NativeType::Char(_) => { // TODO enforce length
-                                let res = try!(String::decrypt(&r.read_bytes().unwrap(), &encryption, &tt[i].key.unwrap()));
+                                let res = try!(String::decrypt(&r.read_lenenc_bytes().unwrap(), &encryption, &tt[i].key.unwrap()));
                                 Some(res)
                             },
                             &NativeType::BOOL => {
                                 debug!("try decrypt bool");
-                                let res = bool::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt[i].key.unwrap())?;
+                                let res = bool::decrypt(&r.read_lenenc_bytes().unwrap(), &encryption, &tt[i].key.unwrap())?;
                                 debug!("FINISH decrypt bool");
                                 Some(format!("{}", res))
                             },
                             &NativeType::D128 => {
-                                let res = d128::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt[i].key.unwrap())?;
+                                let res = d128::decrypt(&r.read_lenenc_bytes().unwrap(), &encryption, &tt[i].key.unwrap())?;
                                 Some(format!("{}", res))
                             },
                             &NativeType::F64 => {
-                                let res = f64::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt[i].key.unwrap())?;
+                                let res = f64::decrypt(&r.read_lenenc_bytes().unwrap(), &encryption, &tt[i].key.unwrap())?;
                                 Some(format!("{}", res))
                             },
                             &NativeType::DATE => {
 
-                                let res = DateTime::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt[i].key.unwrap())?;
+                                let res = DateTime::decrypt(&r.read_lenenc_bytes().unwrap(), &encryption, &tt[i].key.unwrap())?;
                                 Some(res.date().format("%Y-%m-%d").to_string())
                             },
                             &NativeType::DATETIME(ref fsp) => {
-                                let res = DateTime::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt[i].key.unwrap())?;
+                                let res = DateTime::decrypt(&r.read_lenenc_bytes().unwrap(), &encryption, &tt[i].key.unwrap())?;
                                 let fmt = match fsp {
                                     &0 => "%Y-%m-%d %H:%M:%S",
                                     &1 => "%Y-%m-%d %H:%M:%S%.1f",
@@ -979,16 +1097,23 @@ impl MySQLPacketWriter {
     }
 
     pub fn write_bytes(&mut self, b: &[u8]) {
-        //TODO:
+        self.bytes.extend_from_slice(b);
     }
 
     pub fn write_lenenc_string(&mut self, s: String) {
-        //TODO:
+        self.bytes.extend_from_slice(&s.encode());
     }
 
-    pub fn to_packet(&self) -> Packet {
-        //TODO: there is more to it than this ... need header
-        Packet { bytes: self.bytes.clone() }
+    pub fn build(&mut self, sequence_id: u8) -> Packet {
+        let l = self.bytes.len();
+        let mut packet: Vec<u8> = Vec::with_capacity(l + 4);
+        packet.write_u32::<LittleEndian>(l as u32).unwrap();
+        assert!(0x00 == packet[3]);
+        packet.pop();
+        packet.push(sequence_id);
+        packet.extend_from_slice(&self.bytes);
+
+        Packet { bytes: packet }
     }
 
 }
@@ -1042,7 +1167,7 @@ impl<'a> MySQLPacketParser<'a> {
 
         /// reads a length-encoded string
     pub fn read_lenenc_string(&mut self) -> Option<String> {
-        match self.read_bytes() {
+        match self.read_lenenc_bytes() {
             Some(s) => Some(String::from_utf8(s.to_vec()).expect("Invalid UTF-8")),
             None => None
         }
@@ -1060,7 +1185,7 @@ impl<'a> MySQLPacketParser<'a> {
         Some(String::from_utf8(v).expect("Invalid UTF-8"))
     }
 
-    pub fn read_bytes(&mut self) -> Option<Vec<u8>> {
+    pub fn read_lenenc_bytes(&mut self) -> Option<Vec<u8>> {
         match self.read_len() {
             0xfb => None,
             n @ _ => {
