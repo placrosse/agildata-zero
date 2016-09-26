@@ -572,8 +572,22 @@ impl ZeroHandler {
                                 match planner.sql_to_rel(&parsed) {
                                     // If plan OK, continue
                                     Ok(logical_plan) => {
-                                        let phys_planner = PhysicalPlanner{};
-                                        let physical_plan = phys_planner.plan(logical_plan.unwrap(), parsed); // TODO get rid of planner return option
+                                        let physical_plan = match logical_plan {
+                                            Some(log) => {
+                                                let phys_planner = PhysicalPlanner{};
+                                                phys_planner.plan(log, parsed) // TODO get rid of planner return option
+
+                                            },
+                                            None => {
+                                                // i.e. CREATE TABLE
+                                                PhysicalPlan::Plan(PPlan{
+                                                    literals: HashMap::new(),
+                                                    params: HashMap::new(),
+                                                    projection: Vec::new(),
+                                                    ast: parsed
+                                                })
+                                            }
+                                        };
 
                                         PhysPlanResult{
                                             literals: tokens.literals,

@@ -9,7 +9,7 @@ pattern = "{d(%+)(local)} [{t}] {h({l})} {M}:{m}{n}"
 
 [[appenders.console.filter]]
 kind = "threshold"
-level = "warn"
+level = "debug"
 
 [appenders.file]
 kind = "file"
@@ -17,7 +17,7 @@ path = "error.log"
 pattern = "{d} [{t}] {l} {M}:{m}{n}"
 
 [root]
-level = "warn"
+level = "debug"
 appenders = ["console"]
 
 [loggers."test::a"]
@@ -26,5 +26,5 @@ appenders = ["file"]
 additive = true
 
 [loggers."agildata_zero::proxy::server"]
-level = "warn"
+level = "debug"
 
