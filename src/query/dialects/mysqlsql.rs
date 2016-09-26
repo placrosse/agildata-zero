@@ -10,6 +10,8 @@ static KEYWORDS: &'static [&'static str] = &["SHOW", "CREATE", "TABLE", "PRECISI
 	"PRIMARY", "KEY", "UNIQUE", "FULLTEXT", "FOREIGN", "REFERENCES", "CONSTRAINT", "USE",
 	"COMMIT", "ROLLBACK", "BEGIN"];
 
+
+
 pub struct MySQLDialect<'d>{
 	ansi: &'d AnsiSQLDialect
 }

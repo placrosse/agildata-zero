@@ -142,11 +142,45 @@ enum HandlerState {
 
 #[derive(Debug,Clone)]
 struct PStmt {
-    param_types: Vec<u8>,
-    column_types: Vec<u8>,
+    param_types: Vec<ProtocolBinary>,
+    column_types: Vec<ProtocolBinary>,
     plan: Rc<PhysicalPlan>,
     /// does the result set need to be decrypted?
     decrypt_result_set: bool,
+}
+
+#[derive(Debug,Clone,Copy,PartialEq)]
+pub enum ProtocolBinary {
+    Decimal = 0x00,
+    Tiny = 0x01,
+    Short = 0x02,
+    Long = 0x03,
+    Float = 0x04,
+    Double = 0x05,
+    Null = 0x06,
+    Timestamp = 0x07,
+    LongLong = 0x08,
+    Int24 = 0x09,
+    Date = 0x0a,
+    Time = 0x0b,
+    DateTime = 0x0c,
+    Year = 0x0d,
+    //	NewDate = 0x0e, -- not used in protocol
+    Varchar = 0x0f,
+    Bit = 0x10,
+    //	Timestamp2 = 0x11, -- not used in protocol
+    //	Datetime2 = 0x12, -- not used in protocol
+    //	Time2 = 0x13, -- not used in protocol
+    NewDecimal = 0xf6,
+    Enum = 0xf7,
+    Set = 0xf8,
+    TinyBlob = 0xf9,
+    MediumBlob = 0xfa,
+    LongBlob = 0xfb,
+    Blob = 0xfc,
+    VarString = 0xfd,
+    String = 0xfe,
+    Geometry = 0xff,
 }
 
 struct ZeroHandler {
@@ -359,8 +393,8 @@ impl PacketHandler for ZeroHandler {
                     decrypt_result_set: decrypt_result_set
                 };
 
-                debug!("StmtPrepareResponse: stmt_id={}, num_columns={}, num_params={}",
-                       stmt_id, num_columns, num_params);
+                debug!("StmtPrepareResponse: stmt_id={}, num_columns={}, num_params={} decrypt_result_set={}",
+                       stmt_id, num_columns, num_params, decrypt_result_set);
                 (Some(HandlerState::StmtPrepareFieldPacket(
                     stmt_id,
                     Box::new(pstmt),
@@ -397,6 +431,36 @@ impl PacketHandler for ZeroHandler {
                 debug!("StmtPrepareFieldPacket: stmt_id={}, num_columns={:?}, num_params={:?}, {:?}:{:?}:{:?}",
                          stmt_id, num_columns, num_params, schema, table, name);
 
+                let mysql_type = match mysql_type {
+                    0x00 => ProtocolBinary::Decimal,
+                    0x01 => ProtocolBinary::Tiny ,
+                    0x02 => ProtocolBinary::Short ,
+                    0x03 => ProtocolBinary::Long ,
+                    0x04 => ProtocolBinary::Float ,
+                    0x05 => ProtocolBinary::Double ,
+                    0x06 => ProtocolBinary::Null ,
+                    0x07 => ProtocolBinary::Timestamp ,
+                    0x08 => ProtocolBinary::LongLong ,
+                    0x09 => ProtocolBinary::Int24 ,
+                    0x0a => ProtocolBinary::Date ,
+                    0x0b => ProtocolBinary::Time ,
+                    0x0c => ProtocolBinary::DateTime ,
+                    0x0d => ProtocolBinary::Year ,
+                    0x0f => ProtocolBinary::Varchar ,
+                    0x10 => ProtocolBinary::Bit ,
+                    0xf6 => ProtocolBinary::NewDecimal ,
+                    0xf7 => ProtocolBinary::Enum ,
+                    0xf8 => ProtocolBinary::Set ,
+                    0xf9 => ProtocolBinary::TinyBlob ,
+                    0xfa => ProtocolBinary::MediumBlob ,
+                    0xfb => ProtocolBinary::LongBlob ,
+                    0xfc => ProtocolBinary::Blob ,
+                    0xfd => ProtocolBinary::VarString ,
+                    0xfe => ProtocolBinary::String ,
+                    0xff => ProtocolBinary::Geometry ,
+                    _ => panic!("TBD")
+                };
+
                 if num_params.load(Ordering::SeqCst) > 0 {
                     pstmt.param_types.push(mysql_type);
                     num_params.fetch_sub(1, Ordering::SeqCst);
@@ -427,24 +491,26 @@ impl PacketHandler for ZeroHandler {
                     },
                 }
             },
-            HandlerState::StmtExecuteFieldPacket(mut col_count, ref plan) => {
+            HandlerState::StmtExecuteFieldPacket(col_count, ref plan) => {
                 print_packet_chars("StmtExecuteFieldPacket", &p.bytes);
                 if col_count > 1 {
-                    col_count = col_count - 1;
-                    //TODO: rewrite field packet based on plan
-                    (None, Action::Forward)
+                    (Some(HandlerState::StmtExecuteFieldPacket(col_count-1, plan.clone())), Action::Forward)
                 } else {
                     (Some(HandlerState::StmtExecuteResultRow(plan.clone())), Action::Forward)
                 }
             },
             HandlerState::StmtExecuteResultRow(ref pstmt) => {
-                print_packet_chars("StmtExecuteResultRow", &p.bytes);
+                    print_packet_chars("StmtExecuteResultRow", &p.bytes);
                 match p.bytes[4] {
                     0xfe | 0xff => (Some(HandlerState::ExpectClientRequest), Action::Forward),
                     0x00 => {
                         if pstmt.decrypt_result_set {
+                            debug!("need to decrypt results");
                             match pstmt.plan.as_ref() {
                                 &PhysicalPlan::Plan(ref pp) => {
+
+                                    debug!("performing decryption");
+
                                     let cc = pstmt.column_types.len();
 
                                     let mut r = MySQLPacketParser::new(&p.bytes);
@@ -455,6 +521,7 @@ impl PacketHandler for ZeroHandler {
                                     let null_bitmap_len = (cc + 7 + 2) / 8;
 
                                     w.write_bytes(&p.bytes[4..4+null_bitmap_len]); //TODO: check math here
+
                                     r.skip(null_bitmap_len);
 
                                     // iterate over each column's data
@@ -465,8 +532,21 @@ impl PacketHandler for ZeroHandler {
 
                                             let ref encryption = pp.projection[i].encryption;
 
-                                            match pp.projection[i].data_type {
-                                                NativeType::Varchar(len) => {
+                                            match pstmt.column_types[i] {
+
+                                                // integral types
+                                                ProtocolBinary::Tiny     => copy(&mut r, &mut w, 1),
+                                                ProtocolBinary::Short    => copy(&mut r, &mut w, 2),
+                                                ProtocolBinary::Long     => copy(&mut r, &mut w, 4),
+                                                ProtocolBinary::LongLong => copy(&mut r, &mut w, 8),
+
+                                                // string types
+                                                ProtocolBinary::Varchar | ProtocolBinary::String | ProtocolBinary::VarString |
+                                                ProtocolBinary::Enum | ProtocolBinary::Set | ProtocolBinary::LongBlob |
+                                                ProtocolBinary::MediumBlob | ProtocolBinary::Blob | ProtocolBinary::TinyBlob |
+                                                ProtocolBinary::Geometry | ProtocolBinary::Bit | ProtocolBinary::Decimal |
+                                                ProtocolBinary::NewDecimal => {
+
                                                     // note that unwrap() is safe here since result rows never contain null strings
                                                     let v : String = r.read_lenenc_string().unwrap();
 
@@ -482,7 +562,7 @@ impl PacketHandler for ZeroHandler {
                                                     w.write_lenenc_string(res);
                                                 },
                                                 _ => {
-                                                    panic!("no support for {:?}", pp.projection[i].data_type);
+                                                    panic!("no support for {:?}", pstmt.column_types[i]);
                                                 }
                                             }
                                         }
@@ -490,10 +570,14 @@ impl PacketHandler for ZeroHandler {
 
                                     (None, Action::Mutate(w.to_packet()))
                                 },
-                                _ => (None, Action::Forward)
+                                _ => {
+                                    debug!("could not decrypt results because no plan");
+                                    (None, Action::Forward)
+                                }
                             }
 
                         } else {
+                            debug!("no need to decrypt results");
                             (None, Action::Forward)
                         }
                     },
@@ -526,7 +610,13 @@ impl PacketHandler for ZeroHandler {
 
 
    }
+
 }
+
+fn copy(r: &mut MySQLPacketParser, w: &mut MySQLPacketWriter, n: usize) {
+    //TODO:
+}
+
 
 #[allow(dead_code)]
 pub fn print_packet_chars(msg: &'static str, buf: &[u8]) {
@@ -983,4 +1073,9 @@ impl<'a> MySQLPacketParser<'a> {
         }
     }
 
+//    pub fn read_slice(&mut self, n: usize) -> &[u8] {
+//        let v = &self.payload[self.pos..self.pos+n];
+//        self.pos += n;
+//        v
+//    }
 }
