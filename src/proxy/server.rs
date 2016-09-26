@@ -243,24 +243,7 @@ impl PacketHandler for ZeroHandler {
                 Ok(PacketType::ComInitDb) => self.process_init_db(p),
                 Ok(PacketType::ComQuery) => self.process_com_query(p),
                 Ok(PacketType::ComStmtPrepare) => self.process_com_stmt_prepare(p),
-                Ok(PacketType::ComStmtExecute) => {
-                    print_packet_chars("ComStmtExecute", &p.bytes);
-                    let stmt_id = read_u16_le(&p.bytes[5..9]);
-
-                    debug!("stmt_id = {}", stmt_id);
-
-                    match self.stmt_map.get(&stmt_id) {
-                        Some(ref pstmt) => {
-                            debug!("Executing with {:?}", pstmt);
-                            self.state = HandlerState::StmtExecuteResponse(pstmt.plan.clone());
-                            Action::Forward
-                        },
-                        None => {
-                            debug!("No statement in map for id {}", stmt_id);
-                            create_error(format!("No statement in map for id {}", stmt_id))
-                        }
-                    }
-                },
+                Ok(PacketType::ComStmtExecute) => self.process_com_stmt_execute(p),
                 Ok(PacketType::ComStmtClose) => {
                     // no response for this statement
                     self.state = HandlerState::ExpectClientRequest;
@@ -543,6 +526,25 @@ impl ZeroHandler {
         //TODO: rewrite query if it contains literals
         self.state = HandlerState::StmtPrepareResponse(plan.physical_plan);
         Action::Forward
+    }
+
+    fn process_com_stmt_execute(&mut self, p:&Packet) -> Action {
+        print_packet_chars("ComStmtExecute", &p.bytes);
+        let stmt_id = read_u16_le(&p.bytes[5..9]);
+
+        debug!("stmt_id = {}", stmt_id);
+
+        match self.stmt_map.get(&stmt_id) {
+            Some(ref pstmt) => {
+                debug!("Executing with {:?}", pstmt);
+                self.state = HandlerState::StmtExecuteResponse(pstmt.plan.clone());
+                Action::Forward
+            },
+            None => {
+                debug!("No statement in map for id {}", stmt_id);
+                create_error(format!("No statement in map for id {}", stmt_id))
+            }
+        }
     }
 
     fn get_physical_plan(&mut self, query: String) -> PhysPlanResult {
