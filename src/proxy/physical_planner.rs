@@ -292,7 +292,7 @@ impl PhysicalPlanner {
                             (EncScheme::Encrypted(ref e, ref dt, ref k), EncScheme::Potential) | (EncScheme::Potential, EncScheme::Encrypted(ref e, ref dt, ref k)) => {
 
                                 match e {
-                                    &EncryptionType::AES => {
+                                    &EncryptionType::AES(ref iv) => {
                                         let ps = potentials_builder.unwrap().build();
                                         for p in ps.params {
                                             let enc_plan = EncryptionPlan {
@@ -495,7 +495,7 @@ mod tests {
 
                 let lit = p.literals.get(&(1 as usize)).unwrap();
                 assert_eq!(NativeType::Varchar(50), lit.data_type);
-                assert_eq!(EncryptionType::AES, lit.encryption);
+                assert_eq!(EncryptionType::AES([0u8;12]), lit.encryption);
                 assert_eq!(true, lit.key.is_some());
             },
             _ => panic!("TEST FAIL")
@@ -532,7 +532,7 @@ mod tests {
 
                 let lit = p.literals.get(&(2 as usize)).unwrap();
                 assert_eq!(NativeType::Varchar(50), lit.data_type);
-                assert_eq!(EncryptionType::AES, lit.encryption);
+                assert_eq!(EncryptionType::AES([0u8;12]), lit.encryption);
                 assert_eq!(true, lit.key.is_some());
 
                 let lit = p.literals.get(&(3 as usize)).unwrap();
@@ -702,10 +702,10 @@ mod tests {
                                         encryption: EncryptionType::NA,
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("first_name"), native_type: NativeType::Varchar(50),
-                                        encryption: EncryptionType::AES,
+                                        encryption: EncryptionType::AES([0u8;12]),
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("last_name"), native_type: NativeType::Varchar(50),
-                                        encryption: EncryptionType::AES,
+                                        encryption: EncryptionType::AES([0u8;12]),
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("ssn"), native_type: NativeType::Varchar(50),
                                         encryption: EncryptionType::AES_GCM,
@@ -714,10 +714,10 @@ mod tests {
                                         encryption: EncryptionType::AES_GCM,
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("age"), native_type: NativeType::U64,
-                                        encryption: EncryptionType::AES,
+                                        encryption: EncryptionType::AES([0u8;12]),
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("sex"), native_type: NativeType::Varchar(50),
-                                        encryption: EncryptionType::AES,
+                                        encryption: EncryptionType::AES([0u8;12]),
                                         key: [0u8; 32]},
                         ]
                     }))
@@ -732,10 +732,10 @@ mod tests {
                                         encryption: EncryptionType::NA,
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("item_code"), native_type: NativeType::U64,
-                                        encryption: EncryptionType::AES,
+                                        encryption: EncryptionType::AES([0u8;12]),
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("amount"), native_type: NativeType::F64,
-                                        encryption: EncryptionType::AES,
+                                        encryption: EncryptionType::AES([0u8;12]),
                                         key: [0u8; 32]},
                         ]
                     }))
