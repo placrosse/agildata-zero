@@ -169,7 +169,11 @@ fn parse_table_config(builder: &mut TableConfigBuilder, children: Vec<Xml>) {
 						Err(e) => panic!("Failed to determine data type for {}.{} : {}", tbl_name, name, e)
 					};
 
-					let encrypt_type = determine_encryption(&encryption);
+					let iv = match e.get_attribute("iv", None) {
+						Some(hex) => Some(iv_from_hex(hex)),
+						None => None
+					};
+					let encrypt_type = determine_encryption(&encryption, iv);
 					if encrypt_type != EncryptionType::NA && !dt.is_supported() {
 						panic!("Column: {}.{} Native Type {:?} is not supported for encryption {:?}",
 							tbl_name, name, native_type, encrypt_type
@@ -280,11 +284,16 @@ fn determine_native_type(native_type: &String) -> Result<NativeType, Box<ZeroErr
 	reconcile_native_type(&data_type, &qualifiers)
 }
 
-fn determine_encryption(encryption: &String) -> EncryptionType {
+fn determine_encryption(encryption: &String, iv: Option<[u8;12]>) -> EncryptionType {
 	match &encryption.to_uppercase() as &str {
-		"AES" => EncryptionType::AES,
+		"AES" => {
+			match iv {
+				Some(nonce)=> EncryptionType::AES(nonce),
+				None => panic!("iv attribute required for AES encryption")
+			}
+		},
 		// "AES-SALTED" => EncryptionType::AES_SALT,
-		"OPE" => EncryptionType::OPE,
+		"AES_GCM" => EncryptionType::AES_GCM,
 		"NONE" => EncryptionType::NA,
 		_ => panic!("Unsupported encryption type {}", encryption)
 	}
@@ -293,6 +302,10 @@ fn determine_encryption(encryption: &String) -> EncryptionType {
 
 fn determine_key(key: &str) -> [u8; 32] {
     hex_key(key)
+}
+
+fn iv_from_hex(hex: &str) -> [u8; 12] {
+	hex_to_iv(hex)
 }
 
 #[derive(Debug, PartialEq)]

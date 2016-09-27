@@ -267,6 +267,11 @@ impl PhysicalPlanner {
                                         "1064",
                                         format!("Unsupported operation between columns of differing encryption and type, expr: {}", rex.to_readable(literals))
                                     ))
+                                } else if *le == EncryptionType::AES_GCM || *re == EncryptionType::AES_GCM {
+                                    Err(self.zero_error(
+                                        "1064",
+                                        format!("Unsupported operation between columns of AES_GCM encryption, expr: {}", rex.to_readable(literals))
+                                    ))
                                 } else {
                                     // The operation is legal
                                     Ok(EncScheme::Inconsequential)
@@ -286,29 +291,45 @@ impl PhysicalPlanner {
                             // EQ between an encrypted column and potentially encryptable expressions, e.g a = 1, a = (1), etc
                             (EncScheme::Encrypted(ref e, ref dt, ref k), EncScheme::Potential) | (EncScheme::Potential, EncScheme::Encrypted(ref e, ref dt, ref k)) => {
 
-                                // Assign encryption plans for all literals and params contained within
-                                let ps = potentials_builder.unwrap().build();
-                                for p in ps.params {
-                                    let enc_plan = EncryptionPlan {
-                                        data_type: dt.clone(),
-                                        encryption: e.clone(),
-                                        key: Some(k.clone())
-                                    };
+                                match e {
+                                    &EncryptionType::AES(ref iv) => {
+                                        let ps = potentials_builder.unwrap().build();
+                                        for p in ps.params {
+                                            let enc_plan = EncryptionPlan {
+                                                data_type: dt.clone(),
+                                                encryption: e.clone(),
+                                                key: Some(k.clone())
+                                            };
 
-                                    builder.push_param(p, enc_plan);
+                                            builder.push_param(p, enc_plan);
+                                        }
+
+                                        for p in ps.literals {
+                                            let enc_plan = EncryptionPlan {
+                                                data_type: dt.clone(),
+                                                encryption: e.clone(),
+                                                key: Some(k.clone())
+                                            };
+
+                                            builder.push_literal(p, enc_plan);
+                                        }
+
+                                        Ok(EncScheme::Inconsequential)
+                                    },
+                                    &EncryptionType::AES_GCM => {
+                                        Err(self.zero_error(
+                                            "1064",
+                                            format!("Equality on AES_GCM column is unsupported: {}", rex.to_readable(literals))
+                                        ))
+                                    },
+                                    _ => {
+                                        Err(self.zero_error(
+                                            "1064",
+                                            format!("Unsupported expr: {}", rex.to_readable(literals))
+                                        ))
+                                    }
                                 }
 
-                                for p in ps.literals {
-                                    let enc_plan = EncryptionPlan {
-                                        data_type: dt.clone(),
-                                        encryption: e.clone(),
-                                        key: Some(k.clone())
-                                    };
-
-                                    builder.push_literal(p, enc_plan);
-                                }
-
-                                Ok(EncScheme::Inconsequential)
                             },
                             // Anything else, default to unsupported
                             _ => {
@@ -474,7 +495,7 @@ mod tests {
 
                 let lit = p.literals.get(&(1 as usize)).unwrap();
                 assert_eq!(NativeType::Varchar(50), lit.data_type);
-                assert_eq!(EncryptionType::AES, lit.encryption);
+                assert_eq!(EncryptionType::AES([0u8;12]), lit.encryption);
                 assert_eq!(true, lit.key.is_some());
             },
             _ => panic!("TEST FAIL")
@@ -511,7 +532,7 @@ mod tests {
 
                 let lit = p.literals.get(&(2 as usize)).unwrap();
                 assert_eq!(NativeType::Varchar(50), lit.data_type);
-                assert_eq!(EncryptionType::AES, lit.encryption);
+                assert_eq!(EncryptionType::AES([0u8;12]), lit.encryption);
                 assert_eq!(true, lit.key.is_some());
 
                 let lit = p.literals.get(&(3 as usize)).unwrap();
@@ -599,6 +620,57 @@ mod tests {
             },
             _ => panic!("TEST FAIL")
         }
+
+        sql = String::from("SELECT id FROM users WHERE ssn = '123456789'");
+        res = parse_and_plan(sql).unwrap();
+        literals = res.0;
+        parsed = res.1;
+        plan = res.2;
+
+        pplan = planner.plan(plan, parsed, &literals);
+
+        match pplan {
+            PhysicalPlan::Error(box ZeroError::EncryptionError{message, ..}) => {
+                assert_eq!(
+                String::from("Equality on AES_GCM column is unsupported: ssn = '123456789'"),
+                message)
+            },
+            _ => panic!("TEST FAIL")
+        }
+
+        sql = String::from("SELECT id FROM users WHERE ssn = credit_card");
+        res = parse_and_plan(sql).unwrap();
+        literals = res.0;
+        parsed = res.1;
+        plan = res.2;
+
+        pplan = planner.plan(plan, parsed, &literals);
+
+        match pplan {
+            PhysicalPlan::Error(box ZeroError::EncryptionError{message, ..}) => {
+                assert_eq!(
+                String::from("Unsupported operation between columns of AES_GCM encryption, expr: ssn = credit_card"),
+                message)
+            },
+            _ => panic!("TEST FAIL")
+        }
+
+        sql = String::from("SELECT id FROM users AS l JOIN users AS r ON l.ssn = r.ssn");
+        res = parse_and_plan(sql).unwrap();
+        literals = res.0;
+        parsed = res.1;
+        plan = res.2;
+
+        pplan = planner.plan(plan, parsed, &literals);
+
+        match pplan {
+            PhysicalPlan::Error(box ZeroError::EncryptionError{message, ..}) => {
+                assert_eq!(
+                String::from("Unsupported operation between columns of AES_GCM encryption, expr: l.ssn = r.ssn"),
+                message)
+            },
+            _ => panic!("TEST FAIL")
+        }
     }
 
     fn parse_and_plan(sql: String) -> Result<(Vec<LiteralToken>, ASTNode, Rel), Box<ZeroError>> {
@@ -630,19 +702,22 @@ mod tests {
                                         encryption: EncryptionType::NA,
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("first_name"), native_type: NativeType::Varchar(50),
-                                        encryption: EncryptionType::AES,
+                                        encryption: EncryptionType::AES([0u8;12]),
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("last_name"), native_type: NativeType::Varchar(50),
-                                        encryption: EncryptionType::AES,
+                                        encryption: EncryptionType::AES([0u8;12]),
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("ssn"), native_type: NativeType::Varchar(50),
-                                        encryption: EncryptionType::AES,
+                                        encryption: EncryptionType::AES_GCM,
+                                        key: [0u8; 32]},
+                             ColumnMeta {name: String::from("credit_card"), native_type: NativeType::Varchar(50),
+                                        encryption: EncryptionType::AES_GCM,
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("age"), native_type: NativeType::U64,
-                                        encryption: EncryptionType::AES,
+                                        encryption: EncryptionType::AES([0u8;12]),
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("sex"), native_type: NativeType::Varchar(50),
-                                        encryption: EncryptionType::AES,
+                                        encryption: EncryptionType::AES([0u8;12]),
                                         key: [0u8; 32]},
                         ]
                     }))
@@ -657,10 +732,10 @@ mod tests {
                                         encryption: EncryptionType::NA,
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("item_code"), native_type: NativeType::U64,
-                                        encryption: EncryptionType::AES,
+                                        encryption: EncryptionType::AES([0u8;12]),
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("amount"), native_type: NativeType::F64,
-                                        encryption: EncryptionType::AES,
+                                        encryption: EncryptionType::AES([0u8;12]),
                                         key: [0u8; 32]},
                         ]
                     }))

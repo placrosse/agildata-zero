@@ -192,7 +192,7 @@ pub enum LiteralToken {
 impl LiteralToken {
     fn to_readable(&self) -> String {
         match *self {
-            LiteralToken::LiteralString(_, ref value) => value.clone(),
+            LiteralToken::LiteralString(_, ref value) => format!("'{}'", value),
             LiteralToken::LiteralLong(_, ref value) => value.clone(),
             LiteralToken::LiteralDouble(_, ref value) => value.clone(),
             LiteralToken::LiteralBool(_, ref value) => value.clone(),
