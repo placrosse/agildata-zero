@@ -145,7 +145,9 @@ impl Rex {
             Rex::BinaryExpr{box ref left, ref op, box ref right} => {
                 format!("{} {} {}", left.to_readable(literals), op.to_readable(), right.to_readable(literals))
             },
-            Rex::RelationalExpr(ref rel) => {panic!("HERE")},
+            Rex::RelationalExpr(ref rel) => {
+                format!("{:?}", rel) // TODO implement to_readable for rel
+            },
             Rex::RexExprList(ref list) => list.iter().map(|e| e.to_readable(literals)).collect::<Vec<String>>().join(", "),
             Rex::RexUnary{ref operator, box ref rex} => format!("{}{}", operator.to_readable(), rex.to_readable(literals)),
             Rex::RexFunctionCall{ref name, ref args} => {

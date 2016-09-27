@@ -339,7 +339,7 @@ impl PhysicalPlanner {
             },
             Rex::RexFunctionCall { ref name, ref args } => {
                 for arg in args {
-                    self.get_encryption_scheme(&arg, builder, potentials);
+                    self.get_encryption_scheme(&arg, builder, potentials, literals);
                 }
                 Ok(EncScheme::Inconsequential)
             },
@@ -348,7 +348,7 @@ impl PhysicalPlanner {
                 // TODO this can be improved
                 // SELECT 1, a, 'foo' FROM foo WHERE a = (SELECT MAX(1) FROM foo)
                 let mut sub_builder = PhysicalPlanBuilder::new();
-                self.plan_rel(rel, &mut sub_builder);
+                self.plan_rel(rel, &mut sub_builder, literals);
 
                 let sub_plan = match sub_builder.build(ASTNode::SQLLiteral(0)) {
                     PhysicalPlan::Plan(p) => p,
