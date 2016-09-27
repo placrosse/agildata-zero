@@ -260,6 +260,7 @@ impl<'a> Planner<'a> {
                 })
             },
             &ASTNode::SQLLiteral(ref literal) => Ok(Rex::Literal(literal.clone())),
+            &ASTNode::SQLBoundParam(index) => Ok(Rex::BoundParam(index as usize)),
             &ASTNode::SQLUnary{ref operator, box ref expr} => {
                 Ok(Rex::RexUnary{operator: operator.clone(), rex: Box::new(self.sql_to_rex(expr, tt)?)})
             },
