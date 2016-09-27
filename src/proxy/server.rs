@@ -742,26 +742,12 @@ impl ZeroHandler {
 
                 let action = match rewritten {
                     Ok(Some(sql)) => {
-                        // write packed with new query
-                        let slice: &[u8] = sql.as_bytes();
-                        let mut packet: Vec<u8> = Vec::with_capacity(slice.len() + 4);
-                        packet.write_u32::<LittleEndian>((slice.len() + 1) as u32).unwrap();
-                        assert!(0x00 == packet[3]);
-                        packet.push(0x03); // COM_QUERY request packet type
-                        packet.extend_from_slice(slice);
-
                         self.tt = Some(p.projection.clone());
-
-                        Action::Mutate(Packet { bytes: packet })
-
-                        /*
-                         self.tt = Some(p.projection.clone());
                         // write packet with new query
                         let mut w = MySQLPacketWriter::new(0x00); // sequence_id 0x00
                         w.payload.push(0x03); // COM_QUERY request packet type
-                        w.write_lenenc_bytes(sql.as_bytes());
+                        w.write_bytes(sql.as_bytes());
                         Action::Mutate(w.build())
-                        */
                     },
                     Ok(None) => Action::Forward,
                     Err(e) => return create_error_from_err(e)
