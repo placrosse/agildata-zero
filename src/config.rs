@@ -284,7 +284,7 @@ fn determine_encryption(encryption: &String) -> EncryptionType {
 	match &encryption.to_uppercase() as &str {
 		"AES" => EncryptionType::AES,
 		// "AES-SALTED" => EncryptionType::AES_SALT,
-		"OPE" => EncryptionType::OPE,
+		"AES_GCM" => EncryptionType::AES_GCM,
 		"NONE" => EncryptionType::NA,
 		_ => panic!("Unsupported encryption type {}", encryption)
 	}

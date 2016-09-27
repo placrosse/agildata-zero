@@ -7,7 +7,7 @@ use error::ZeroError;
 use byteorder::{WriteBytesExt,ReadBytesExt,BigEndian};
 use std::io::Cursor;
 
-use chrono::{DateTime, TimeZone, NaiveDateTime};
+use chrono::{DateTime, TimeZone, NaiveDateTime, Timelike};
 use chrono::offset::utc::UTC;
 
 use decimal::d128;
@@ -16,7 +16,7 @@ use std::str::from_utf8_unchecked;
 #[derive(Debug, PartialEq, Clone)]
 pub enum EncryptionType {
 	AES,
-	OPE,
+	AES_GCM,
 	NA,
 }
 
@@ -91,17 +91,9 @@ impl Decrypt for bool {
 impl Encrypt for bool {
 
 	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<ZeroError>> {
-
-		match scheme {
-			&EncryptionType::AES => {
-				let mut buf: Vec<u8> = Vec::new();
-				buf.write_u8(self as u8).unwrap();
-
-				encrypt(key, &buf)
-			},
-			_ => Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
-		}
-
+		let mut buf: Vec<u8> = Vec::new();
+		buf.write_u8(self as u8).unwrap();
+		encrypt(key, &buf, make_nonce(scheme)?)
 	}
 }
 
@@ -123,15 +115,9 @@ impl Encrypt for u64 {
 
 	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<ZeroError>> {
 
-		match scheme {
-			&EncryptionType::AES => {
-				let mut buf: Vec<u8> = Vec::new();
-				buf.write_u64::<BigEndian>(self).unwrap();
-
-				encrypt(key, &buf)
-			},
-			_ => Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
-		}
+		let mut buf: Vec<u8> = Vec::new();
+		buf.write_u64::<BigEndian>(self).unwrap();
+		encrypt(key, &buf, make_nonce(scheme)?)
 
 	}
 }
@@ -154,17 +140,9 @@ impl Encrypt for i64 {
 
 	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<ZeroError>> {
 
-		match scheme {
-			&EncryptionType::AES => {
-
-				let mut buf: Vec<u8> = Vec::new();
-				buf.write_i64::<BigEndian>(self).unwrap();
-
-				encrypt(key, &buf)
-			},
-			_ => Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
-
-		}
+		let mut buf: Vec<u8> = Vec::new();
+		buf.write_i64::<BigEndian>(self).unwrap();
+		encrypt(key, &buf, make_nonce(scheme)?)
 
 	}
 }
@@ -187,16 +165,9 @@ impl Encrypt for f64 {
 
 	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<ZeroError>> {
 
-		match scheme {
-			&EncryptionType::AES => {
-				let mut buf: Vec<u8> = Vec::new();
-				buf.write_f64::<BigEndian>(self).unwrap();
-
-				encrypt(key, &buf)
-			},
-			_ => Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
-
-		}
+		let mut buf: Vec<u8> = Vec::new();
+		buf.write_f64::<BigEndian>(self).unwrap();
+		encrypt(key, &buf, make_nonce(scheme)?)
 
 	}
 }
@@ -225,33 +196,25 @@ impl Encrypt for d128 {
 
 
 	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<ZeroError>> {
-		match scheme {
-			&EncryptionType::AES => {
+		// decimal does not expose underlying bytes.
+		// get hex string, convert to bytes and encrypt
+		let hex = format!("{:x}", self);
 
-				// decimal does not expose underlying bytes.
-				// get hex string, convert to bytes and encrypt
-				let hex = format!("{:x}", self);
+		unsafe {
+			let mut bytes: Vec<u8> = Vec::new();
+			for octet in hex.as_bytes().chunks(2).rev() {
+				bytes.push( match u8::from_str_radix(from_utf8_unchecked(octet), 16) {
+					Ok(b) => b,
+					Err(e) => return Err(
+						ZeroError::EncryptionError{
+							message: format!("Failed to encrypt {} due to : {}", self, e),
+							code: "123".into()
+						}.into()
+					)
+				})
+			}
 
-				unsafe {
-					let mut bytes: Vec<u8> = Vec::new();
-					for octet in hex.as_bytes().chunks(2).rev() {
-						bytes.push( match u8::from_str_radix(from_utf8_unchecked(octet), 16) {
-							Ok(b) => b,
-							Err(e) => return Err(
-								ZeroError::EncryptionError{
-									message: format!("Failed to encrypt {} due to : {}", self, e),
-									code: "123".into()
-								}.into()
-							)
-						})
-					}
-
-					encrypt(key, &bytes)
-				}
-
-			},
-			_ => Err(ZeroError::EncryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
-
+			encrypt(key, &bytes, make_nonce(scheme)?)
 		}
 
 	}
@@ -274,17 +237,8 @@ impl Decrypt for String {
 
 impl Encrypt for String {
 	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<ZeroError>> {
-		match scheme {
-			&EncryptionType::AES => {
-				let buf = self.as_bytes();
-				debug!("Buf length = {}", buf.len());
-				let e = encrypt(key, &buf).unwrap();
-				debug!("Encrypted length = {}", e.len());
-				Ok(e)
-			},
-			_ => Err(ZeroError::EncryptionError{message: format!("Decryption not supported {:?}", scheme), code: "123".into()}.into())
-
-		}
+		let buf = self.as_bytes();
+		encrypt(key, &buf, make_nonce(scheme)?)
 	}
 }
 
@@ -315,20 +269,11 @@ impl<Tz: TimeZone> Encrypt for DateTime<Tz> {
 
 	fn encrypt(self, scheme: &EncryptionType, key: &[u8; 32]) -> Result<Vec<u8>, Box<ZeroError>> {
 
-		match scheme {
-			&EncryptionType::AES => {
-
-				let mut buf: Vec<u8> = Vec::new();
-				// sgtore fractional seconds alongside timestamp
-				buf.write_i64::<BigEndian>(self.timestamp()).unwrap();
-				buf.write_u32::<BigEndian>(self.timestamp_subsec_nanos()).unwrap();
-
-				encrypt(key, &buf)
-
-			},
-			_ => Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
-
-		}
+		let mut buf: Vec<u8> = Vec::new();
+		// store fractional seconds alongside timestamp
+		buf.write_i64::<BigEndian>(self.timestamp()).unwrap();
+		buf.write_u32::<BigEndian>(self.timestamp_subsec_nanos()).unwrap();
+		encrypt(key, &buf, make_nonce(scheme)?)
 
 	}
 }
@@ -356,9 +301,34 @@ pub fn hex_key(hex: &str) -> [u8; 32] {
 	k
 }
 
+pub fn make_nonce(scheme: &EncryptionType) -> Result<[u8; 12], Box<ZeroError>> {
+	match scheme {
+		&EncryptionType::AES => Ok(aes_eq_nonce()),
+		&EncryptionType::AES_GCM => Ok(gcm_nonce()),
+		_ => return Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
+	}
+}
 
-pub fn encrypt(key: &[u8], buf: &[u8]) -> Result<Vec<u8>, Box<ZeroError>> {
-    let nonce = [0_u8;12];
+// Create a random, unique nonce
+pub fn gcm_nonce() -> [u8; 12] {
+	let now = UTC::now();
+	let mut ts = now.timestamp();
+	let mut tn = now.nanosecond();
+	let mut nonce = [0u8; 12];
+
+	for i in 0..8 { nonce[i] = (ts & 0xff) as u8; ts >>= 8; }
+	for i in 0..4 { nonce[i + 8] = (tn & 0xff) as u8; tn >>= 8; }
+
+	nonce
+}
+
+// Create an equality preserving nonce
+pub fn aes_eq_nonce() -> [u8;12] {
+	[0_u8; 12] // TODO
+}
+
+
+pub fn encrypt(key: &[u8], buf: &[u8], nonce: [u8; 12]) -> Result<Vec<u8>, Box<ZeroError>> {
     let mut cipher = AesGcm::new(KeySize::KeySize256, key, &nonce, &[]);
 
     let mut tag = [0u8; 16];

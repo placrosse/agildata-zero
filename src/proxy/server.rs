@@ -383,7 +383,7 @@ impl PacketHandler for ZeroHandler {
                     &PhysicalPlan::Plan(ref p) => {
                         p.projection.iter().filter(|e| match e.encryption {
                             EncryptionType::AES => true,
-                            EncryptionType::OPE => true,
+                            EncryptionType::AES_GCM => true,
                             EncryptionType::NA => false,
                         }).count() > 0
                     },
