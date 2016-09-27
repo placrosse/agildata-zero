@@ -1199,7 +1199,6 @@ impl MySQLPacketWriter {
 
     /// calculates the payload length and writes it to the first three bytes of the header
     fn build(&mut self) {
-        //TODO: could re-implement this struct/impl to avoid being so expensive here
         let l = self.payload.len() - 4;
         let mut header : Vec<u8> = Vec::with_capacity(4);
         // write the payload length to the header
@@ -1210,8 +1209,6 @@ impl MySQLPacketWriter {
         self.payload[0] = header[0];
         self.payload[1] = header[1];
         self.payload[2] = header[2];
-        //TODO: would be nice to transfer ownership of payload to the packet
-        //Packet { bytes: self.payload.clone() }
     }
 
 }
@@ -1244,8 +1241,7 @@ impl MySQLEncoder for f64 {
 
 impl MySQLEncoder for d128 {
     fn encode(&self, w: &mut MySQLPacketWriter) {
-        //MYSQL_TYPE_DOUBLE stores a floating point in IEEE 754 double precision format
-        panic!("not implemented");
+        w.write_lenenc_bytes(&format!("{}", self));
     }
 }
 
