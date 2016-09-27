@@ -520,7 +520,7 @@ impl PacketHandler for ZeroHandler {
                                     //TODO: this could be calculated once at planning time
                                     let null_bitmap_len = (cc + 7 + 2) / 8;
 
-                                    w.write_bytes(&p.bytes[4..4+null_bitmap_len+1]); //TODO: check math here
+                                    w.write_bytes(&p.bytes[4..4+null_bitmap_len+1]);
 
                                     r.skip(null_bitmap_len+1);
 
@@ -1178,11 +1178,12 @@ impl MySQLPacketWriter {
         if l < 0xfc {
             // single byte to represent length
             self.payload.push(l as u8);
-        } else {
+        } else if l < 2^16 {
             // two bytes to represent length
-            //TODO: add support for 3 and 4 byte lengths!!
             self.payload.push(0xfc);
             self.payload.write_u16::<LittleEndian>(l as u16);
+        } else {
+            panic!("no support yet for length >= 2^16");
         }
 
         // now write the actual data
