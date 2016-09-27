@@ -89,3 +89,78 @@ SELECT a, b, c, d, e, f, g, h, i FROM temporal
     WHERE a = '2016-09-15' AND b = '2015-01-24 15:22:06' AND c = '2015-01-24 15:22:06.002347'
     AND d = '15:22:06.002347' AND e = '15:22:06.002347' AND f = '2015-01-24 15:22:06'
     AND g = '2015-01-24 15:22:06.002347' AND h = '1993' AND i = '2006';
+
+CREATE TABLE numerics_gcm (
+    a BIT,
+    b BIT(2),
+    c TINYINT,
+    d TINYINT(10),
+    e BOOL,
+    f BOOLEAN,
+    g SMALLINT,
+    h SMALLINT(100),
+    i INT,
+    j INT(64),
+    k INTEGER,
+    l INTEGER(64),
+    m BIGINT,
+    n BIGINT(100),
+    o DECIMAL,
+    p DECIMAL(10),
+    q DECIMAL(10,2),
+    r DEC,
+    s DEC(10),
+    t DEC(10, 2),
+    u FLOAT,
+    v FLOAT(10),
+    w FLOAT(10,2),
+    x DOUBLE,
+    y DOUBLE(10,2),
+    z DOUBLE,
+    aa DOUBLE PRECISION (10, 2)
+);
+
+INSERT INTO numerics_gcm (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, aa)
+    VALUES (1, 2, 10, 123, true, false, 1234, 1234, 12345, 12345, 12345, 12345, 123456, 123456, 10.12345, 10000.12, 10000.12,
+       10.12345, 10000.12, 10000.12, 123.456, 123.456, 123.45, 12345.6789, 12345.67, 12345.6789, 12345.67);
+
+SELECT a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, aa FROM numerics_gcm;
+
+CREATE TABLE characters_gcm (
+    a NATIONAL CHAR,
+    b CHAR,
+    c CHAR(255),
+    d NCHAR,
+    e NCHAR(255),
+    f NATIONAL CHARACTER,
+    g CHARACTER,
+    h CHARACTER(255),
+    i NATIONAL CHARACTER(50),
+    j VARCHAR(50),
+    k NVARCHAR(50),
+    l CHARACTER VARYING(50)
+);
+
+INSERT INTO characters_gcm (a, b, c, d, e, f, g, h, i, j, k, l)
+    VALUES('a', 'a', 'chars', 'b', 'nchars', 'b', 'b', 'characters', 'ineedtwentyfivecharacters', 'variableness',
+        'nvariableness', 'varying characters');
+
+SELECT a, b, c, d, e, f, g, h, i, j, k, l FROM characters_gcm;
+
+CREATE TABLE temporal_gcm (
+    a DATE,
+    b DATETIME,
+    c DATETIME(6),
+    d TIME,
+    e TIME(6),
+    f TIMESTAMP,
+    g TIMESTAMP(6) DEFAULT '1970-01-01 00:00:01.000000',
+    h YEAR,
+    i YEAR(4)
+);
+
+INSERT INTO temporal_gcm (a, b, c, d, e, f, g, h, i)
+    VALUES('2016-09-15', '2015-01-24 15:22:06', '2015-01-24 15:22:06.002347', '15:22:06.002347',
+        '15:22:06.002347', '2015-01-24 15:22:06', '2015-01-24 15:22:06.002347', '1993', '2006');
+
+SELECT a, b, c, d, e, f, g, h, i FROM temporal_gcm;
