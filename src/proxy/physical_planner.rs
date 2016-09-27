@@ -251,6 +251,11 @@ impl PhysicalPlanner {
                                         "1064",
                                         format!("Unsupported operation between columns of differing encryption and type, expr: {:?}", *rex)
                                     ))
+                                } else if *le == EncryptionType::AES_GCM || *re == EncryptionType::AES_GCM {
+                                    Err(self.zero_error(
+                                        "1064",
+                                        format!("Unsupported operation between columns of AES_GCM encryption, expr: {:?}", *rex)
+                                    ))
                                 } else {
                                     Ok(EncScheme::Inconsequential)
                                 }
@@ -265,28 +270,45 @@ impl PhysicalPlanner {
                             (EncScheme::Unencrypted, _) | (_, EncScheme::Unencrypted) => Ok(EncScheme::Inconsequential), // OK
                             (EncScheme::Encrypted(ref e, ref dt, ref k), EncScheme::Potential) | (EncScheme::Potential, EncScheme::Encrypted(ref e, ref dt, ref k)) => {
 
-                                let ps = potentials_builder.unwrap().build();
-                                for p in ps.params {
-                                    let enc_plan = EncryptionPlan {
-                                        data_type: dt.clone(),
-                                        encryption: e.clone(),
-                                        key: Some(k.clone())
-                                    };
+                                match e {
+                                    &EncryptionType::AES => {
+                                        let ps = potentials_builder.unwrap().build();
+                                        for p in ps.params {
+                                            let enc_plan = EncryptionPlan {
+                                                data_type: dt.clone(),
+                                                encryption: e.clone(),
+                                                key: Some(k.clone())
+                                            };
 
-                                    builder.push_param(p, enc_plan);
+                                            builder.push_param(p, enc_plan);
+                                        }
+
+                                        for p in ps.literals {
+                                            let enc_plan = EncryptionPlan {
+                                                data_type: dt.clone(),
+                                                encryption: e.clone(),
+                                                key: Some(k.clone())
+                                            };
+
+                                            builder.push_literal(p, enc_plan);
+                                        }
+
+                                        Ok(EncScheme::Inconsequential)
+                                    },
+                                    &EncryptionType::AES_GCM => {
+                                        Err(self.zero_error(
+                                            "1064",
+                                            format!("Equality on AES_GCM column is unsupported: {:?}", *rex)
+                                        ))
+                                    },
+                                    _ => {
+                                        Err(self.zero_error(
+                                            "1064",
+                                            format!("Unsupported expr: {:?}", *rex)
+                                        ))
+                                    }
                                 }
 
-                                for p in ps.literals {
-                                    let enc_plan = EncryptionPlan {
-                                        data_type: dt.clone(),
-                                        encryption: e.clone(),
-                                        key: Some(k.clone())
-                                    };
-
-                                    builder.push_literal(p, enc_plan);
-                                }
-
-                                Ok(EncScheme::Inconsequential)
                             },
                             _ => {
                                 Err(self.zero_error(
