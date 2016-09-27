@@ -18,8 +18,8 @@
 	</connection>
 
     <parsing>
-        <!--<property name="mode" value="permissive"/>-->
-        <property name="mode" value="strict"/>
+        <property name="mode" value="permissive"/>
+        <!--<property name="mode" value="strict"/>-->
     </parsing>
 
 	<schema name="tpcc">

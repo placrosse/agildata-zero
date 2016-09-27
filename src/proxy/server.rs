@@ -574,7 +574,7 @@ impl PacketHandler for ZeroHandler {
                                                         &EncryptionType::AES => {
                                                             match write_decrypted(&pp.projection[i], v, &mut w) {
                                                                 Ok(()) => {},
-                                                                Err(e) => panic!("TBD")
+                                                                Err(e) => return create_error(String::from("Failed to decrypt result row"))
                                                             }
                                                         },
                                                         _ => {
@@ -583,9 +583,7 @@ impl PacketHandler for ZeroHandler {
                                                     }
 
                                                 },
-                                                _ => {
-                                                    panic!("no support for {:?}", pstmt.column_types[i]);
-                                                }
+                                                _ => return create_error(format!("no support for {:?} in pstmt result set", pstmt.column_types[i]))
                                             }
                                         }
                                     }
@@ -609,14 +607,16 @@ impl PacketHandler for ZeroHandler {
                             (None, Action::Forward)
                         }
                     },
-                    _ => panic!("invalid packet type {:?} for StmtExecuteResultRow", p.bytes[4])
+                    _ => (Some(HandlerState::IgnoreFurtherResults),
+                                     create_error(format!("invalid packet type {:?} for StmtExecuteResultRow", p.bytes[4])))
                 }
             },
             HandlerState::OkErrResponse => {
                 print_packet_chars("OkErrResponse", &p.bytes);
                 match p.bytes[4] {
                     0x00 | 0xff => (Some(HandlerState::ExpectClientRequest), Action::Forward),
-                    _ => panic!("invalid packet type {:?} for OkErrResponse", p.bytes[4])
+                    _ => (Some(HandlerState::IgnoreFurtherResults),
+                                 create_error(format!("invalid packet type {:?} for OkErrResponse", p.bytes[4])))
                 }
 
             },
@@ -633,10 +633,7 @@ impl PacketHandler for ZeroHandler {
             None => {}
         }
 
-        //self.state = state;
         action
-
-
    }
 
 }
@@ -770,9 +767,16 @@ impl ZeroHandler {
     }
 
     fn process_com_stmt_prepare(&mut self, p:&Packet) -> Action {
-        debug!("COM_STMT_PREPARE : {}", parse_string(&p.bytes[5..]));
-        let plan = self.get_physical_plan(parse_string(&p.bytes[5..]));
-        //TODO: rewrite query if it contains literals
+        let sql = parse_string(&p.bytes[5..]);
+        debug!("COM_STMT_PREPARE : {}", sql);
+        let plan = self.get_physical_plan(sql);
+
+        if let &PhysicalPlan::Error(ref e) = plan.physical_plan.as_ref() {
+            return create_error_from_err(e.clone())
+        }
+
+        //TODO: rewrite query if it contains literals for encrypted columns (or maybe reject as unsupported)
+        // INSERT ... (id, ssn) VALUES (?, lit)
         self.state = HandlerState::StmtPrepareResponse(plan.physical_plan);
         Action::Forward
     }
