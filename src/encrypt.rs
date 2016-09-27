@@ -316,7 +316,7 @@ pub fn gcm_nonce() -> [u8; 12] {
 	let mut tn = now.nanosecond();
 	let mut nonce = [0u8; 12];
 
-	for i in 0..8 { nonce[i] = (ts & 0xff) as u8; ts >>= 8; }
+	for i in 0..8 { nonce[i] = (ts & 0xff) as u8; ts >>= 4; }
 	for i in 0..4 { nonce[i + 8] = (tn & 0xff) as u8; tn >>= 8; }
 
 	nonce
