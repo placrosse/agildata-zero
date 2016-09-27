@@ -15,9 +15,9 @@ use std::str::from_utf8_unchecked;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum EncryptionType {
-	AES,
-	AES_GCM,
-	NA,
+	AES, // AES equality
+	AES_GCM, // Full AES gcm
+	NA, // None
 }
 
 #[derive(Debug, PartialEq, Clone)]
