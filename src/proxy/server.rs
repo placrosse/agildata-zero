@@ -590,7 +590,9 @@ impl PacketHandler for ZeroHandler {
                                         }
                                     }
 
-                                    let new_packet = w.build();
+                                    w.build();
+
+                                    let new_packet = Packet { bytes: w.payload };
 
                                     print_packet_chars("Decrypted packet", &new_packet.bytes);
 
@@ -747,7 +749,9 @@ impl ZeroHandler {
                         let mut w = MySQLPacketWriter::new(0x00); // sequence_id 0x00
                         w.payload.push(0x03); // COM_QUERY request packet type
                         w.write_bytes(sql.as_bytes());
-                        Action::Mutate(w.build())
+                        w.build();
+                        let new_packet = Packet { bytes: w.payload };
+                        Action::Mutate(new_packet)
                     },
                     Ok(None) => Action::Forward,
                     Err(e) => return create_error_from_err(e)
@@ -1026,7 +1030,9 @@ impl ZeroHandler {
                     }
 
                     // write the new packet
-                    Ok(Action::Mutate(w.build()))
+                    w.build();
+                    let new_packet = Packet { bytes: w.payload };
+                    Ok(Action::Mutate(new_packet))
                 } else {
                     // no decryption required, so just forward packet
                     Ok(Action::Forward)
@@ -1184,7 +1190,7 @@ impl MySQLPacketWriter {
     }
 
     /// calculates the payload length and writes it to the first three bytes of the header
-    fn build(&mut self) -> Packet {
+    fn build(&mut self) {
         //TODO: could re-implement this struct/impl to avoid being so expensive here
         let l = self.payload.len() - 4;
         let mut header : Vec<u8> = Vec::with_capacity(4);
@@ -1197,7 +1203,7 @@ impl MySQLPacketWriter {
         self.payload[1] = header[1];
         self.payload[2] = header[2];
         //TODO: would be nice to transfer ownership of payload to the packet
-        Packet { bytes: self.payload.clone() }
+        //Packet { bytes: self.payload.clone() }
     }
 
 }
