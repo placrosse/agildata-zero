@@ -753,6 +753,15 @@ impl ZeroHandler {
                         self.tt = Some(p.projection.clone());
 
                         Action::Mutate(Packet { bytes: packet })
+
+                        /*
+                         self.tt = Some(p.projection.clone());
+                        // write packet with new query
+                        let mut w = MySQLPacketWriter::new(0x00); // sequence_id 0x00
+                        w.payload.push(0x03); // COM_QUERY request packet type
+                        w.write_lenenc_bytes(sql.as_bytes());
+                        Action::Mutate(w.build())
+                        */
                     },
                     Ok(None) => Action::Forward,
                     Err(e) => return create_error_from_err(e)
@@ -939,102 +948,105 @@ impl ZeroHandler {
                           p: &Packet,
                           ) -> Result<Action, Box<ZeroError>> {
 
+
         match self.tt {
             Some(ref tt) => {
 
-                debug!("Received row: tt={:?}", tt);
+                // do we need to decrypt anything?
+                let decrypt_result_set = tt.iter().filter(|e| match e.encryption {
+                    EncryptionType::AES => true,
+                    EncryptionType::OPE => true,
+                    EncryptionType::NA => false,
+                }).count() > 0;
 
-                let mut r = MySQLPacketParser::new(&p.bytes);
-                let mut wtr: Vec<u8> = vec![];
+                if decrypt_result_set {
+                    debug!("Received row: tt={:?}", tt);
 
-                for i in 0..tt.len() {
-                    debug!("decrypt element {} : {:?}", i, &tt[i]);
+                    let mut r = MySQLPacketParser::new(&p.bytes);
+                    let mut w = MySQLPacketWriter::new(p.bytes[3]);
 
-                    let value = match &tt[i].encryption {
-                        &EncryptionType::NA => r.read_lenenc_string(),
-                        encryption @ _ => {
-                            match r.read_lenenc_bytes() {
-                                Some(ref v) => {
-                                    match &tt[i].data_type {
-                                        &NativeType::U64 => {
-                                            let res = try!(u64::decrypt(&v, &encryption, &tt[i].key.unwrap()));
-                                            Some(format!("{}", res))
-                                        },
-                                        &NativeType::I64 => {
-                                            let res = try!(i64::decrypt(&v, &encryption, &tt[i].key.unwrap()));
-                                            Some(format!("{}", res))
-                                        },
-                                        &NativeType::Varchar(_) | &NativeType::Char(_) => { // TODO enforce length
-                                            let res = try!(String::decrypt(&v, &encryption, &tt[i].key.unwrap()));
-                                            Some(res)
-                                        },
-                                        &NativeType::BOOL => {
-                                            debug!("try decrypt bool");
-                                            let res = bool::decrypt(&v, &encryption, &tt[i].key.unwrap())?;
-                                            debug!("FINISH decrypt bool");
-                                            Some(format!("{}", res))
-                                        },
-                                        &NativeType::D128 => {
-                                            let res = d128::decrypt(&v, &encryption, &tt[i].key.unwrap())?;
-                                            Some(format!("{}", res))
-                                        },
-                                        &NativeType::F64 => {
-                                            let res = f64::decrypt(&v, &encryption, &tt[i].key.unwrap())?;
-                                            Some(format!("{}", res))
-                                        },
-                                        &NativeType::DATE => {
+                    for i in 0..tt.len() {
+                        debug!("decrypt element {} : {:?}", i, &tt[i]);
 
-                                            let res = DateTime::decrypt(&v, &encryption, &tt[i].key.unwrap())?;
-                                            Some(res.date().format("%Y-%m-%d").to_string())
-                                        },
-                                        &NativeType::DATETIME(ref fsp) => {
-                                            let res = DateTime::decrypt(&v, &encryption, &tt[i].key.unwrap())?;
-                                            let fmt = match fsp {
-                                                &0 => "%Y-%m-%d %H:%M:%S",
-                                                &1 => "%Y-%m-%d %H:%M:%S%.1f",
-                                                &2 => "%Y-%m-%d %H:%M:%S%.2f",
-                                                &3 => "%Y-%m-%d %H:%M:%S%.3f",
-                                                &4 => "%Y-%m-%d %H:%M:%S%.4f",
-                                                &5 => "%Y-%m-%d %H:%M:%S%.5f",
-                                                &6 => "%Y-%m-%d %H:%M:%S%.6f",
-                                                _ => return Err(ZeroError::EncryptionError {
-                                                    message: format!("Invalid fractional second precision {}", fsp).into(),
-                                                    code: "1064".into()
-                                                }.into())
-                                            };
-                                            Some(res.format(fmt).to_string())
+                        let value = match &tt[i].encryption {
+                            &EncryptionType::NA => r.read_lenenc_string(),
+                            encryption @ _ => {
+                                match r.read_lenenc_bytes() {
+                                    Some(ref v) => {
+                                        match &tt[i].data_type {
+                                            &NativeType::U64 => {
+                                                let res = try!(u64::decrypt(&v, &encryption, &tt[i].key.unwrap()));
+                                                Some(format!("{}", res))
+                                            },
+                                            &NativeType::I64 => {
+                                                let res = try!(i64::decrypt(&v, &encryption, &tt[i].key.unwrap()));
+                                                Some(format!("{}", res))
+                                            },
+                                            &NativeType::Varchar(_) | &NativeType::Char(_) => { // TODO enforce length
+                                                let res = try!(String::decrypt(&v, &encryption, &tt[i].key.unwrap()));
+                                                Some(res)
+                                            },
+                                            &NativeType::BOOL => {
+                                                debug!("try decrypt bool");
+                                                let res = bool::decrypt(&v, &encryption, &tt[i].key.unwrap())?;
+                                                debug!("FINISH decrypt bool");
+                                                Some(format!("{}", res))
+                                            },
+                                            &NativeType::D128 => {
+                                                let res = d128::decrypt(&v, &encryption, &tt[i].key.unwrap())?;
+                                                Some(format!("{}", res))
+                                            },
+                                            &NativeType::F64 => {
+                                                let res = f64::decrypt(&v, &encryption, &tt[i].key.unwrap())?;
+                                                Some(format!("{}", res))
+                                            },
+                                            &NativeType::DATE => {
 
+                                                let res = DateTime::decrypt(&v, &encryption, &tt[i].key.unwrap())?;
+                                                Some(res.date().format("%Y-%m-%d").to_string())
+                                            },
+                                            &NativeType::DATETIME(ref fsp) => {
+                                                let res = DateTime::decrypt(&v, &encryption, &tt[i].key.unwrap())?;
+                                                let fmt = match fsp {
+                                                    &0 => "%Y-%m-%d %H:%M:%S",
+                                                    &1 => "%Y-%m-%d %H:%M:%S%.1f",
+                                                    &2 => "%Y-%m-%d %H:%M:%S%.2f",
+                                                    &3 => "%Y-%m-%d %H:%M:%S%.3f",
+                                                    &4 => "%Y-%m-%d %H:%M:%S%.4f",
+                                                    &5 => "%Y-%m-%d %H:%M:%S%.5f",
+                                                    &6 => "%Y-%m-%d %H:%M:%S%.6f",
+                                                    _ => return Err(ZeroError::EncryptionError {
+                                                        message: format!("Invalid fractional second precision {}", fsp).into(),
+                                                        code: "1064".into()
+                                                    }.into())
+                                                };
+                                                Some(res.format(fmt).to_string())
+
+                                            }
+                                            native_type @ _ => panic!("Native type {:?} not implemented", native_type)
                                         }
-                                        native_type @ _ => panic!("Native type {:?} not implemented", native_type)
-                                    }
-                                },
-                                None => None
+                                    },
+                                    None => None
+                                }
+
                             }
+                        };
 
+                        match value {
+                            Some(s) => w.write_lenenc_bytes(s.as_bytes()),
+                            None => w.write_byte(0xfb)
                         }
-                    };
 
-                    // encode this field in the new packet
-                    match value {
-                        None => wtr.push(0xfb),
-                        Some(v) => {
-                            let slice = v.as_bytes();
-                            //TODO: hacked to assume single byte for string length
-                            wtr.write_u8(slice.len() as u8).unwrap();
-                            wtr.extend_from_slice(&slice);
-                        }
                     }
+
+                    // write the new packet
+                    Ok(Action::Mutate(w.build()))
+                } else {
+                    // no decryption required, so just forward packet
+                    Ok(Action::Forward)
                 }
-
-                let mut new_packet: Vec<u8> = vec![];
-                let sequence_id = p.sequence_id();
-                new_packet.write_u32::<LittleEndian>(wtr.len() as u32).unwrap();
-                new_packet.pop();
-                new_packet.push(sequence_id);
-                new_packet.extend_from_slice(&wtr);
-
-                Ok(Action::Mutate(Packet { bytes: new_packet }))
             },
+            // no decryption required, so just forward packet
             None => Ok(Action::Forward)
         }
     }
