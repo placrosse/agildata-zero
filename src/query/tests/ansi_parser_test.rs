@@ -38,6 +38,35 @@ fn select_wildcard() {
 }
 
 #[test]
+fn select_1() {
+    let dialect = AnsiSQLDialect::new();
+    let sql = String::from("SELECT 1");
+    let tokens = sql.tokenize(&dialect).unwrap();
+    let parsed = tokens.parse().unwrap();
+
+    assert_eq!(
+		SQLSelect {
+			expr_list: Box::new(SQLExprList(vec![SQLLiteral(0)])),
+			relation: None,
+			selection: None,
+			order: None,
+			for_update: false
+		},
+		parsed
+	);
+
+    println!("{:#?}", parsed);
+
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
+    let writer = SQLWriter::new(vec![&ansi_writer]);
+    let rewritten = writer.write(&parsed).unwrap();
+    assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+    println!("Rewritten: {:?}", rewritten);
+
+}
+
+#[test]
 fn select_with_nulls() {
     let dialect = AnsiSQLDialect::new();
     let sql = String::from("SELECT a, NULL FROM foo WHERE b = null");
