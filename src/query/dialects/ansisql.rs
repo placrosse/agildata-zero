@@ -350,6 +350,7 @@ impl AnsiSQLDialect {
 				},
 				_ => None
 			},
+            None => None,
 			_ => return Err(ZeroError::ParseError {
                     message: format!("unexpected token {:?}", tokens.peek()).into(),
                     code: "1064".into()
