@@ -1232,12 +1232,15 @@ impl MySQLEncoder for i64 {
 
 impl MySQLEncoder for f64 {
     fn encode(&self, w: &mut MySQLPacketWriter) {
-        panic!("not implemented");
+        //MYSQL_TYPE_FLOAT stores a floating point in IEEE 754 single precision format
+        //TODO: is this the correct encoding?
+        w.payload.write_f64::<LittleEndian>(*self);
     }
 }
 
 impl MySQLEncoder for d128 {
     fn encode(&self, w: &mut MySQLPacketWriter) {
+        //MYSQL_TYPE_DOUBLE stores a floating point in IEEE 754 double precision format
         panic!("not implemented");
     }
 }
