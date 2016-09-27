@@ -1145,7 +1145,6 @@ impl<'a> MySQLPacketParser<'a> {
 }
 
 struct MySQLPacketWriter {
-    sequence_id: u8,
     payload: Vec<u8>
 }
 
@@ -1154,8 +1153,7 @@ impl MySQLPacketWriter {
 
     fn new(sequence_id: u8) -> Self {
         MySQLPacketWriter {
-            sequence_id: sequence_id,
-            payload: vec![],
+            payload: vec![0x00, 0x00, 0x00, sequence_id],
         }
     }
 
@@ -1188,18 +1186,18 @@ impl MySQLPacketWriter {
     /// calculates the payload length and writes it to the first three bytes of the header
     fn build(&mut self) -> Packet {
         //TODO: could re-implement this struct/impl to avoid being so expensive here
-        let l = self.payload.len();
-        let mut packet_bytes : Vec<u8> = Vec::with_capacity(l + 4);
+        let l = self.payload.len() - 4;
+        let mut header : Vec<u8> = Vec::with_capacity(4);
         // write the payload length to the header
-        packet_bytes.write_u32::<LittleEndian>(l as u32).unwrap();
+        header.write_u32::<LittleEndian>(l as u32).unwrap();
         // length is a 3-byte little-endian integer, so the fourth byte must always be zero
-        assert!(0x00 == packet_bytes[3]);
-        // replace the fourth byte with the sequence id
-        packet_bytes.pop();
-        packet_bytes.push(self.sequence_id);
-        // append the payload
-        packet_bytes.extend_from_slice(&self.payload);
-        Packet { bytes: packet_bytes }
+        assert!(0x00 == header[3]);
+        // copy the header into the payload
+        self.payload[0] = header[0];
+        self.payload[1] = header[1];
+        self.payload[2] = header[2];
+        //TODO: would be nice to transfer ownership of payload to the packet
+        Packet { bytes: self.payload.clone() }
     }
 
 }
