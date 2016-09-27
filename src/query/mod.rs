@@ -188,6 +188,18 @@ pub enum LiteralToken {
     LiteralBool(usize, String),
     LiteralNull(usize)
 }
+
+impl LiteralToken {
+    fn to_readable(&self) -> String {
+        match *self {
+            LiteralToken::LiteralString(_, ref value) => value.clone(),
+            LiteralToken::LiteralLong(_, ref value) => value.clone(),
+            LiteralToken::LiteralDouble(_, ref value) => value.clone(),
+            LiteralToken::LiteralBool(_, ref value) => value.clone(),
+            LiteralToken::LiteralNull(_) => "NULL".into(),
+        }
+    }
+}
 // Parser APIs
 pub trait Parser<D: Dialect> {
 	fn parse(&self) -> Result<ASTNode, Box<ZeroError>>;
@@ -275,15 +287,6 @@ pub enum ASTNode {
 	MySQLUse(Box<ASTNode>)
 }
 
-//#[derive(Debug, PartialEq, Clone)]
-//pub enum LiteralExpr {
-//	LiteralLong(u32, u64),
-//	LiteralBool(u32, bool),
-//	LiteralDouble(u32, f64),
-//	LiteralString(u32, String),
-//    LiteralNull(u32)
-//}
-
 #[derive(Debug, PartialEq, Clone)]
 pub enum Operator {
 	ADD,
@@ -299,6 +302,26 @@ pub enum Operator {
     NEQ,
 	OR,
 	AND
+}
+
+impl Operator {
+    fn to_readable(&self) -> String {
+        match *self {
+            Operator::ADD => "+".into(),
+            Operator::SUB => "-".into(),
+            Operator::MULT => "*".into(),
+            Operator::DIV => "/".into(),
+            Operator::MOD => "%".into(),
+            Operator::GT => ">".into(),
+            Operator::LT => "<".into(),
+            Operator::GTEQ => ">=".into(),
+            Operator::LTEQ => "<=".into(),
+            Operator::EQ => "=".into(),
+            Operator::NEQ => "!=".into(),
+            Operator::OR => "OR".into(),
+            Operator::AND => "AND".into(),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -441,10 +464,4 @@ impl<'a> Writer for SQLWriter<'a> {
             code: "1064".into()
         }.into())
     }
-}
-
-pub trait ASTVisitor {
-	fn visit_ast(&mut self, &ASTNode);
-//	fn visit_ast_lit(&mut self, &LiteralExpr);
-	fn visit_ast_operator(&mut self, &Operator);
 }
