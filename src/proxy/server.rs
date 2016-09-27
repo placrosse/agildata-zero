@@ -505,7 +505,7 @@ impl PacketHandler for ZeroHandler {
                                     //TODO: this could be calculated once at planning time
                                     let null_bitmap_len = (cc + 7 + 2) / 8;
 
-                                    w.write_bytes(&p.bytes[4..4+null_bitmap_len+1]); //TODO: check math here
+                                    w.write_bytes(&p.bytes[4..4+null_bitmap_len+1]);
 
                                     r.skip(null_bitmap_len+1);
 
@@ -559,7 +559,7 @@ impl PacketHandler for ZeroHandler {
                                                         &EncryptionType::AES => {
                                                             match write_decrypted(&pp.projection[i], v, &mut w) {
                                                                 Ok(()) => {},
-                                                                Err(e) => panic!("TBD")
+                                                                Err(e) => return create_error(String::from("Failed to decrypt result row"))
                                                             }
                                                         },
                                                         _ => {
@@ -568,9 +568,7 @@ impl PacketHandler for ZeroHandler {
                                                     }
 
                                                 },
-                                                _ => {
-                                                    panic!("no support for {:?}", pstmt.column_types[i]);
-                                                }
+                                                _ => return create_error(format!("no support for {:?} in pstmt result set", pstmt.column_types[i]))
                                             }
                                         }
                                     }
@@ -594,14 +592,16 @@ impl PacketHandler for ZeroHandler {
                             (None, Action::Forward)
                         }
                     },
-                    _ => panic!("invalid packet type {:?} for StmtExecuteResultRow", p.bytes[4])
+                    _ => (Some(HandlerState::IgnoreFurtherResults),
+                                     create_error(format!("invalid packet type {:?} for StmtExecuteResultRow", p.bytes[4])))
                 }
             },
             HandlerState::OkErrResponse => {
                 print_packet_chars("OkErrResponse", &p.bytes);
                 match p.bytes[4] {
                     0x00 | 0xff => (Some(HandlerState::ExpectClientRequest), Action::Forward),
-                    _ => panic!("invalid packet type {:?} for OkErrResponse", p.bytes[4])
+                    _ => (Some(HandlerState::IgnoreFurtherResults),
+                                 create_error(format!("invalid packet type {:?} for OkErrResponse", p.bytes[4])))
                 }
 
             },
@@ -618,10 +618,7 @@ impl PacketHandler for ZeroHandler {
             None => {}
         }
 
-        //self.state = state;
         action
-
-
    }
 
 }
@@ -629,7 +626,7 @@ impl PacketHandler for ZeroHandler {
 
 fn write_decrypted(e: &EncryptionPlan, v: Vec<u8>, w: &mut MySQLPacketWriter) -> Result<(), Box<ZeroError>> {
 
-    debug!("decrypt_aes()");
+    debug!("write_decrypted()");
 
     match &e.data_type {
         &NativeType::U64 => {
@@ -637,52 +634,56 @@ fn write_decrypted(e: &EncryptionPlan, v: Vec<u8>, w: &mut MySQLPacketWriter) ->
             n.encode(w);
             Ok(())
         },
-        //                                                                &NativeType::I64 => {
-        //                                                                    let res = try!(i64::decrypt(&r.read_bytes().unwrap(), &encryption, &tt[i].key.unwrap()));
-        //                                                                    Some(format!("{}", res))
-        //                                                                },
+        &NativeType::I64 => {
+            let n = try!(i64::decrypt(&v, &e.encryption, &e.key.unwrap()));
+            n.encode(w);
+            Ok(())
+        },
         &NativeType::Varchar(_) | &NativeType::Char(_) => { // TODO enforce length
             let s = try!(String::decrypt(&v, &e.encryption, &e.key.unwrap()));
             s.encode(w);
             Ok(())
         },
-        //                                                                &NativeType::BOOL => {
-        //                                                                    debug!("try decrypt bool");
-        //                                                                    let res = bool::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt[i].key.unwrap())?;
-        //                                                                    debug!("FINISH decrypt bool");
-        //                                                                    Some(format!("{}", res))
-        //                                                                },
-        //                                                                &NativeType::D128 => {
-        //                                                                    let res = d128::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt[i].key.unwrap())?;
-        //                                                                    Some(format!("{}", res))
-        //                                                                },
-        //                                                                &NativeType::F64 => {
-        //                                                                    let res = f64::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt[i].key.unwrap())?;
-        //                                                                    Some(format!("{}", res))
-        //                                                                },
-        //                                                                &NativeType::DATE => {
-        //
-        //                                                                    let res = DateTime::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt[i].key.unwrap())?;
-        //                                                                    Some(res.date().format("%Y-%m-%d").to_string())
-        //                                                                },
-        //                                                                &NativeType::DATETIME(ref fsp) => {
-        //                                                                    let res = DateTime::decrypt(&r.read_bytes().unwrap(),  &encryption, &tt[i].key.unwrap())?;
-        //                                                                    let fmt = match fsp {
-        //                                                                        &0 => "%Y-%m-%d %H:%M:%S",
-        //                                                                        &1 => "%Y-%m-%d %H:%M:%S%.1f",
-        //                                                                        &2 => "%Y-%m-%d %H:%M:%S%.2f",
-        //                                                                        &3 => "%Y-%m-%d %H:%M:%S%.3f",
-        //                                                                        &4 => "%Y-%m-%d %H:%M:%S%.4f",
-        //                                                                        &5 => "%Y-%m-%d %H:%M:%S%.5f",
-        //                                                                        &6 => "%Y-%m-%d %H:%M:%S%.6f",
-        //                                                                        _ => return Err(ZeroError::EncryptionError {
-        //                                                                            message: format!("Invalid fractional second precision {}", fsp).into(),
-        //                                                                            code: "1064".into()
-        //                                                                        }.into())
-        //                                                                    };
-        //                                                                    Some(res.format(fmt).to_string())
-        //
-        //                                                                }
+        &NativeType::BOOL => {
+            let s = try!(bool::decrypt(&v, &e.encryption, &e.key.unwrap()));
+            s.encode(w);
+            Ok(())
+        },
+        &NativeType::D128 => {
+            let s = try!(d128::decrypt(&v, &e.encryption, &e.key.unwrap()));
+            s.encode(w);
+            Ok(())
+        },
+        &NativeType::F64 => {
+            let s = try!(f64::decrypt(&v, &e.encryption, &e.key.unwrap()));
+            s.encode(w);
+            Ok(())
+        },
+        &NativeType::DATE => {
+            let s = try!(DateTime::decrypt(&v, &e.encryption, &e.key.unwrap()));
+            let s = s.date().format("%Y-%m-%d").to_string();
+            s.encode(w);
+            Ok(())
+        },
+        &NativeType::DATETIME(ref fsp) => {
+            let s = try!(DateTime::decrypt(&v, &e.encryption, &e.key.unwrap()));
+            let fmt = match fsp {
+                &0 => "%Y-%m-%d %H:%M:%S",
+                &1 => "%Y-%m-%d %H:%M:%S%.1f",
+                &2 => "%Y-%m-%d %H:%M:%S%.2f",
+                &3 => "%Y-%m-%d %H:%M:%S%.3f",
+                &4 => "%Y-%m-%d %H:%M:%S%.4f",
+                &5 => "%Y-%m-%d %H:%M:%S%.5f",
+                &6 => "%Y-%m-%d %H:%M:%S%.6f",
+                _ => return Err(ZeroError::EncryptionError {
+                    message: format!("Invalid fractional second precision {}", fsp).into(),
+                    code: "1064".into()
+                }.into())
+            };
+            let s = s.format(fmt).to_string();
+            s.encode(w);
+            Ok(())
+        },
         native_type @ _ => panic!("Native type {:?} not implemented", native_type)
     }
 }
@@ -751,9 +752,16 @@ impl ZeroHandler {
     }
 
     fn process_com_stmt_prepare(&mut self, p:&Packet) -> Action {
-        debug!("COM_STMT_PREPARE : {}", parse_string(&p.bytes[5..]));
-        let plan = self.get_physical_plan(parse_string(&p.bytes[5..]));
-        //TODO: rewrite query if it contains literals
+        let sql = parse_string(&p.bytes[5..]);
+        debug!("COM_STMT_PREPARE : {}", sql);
+        let plan = self.get_physical_plan(sql);
+
+        if let &PhysicalPlan::Error(ref e) = plan.physical_plan.as_ref() {
+            return create_error_from_err(e.clone())
+        }
+
+        //TODO: rewrite query if it contains literals for encrypted columns (or maybe reject as unsupported)
+        // INSERT ... (id, ssn) VALUES (?, lit)
         self.state = HandlerState::StmtPrepareResponse(plan.physical_plan);
         Action::Forward
     }
@@ -1157,11 +1165,12 @@ impl MySQLPacketWriter {
         if l < 0xfc {
             // single byte to represent length
             self.payload.push(l as u8);
-        } else {
+        } else if l < 2^16 {
             // two bytes to represent length
-            //TODO: add support for 3 and 4 byte lengths!!
             self.payload.push(0xfc);
             self.payload.write_u16::<LittleEndian>(l as u16);
+        } else {
+            panic!("no support yet for length >= 2^16");
         }
 
         // now write the actual data
@@ -1178,7 +1187,6 @@ impl MySQLPacketWriter {
 
     /// calculates the payload length and writes it to the first three bytes of the header
     fn build(&mut self) {
-        //TODO: could re-implement this struct/impl to avoid being so expensive here
         let l = self.payload.len() - 4;
         let mut header : Vec<u8> = Vec::with_capacity(4);
         // write the payload length to the header
@@ -1189,8 +1197,6 @@ impl MySQLPacketWriter {
         self.payload[0] = header[0];
         self.payload[1] = header[1];
         self.payload[2] = header[2];
-        //TODO: would be nice to transfer ownership of payload to the packet
-        //Packet { bytes: self.payload.clone() }
     }
 
 }
@@ -1204,6 +1210,33 @@ trait MySQLEncoder {
 impl MySQLEncoder for u64 {
     fn encode(&self, w: &mut MySQLPacketWriter) {
         w.payload.write_u64::<LittleEndian>(*self);
+    }
+}
+
+impl MySQLEncoder for i64 {
+    fn encode(&self, w: &mut MySQLPacketWriter) {
+        w.payload.write_i64::<LittleEndian>(*self);
+    }
+}
+
+impl MySQLEncoder for f64 {
+    fn encode(&self, w: &mut MySQLPacketWriter) {
+        //MYSQL_TYPE_FLOAT stores a floating point in IEEE 754 single precision format
+        //TODO: is this the correct encoding?
+        w.payload.write_f64::<LittleEndian>(*self);
+    }
+}
+
+impl MySQLEncoder for d128 {
+    fn encode(&self, w: &mut MySQLPacketWriter) {
+        let s = format!("{}", self);
+        w.write_lenenc_bytes(s.as_bytes());
+    }
+}
+
+impl MySQLEncoder for bool {
+    fn encode(&self, w: &mut MySQLPacketWriter) {
+        w.payload.push(if *self { 1 } else { 0 });
     }
 }
 
