@@ -1241,7 +1241,8 @@ impl MySQLEncoder for f64 {
 
 impl MySQLEncoder for d128 {
     fn encode(&self, w: &mut MySQLPacketWriter) {
-        w.write_lenenc_bytes(&format!("{}", self));
+        let s = format!("{}", self);
+        w.write_lenenc_bytes(s.as_bytes());
     }
 }
 
