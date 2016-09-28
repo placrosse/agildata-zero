@@ -33,7 +33,6 @@ use std::process;
 
 mod encrypt;
 mod config;
-mod protocol;
 mod proxy;
 mod error;
 mod query;
