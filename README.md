@@ -37,6 +37,7 @@ We use github issues to track the roadmap for this product. Some of major themes
 - Add query engine in the gateway to allow for increased functionality against strongly encrypted data
 - Add support for caching unencrypted index data in the gateway to support efficient range queries and sort operations
 - Improving coverage of MySQL/MariaDB SQL syntax
+- Develop tools to make recommendations for encryption schemes based on current query access patterns
 
 
 
