@@ -17,7 +17,6 @@ pub struct EncryptionPlan {
     pub data_type: NativeType,
     pub encryption: EncryptionType,
     pub key: Option<[u8; 32]>
-//    value_type: ValueType
 }
 
 #[derive(Debug, PartialEq)]

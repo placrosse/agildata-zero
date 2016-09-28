@@ -15,7 +15,6 @@ One of the challenges with storing encrypted data in a database is that it reduc
 
 AgilData Zero takes a pragmatic approach to the problem by supporting encyrption schemes that allow for some basic operations to be performed by the database. AgilData Zero also validates queries and fails any queries that attempt to perform an operation on encrypted data, rather than just returning the wrong results.
 
-
 # Supported Encryption Algorithms
 
 AgilData Zero currently supports the following types of encryption:
@@ -47,7 +46,15 @@ We use github issues to track the roadmap for this product. Some of major themes
 - Improving coverage of MySQL/MariaDB SQL syntax
 - Develop tools to make recommendations for encryption schemes based on current query access patterns
 
+# Running AgilData Zero
 
+We recommend using rustc 1.13.0-nightly.
+
+Simply modify zero-config.xml to specify the MySQL connection details and specify which columns should be encrypted. 
+
+```
+cargo run --release
+```
 
 
 

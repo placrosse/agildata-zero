@@ -47,18 +47,25 @@ pub struct Element {
 }
 
 #[derive(Debug, Clone)]
+/// Relational expression
 pub enum Rex {
-    //Alias { name: String, expr: Box<Rex> },
+    /// Alias { name: String, expr: Box<Rex> },
     Identifier { id: Vec<String>, el: Element },
     /// literal value with index
     Literal(usize),
     /// bound parameter with index
     BoundParam(usize),
+    /// Binary expression
     BinaryExpr{left: Box<Rex>, op: Operator, right: Box<Rex>},
+    /// An expression that is also a relation e.g. a subquery
     RelationalExpr(Rel),
+    /// Expression-list
     RexExprList(Vec<Rex>),
+    /// Unary expression
     RexUnary{operator: Operator, rex: Box<Rex>},
+    /// Function call
     RexFunctionCall{name: String, args: Vec<Rex>},
+    /// Nested expression
     RexNested(Box<Rex>)
 }
 
