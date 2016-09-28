@@ -9,8 +9,6 @@ Even if the database server is compromised and an unauthorized user is able to l
 - Hosting databases in the cloud
 - Sharing healthcare data in the cloud
 
-[need more]
-
 # Security versus Functionality
 
 One of the challenges with storing encrypted data in a database is that it reduces the databases ability to operate on that data. For example, if data is encrypted with AES-256 then it changes the sort order of that data, so it is no longer possible for the database to perform range queries or sort that data with an `ORDER BY` clause. Weaker forms of encryption exist that can preserve the sort order, but order-preserving encryption is known to leak knowledge about the data, as demonstrated in [cite that paper here]. 
@@ -37,6 +35,7 @@ This form of encryption uses a unique IV per row. This is a stronger form of enc
 We use github issues to track the roadmap for this product. Some of major themes are:
 
 - Add query engine in the gateway to allow for increased functionality against strongly encrypted data
+- Add support for caching unencrypted index data in the gateway to support efficient range queries and sort operations
 - Improving coverage of MySQL/MariaDB SQL syntax
 
 
