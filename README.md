@@ -30,6 +30,14 @@ If two columns share the same key and IV then `JOIN` operations can also be perf
 
 This form of encryption uses a unique IV per row. This is a stronger form of encryption but adds additional restrictions on functionality. Equality checks can no longer be performed.
 
+# Architecture
+
+AgilData is implemented in the Rust programming language since this ensures that the product is not susceptible to exploits that rely on buffer overflow / overrun errors. Also, Rust can be run on bare metal for additional security.
+
+# Performance
+
+Performance will naturally depend greatly on the specific application and the encryption schemes chosen, but the general overhead of parsing and planning queries (excluding encryption) adds approximately 10% overhead compared to running an applicaton directly against MySQL.
+
 # Roadmap
 
 We use github issues to track the roadmap for this product. Some of major themes are:
