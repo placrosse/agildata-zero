@@ -6,8 +6,6 @@ use error::ZeroError;
 pub mod dialects;
 pub mod planner;
 
-use std::hash::{Hash, SipHasher, Hasher};
-
 #[cfg(test)]
 mod tests;
 
@@ -53,6 +51,7 @@ impl<D: Dialect> Tokenizer<D> for String {
 		let stream = tokens
 			.into_iter()
 			.filter(|t| match t { &Token::Whitespace => false, _ => true })
+			.filter(|t| match t { &Token::Comment(_) => false, _ => true })
 			.collect::<Vec<_>>();
 
 		Ok(Tokens::new(dialect, stream, literals))
@@ -177,7 +176,8 @@ pub enum Token  {
 	Literal(usize),
 	BoundParam(u32),
 	Operator(String),
-	Punctuator(String)
+	Punctuator(String),
+	Comment(String)
 }
 
 #[derive(Debug,PartialEq,Clone)]
