@@ -36,10 +36,26 @@ impl Dialect for AnsiSQLDialect {
 		match chars.peek() {
 	        Some(&ch) => match ch {
 	            ' ' | '\t' | '\n' => {
-	                chars.next(); // consumer the char
+	                chars.next(); // consume the char
 	                Ok(Some(Token::Whitespace))
 	            },
-	            '+' | '-' | '/' | '*' | '%' | '=' => {
+	            '/' => {
+					chars.next(); // consume one
+					match chars.peek() {
+						Some(&ch2) => match ch2 {
+							'*' => {
+								let mut comment = String::from("/");
+								while !comment.ends_with("*/") {
+									comment.push(chars.next().unwrap());
+								}
+								Ok(Some(Token::Comment(comment)))
+							},
+							_ => Ok(Some(Token::Operator(String::from("/"))))
+						},
+						None => Ok(Some(Token::Operator(String::from("/"))))
+					}
+				},
+	            '+' | '-' | '*' | '%' | '=' => {
 	                chars.next(); // consume one
 	                Ok(Some(Token::Operator(ch.to_string()))) // after consume because return val
 	            },

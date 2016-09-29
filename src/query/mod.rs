@@ -177,7 +177,8 @@ pub enum Token  {
 	Literal(usize),
 	BoundParam(u32),
 	Operator(String),
-	Punctuator(String)
+	Punctuator(String),
+	Comment(String)
 }
 
 #[derive(Debug,PartialEq,Clone)]
