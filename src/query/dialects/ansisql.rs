@@ -110,11 +110,11 @@ impl Dialect for AnsiSQLDialect {
 						Ok(Some(Token::Literal(index)))
 	                }
 	            },
-	            'a'...'z' | 'A'...'Z' => { // TODO this should really be any valid char for an identifier..
+	            'a'...'z' | 'A'...'Z' | '@' => { // TODO this should really be any valid char for an identifier..
 	                let mut text = String::new();
 	                while let Some(&c) = chars.peek() { // will break when it.peek() => None
 
-	                    if c.is_alphabetic() || c.is_numeric() || c == '.' || c == '_' {
+	                    if c.is_alphabetic() || c.is_numeric() || c == '.' || c == '_' || c == '@' {
 	                        text.push(c);
 	                    } else {
 	                        break; // leave the loop early
