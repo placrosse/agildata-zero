@@ -1,7 +1,5 @@
-use std::error::Error;
 use super::{ASTNode, Operator, JoinType, LiteralToken};
 use encrypt::EncryptionType;
-//use config::*;
 use encrypt::NativeType;
 use error::ZeroError;
 use std::rc::Rc;
@@ -70,17 +68,11 @@ pub enum Rex {
 }
 
 impl Rex {
-    fn name(&self) -> String {
-        match self {
-            &Rex::Identifier { ref el, .. } => el.name.clone(),
-            _ => panic!("")
-        }
-    }
 
     pub fn get_element(&self) -> Result<Element, Box<ZeroError>> {
         match self {
             &Rex::Identifier{ref el, ..} => Ok(el.clone()),
-            &Rex::Literal(ref i) => {
+            &Rex::Literal(_) => {
                 Ok(Element {
                     name : "Literal".into(), // TODO
                     encryption: EncryptionType::NA,
@@ -303,7 +295,7 @@ impl<'a> Planner<'a> {
 
     pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Rel, Box<ZeroError>> {
         match *sql {
-            ASTNode::SQLSelect { box ref expr_list, ref relation, ref selection, ref order, ref for_update } => {
+            ASTNode::SQLSelect { box ref expr_list, ref relation, ref selection, ..  } => {
 
                 let mut input = match relation {
                     &Some(box ref r) => self.sql_to_rel(r)?,
@@ -484,10 +476,8 @@ pub trait RelVisitor {
 mod tests {
 
     use query::{Tokenizer, Parser, ASTNode};
-    use config;
     use query::dialects::ansisql::*;
     use query::dialects::mysqlsql::*;
-    use std::error::Error;
     use encrypt::{NativeType, EncryptionType};
     use std::rc::Rc;
     use super::{Planner, SchemaProvider, TableMeta, ColumnMeta, Rel};
@@ -662,7 +652,7 @@ mod tests {
 
     #[test]
     fn plan_unsupported() {
-        let mut sql = String::from("SELECT COALESCE(id, first_name, 'foo') FROM users ");
+        let sql = String::from("SELECT COALESCE(id, first_name, 'foo') FROM users ");
         let plan = parse_and_plan(sql);
 
 

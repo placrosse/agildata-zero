@@ -5,7 +5,6 @@ use std::iter::Peekable;
 use std::str::Chars;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::ascii::AsciiExt;
-use std::str::FromStr;
 use std::fmt::Write;
 
 // TODO need some way of unifying keywords between dialects
@@ -42,11 +41,17 @@ impl Dialect for AnsiSQLDialect {
 	            '/' => {
 					chars.next(); // consume one
 					match chars.peek() {
-						Some(&ch2) => match ch2 {
+						Some(&ch) => match ch {
 							'*' => {
 								let mut comment = String::from("/");
 								while !comment.ends_with("*/") {
-									comment.push(chars.next().unwrap());
+									match chars.next() {
+										Some(ch) => comment.push(ch),
+										None => return Err(ZeroError::ParseError{
+											message: format!("Expected EOF during comment").into(),
+											code: "1064".into()
+										}.into())
+									}
 								}
 								Ok(Some(Token::Comment(comment)))
 							},
@@ -813,7 +818,7 @@ impl<'a> ExprWriter for AnsiSQLWriter<'a> {
 				writer._write(builder, right)?;
 
 			},
-			&ASTNode::SQLBoundParam(ref i) => builder.push_str("?"),
+			&ASTNode::SQLBoundParam(_) => builder.push_str("?"),
 			&ASTNode::SQLLiteral(index) => match self.literal_tokens.get(index) {
                 Some(lit) => match lit {
                     &LiteralToken::LiteralLong(_, ref l) => {

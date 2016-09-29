@@ -7,7 +7,7 @@ use error::ZeroError;
 use byteorder::{WriteBytesExt,ReadBytesExt,BigEndian};
 use std::io::Cursor;
 
-use chrono::{DateTime, TimeZone, NaiveDateTime, Timelike};
+use chrono::{DateTime, TimeZone, Timelike};
 use chrono::offset::utc::UTC;
 
 use decimal::d128;
