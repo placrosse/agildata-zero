@@ -18,6 +18,25 @@ fn simple_tokenize() {
 }
 
 #[test]
+fn tokenize_comment() {
+	let dialect = AnsiSQLDialect::new();
+	let tokens = String::from("/* mysql-connector-java-6.0.4 ( Revision: d2d72c397f9880b5861eb144cd8950eff808bffd ) */ SELECT 1 + 1").tokenize(&dialect).unwrap();
+	assert_eq!(
+		vec![
+			//NOTE that for now, comments are actually stripped out by the tokenizer
+			//Token::Comment("/* mysql-connector-java-6.0.4 ( Revision: d2d72c397f9880b5861eb144cd8950eff808bffd ) */".to_string()),
+			Token::Keyword("SELECT".to_string()),
+			Token::Literal(0),
+			Token::Operator("+".to_string()),
+			Token::Literal(1)
+		],
+		tokens.tokens
+	);
+
+	// let parsed = tokens.parse().unwrap();
+}
+
+#[test]
 fn tokenize_with_null() {
 	let dialect = AnsiSQLDialect::new();
 	let tokens = String::from("SELECT NULL, null").tokenize(&dialect).unwrap();

@@ -6,7 +6,6 @@ use super::super::UnionType::*;
 use super::super::{Tokenizer, Parser, SQLWriter, Writer, InsertMode};
 use super::super::dialects::ansisql::*;
 use super::test_helper::*;
-use std::error::Error;
 
 #[test]
 fn select_wildcard() {
@@ -546,6 +545,38 @@ fn insert() {
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 
 	println!("Rewritten: {:?}", rewritten);
+}
+
+#[test]
+fn insert_with_comments() {
+
+	let dialect = AnsiSQLDialect::new();
+	let sql = String::from("/* comment one */ INSERT INTO /* comment two */ foo (a, b, c) VALUES(1, 20.45, ?)");
+	let tokens = sql.tokenize(&dialect).unwrap();
+	let parsed = tokens.parse().unwrap();
+
+	assert_eq!(
+		SQLInsert{
+			table: Box::new(SQLIdentifier{id: String::from("foo"), parts: vec![String::from("foo")]}),
+			insert_mode: InsertMode::INSERT,
+			column_list: Box::new(SQLExprList(
+				vec![
+					SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]},
+					SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]},
+					SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}
+				]
+			)),
+			values_list: Box::new(SQLExprList(
+				vec![
+					SQLLiteral(0),
+					SQLLiteral(1),
+					SQLBoundParam(0)
+				]
+			))
+		},
+		parsed
+	);
+
 }
 
 #[test]
