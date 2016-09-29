@@ -796,8 +796,7 @@ fn select_for_update() {
 #[test]
 fn select_with_variables() {
 	let dialect = AnsiSQLDialect::new();
-	let sql = String::from("/* mysql-connector-java-6.0.4 ( Revision: d2d72c397f9880b5861eb144cd8950eff808bffd ) */
-		SELECT  @@session.auto_increment_increment AS auto_increment_increment, @@character_set_client AS character_set_client,
+	let sql = String::from("SELECT  @@session.auto_increment_increment AS auto_increment_increment, @@character_set_client AS character_set_client,
 		@@character_set_connection AS character_set_connection, @@character_set_results AS character_set_results,
 		@@character_set_server AS character_set_server, @@init_connect AS init_connect, @@interactive_timeout AS interactive_timeout,
 		@@license AS license, @@lower_case_table_names AS lower_case_table_names, @@max_allowed_packet AS max_allowed_packet,
