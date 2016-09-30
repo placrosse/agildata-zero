@@ -1,16 +1,9 @@
-use query::planner::{Rel, Rex, TupleType, Element, HasTupleType};
+use query::planner::{Rel, Rex};
 use encrypt::{NativeType, EncryptionType};
-use query::{Token, ASTNode, LiteralToken, Operator};
+use query::{ASTNode, LiteralToken, Operator};
 use error::ZeroError;
 
 use std::collections::HashMap;
-
-#[derive(Debug, PartialEq)]
-pub enum ValueType {
-    BOUND_PARAM(u32),
-    LITERAL(u32),
-    COLUMN
-}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct EncryptionPlan {
@@ -91,7 +84,7 @@ impl PhysicalPlanner {
     fn plan_rel(&self, rel: &Rel, builder: &mut PhysicalPlanBuilder, literals: &Vec<LiteralToken>) -> Result<(), Box<ZeroError>> {
         match *rel {
             Rel::Projection { box ref project, box ref input, ref tt } => {
-                self.plan_rex(project, builder, tt, literals)?;
+                self.plan_rex(project, builder, literals)?;
                 self.plan_rel(input, builder, literals)?;
 
                 // push projection encryption types into builder
@@ -107,41 +100,41 @@ impl PhysicalPlanner {
                 }
             },
             Rel::Selection { box ref expr, box ref input } => {
-                self.plan_rex(expr, builder, input.tt(), literals)?;
+                self.plan_rex(expr, builder, literals)?;
                 self.plan_rel(input, builder, literals)?;
             },
             Rel::TableScan { .. } => {},
-            Rel::Join { box ref left, box ref right, ref on_expr, ref tt, .. } => {
+            Rel::Join { box ref left, box ref right, ref on_expr, .. } => {
                 self.plan_rel(left, builder, literals)?;
                 self.plan_rel(right, builder, literals)?;
                 match on_expr {
-                    &Some(box ref o) => self.plan_rex(o, builder, tt, literals)?,
+                    &Some(box ref o) => self.plan_rex(o, builder, literals)?,
                     &None => {}
                 }
             },
             Rel::AliasedRel { box ref input, .. } => self.plan_rel(input, builder, literals)?,
             Rel::Dual { .. } => {},
-            Rel::Update { ref table, box ref set_stmts, ref selection, ref tt } => {
+            Rel::Update { box ref set_stmts, ref selection, .. } => {
                 match set_stmts {
                     &Rex::RexExprList(ref list) => {
                         for e in list.iter() {
-                            self.plan_rex(e, builder, tt, literals);
+                            self.plan_rex(e, builder, literals)?;
                         }
                     },
                     _ => {}
                 }
                 match selection {
-                    &Some(box ref s) => self.plan_rex(s, builder, tt, literals)?,
+                    &Some(box ref s) => self.plan_rex(s, builder, literals)?,
                     &None => {}
                 }
             },
-            Rel::Delete { ref table, ref selection, ref tt } => {
+            Rel::Delete { ref selection, .. } => {
                 match selection {
-                    &Some(box ref s) => self.plan_rex(s, builder, tt, literals)?,
+                    &Some(box ref s) => self.plan_rex(s, builder, literals)?,
                     &None => {}
                 }
             },
-            Rel::Insert { ref table, box ref columns, box ref values, .. } => {
+            Rel::Insert { box ref columns, box ref values, .. } => {
                 match (columns, values) {
                     ( & Rex::RexExprList( ref c_list), & Rex::RexExprList( ref v_list)) => {
                         let mut it = c_list.iter().zip(v_list.iter());
@@ -182,7 +175,7 @@ impl PhysicalPlanner {
         }.into()
     }
 
-    fn plan_rex(&self, rex: &Rex, builder: &mut PhysicalPlanBuilder, tt: &TupleType, literals: &Vec<LiteralToken>) -> Result<(), Box<ZeroError>>  {
+    fn plan_rex(&self, rex: &Rex, builder: &mut PhysicalPlanBuilder, literals: &Vec<LiteralToken>) -> Result<(), Box<ZeroError>>  {
         match self.get_encryption_scheme(rex, builder, &mut None, literals) {
             Ok(_) => Ok(()),
             Err(e) => Err(e)
@@ -266,10 +259,10 @@ impl PhysicalPlanner {
                                         "1064",
                                         format!("Unsupported operation between columns of differing encryption and type, expr: {}", rex.to_readable(literals))
                                     ))
-                                } else if *le == EncryptionType::AES_GCM || *re == EncryptionType::AES_GCM {
+                                } else if *le == EncryptionType::AesGcm || *re == EncryptionType::AesGcm {
                                     Err(self.zero_error(
                                         "1064",
-                                        format!("Unsupported operation between columns of AES_GCM encryption, expr: {}", rex.to_readable(literals))
+                                        format!("Unsupported operation between columns of AesGcm encryption, expr: {}", rex.to_readable(literals))
                                     ))
                                 } else {
                                     // The operation is legal
@@ -291,7 +284,7 @@ impl PhysicalPlanner {
                             (EncScheme::Encrypted(ref e, ref dt, ref k), EncScheme::Potential) | (EncScheme::Potential, EncScheme::Encrypted(ref e, ref dt, ref k)) => {
 
                                 match e {
-                                    &EncryptionType::AES(ref iv) => {
+                                    &EncryptionType::Aes(_) => {
                                         let ps = potentials_builder.unwrap().build();
                                         for p in ps.params {
                                             let enc_plan = EncryptionPlan {
@@ -315,10 +308,10 @@ impl PhysicalPlanner {
 
                                         Ok(EncScheme::Inconsequential)
                                     },
-                                    &EncryptionType::AES_GCM => {
+                                    &EncryptionType::AesGcm => {
                                         Err(self.zero_error(
                                             "1064",
-                                            format!("Equality on AES_GCM column is unsupported: {}", rex.to_readable(literals))
+                                            format!("Equality on AesGcm column is unsupported: {}", rex.to_readable(literals))
                                         ))
                                     },
                                     _ => {
@@ -357,9 +350,9 @@ impl PhysicalPlanner {
 
                 }
             },
-            Rex::RexFunctionCall { ref name, ref args } => {
+            Rex::RexFunctionCall { ref args, .. } => {
                 for arg in args {
-                    self.get_encryption_scheme(&arg, builder, potentials, literals);
+                    self.get_encryption_scheme(&arg, builder, potentials, literals)?;
                 }
                 Ok(EncScheme::Inconsequential)
             },
@@ -368,7 +361,7 @@ impl PhysicalPlanner {
                 // TODO this can be improved
                 // SELECT 1, a, 'foo' FROM foo WHERE a = (SELECT MAX(1) FROM foo)
                 let mut sub_builder = PhysicalPlanBuilder::new();
-                self.plan_rel(rel, &mut sub_builder, literals);
+                self.plan_rel(rel, &mut sub_builder, literals)?;
 
                 let sub_plan = match sub_builder.build(ASTNode::SQLLiteral(0)) {
                     PhysicalPlan::Plan(p) => p,
@@ -458,17 +451,13 @@ impl PotentialsBuilder {
 mod tests {
 
     use super::*;
-    use config;
     use error::ZeroError;
-    use std::collections::HashMap;
     use query::dialects::ansisql::*;
     use query::dialects::mysqlsql::*;
-    use query::{Tokenizer, Parser, SQLWriter, Writer, ASTNode, LiteralToken};
-    use query::planner::{Planner, RelVisitor, Rel, SchemaProvider, TableMeta, ColumnMeta};
+    use query::{Tokenizer, Parser, ASTNode, LiteralToken};
+    use query::planner::{Planner, Rel, SchemaProvider, TableMeta, ColumnMeta};
     use encrypt::{EncryptionType, NativeType};
     use std::rc::Rc;
-    use std::error::Error;
-    use super::super::writers::*;
 
     #[test]
     fn test_physical_plan() {
@@ -494,7 +483,7 @@ mod tests {
 
                 let lit = p.literals.get(&(1 as usize)).unwrap();
                 assert_eq!(NativeType::Varchar(50), lit.data_type);
-                assert_eq!(EncryptionType::AES([0u8;12]), lit.encryption);
+                assert_eq!(EncryptionType::Aes([0u8;12]), lit.encryption);
                 assert_eq!(true, lit.key.is_some());
             },
             _ => panic!("TEST FAIL")
@@ -531,7 +520,7 @@ mod tests {
 
                 let lit = p.literals.get(&(2 as usize)).unwrap();
                 assert_eq!(NativeType::Varchar(50), lit.data_type);
-                assert_eq!(EncryptionType::AES([0u8;12]), lit.encryption);
+                assert_eq!(EncryptionType::Aes([0u8;12]), lit.encryption);
                 assert_eq!(true, lit.key.is_some());
 
                 let lit = p.literals.get(&(3 as usize)).unwrap();
@@ -631,7 +620,7 @@ mod tests {
         match pplan {
             PhysicalPlan::Error(box ZeroError::EncryptionError{message, ..}) => {
                 assert_eq!(
-                String::from("Equality on AES_GCM column is unsupported: ssn = '123456789'"),
+                String::from("Equality on AesGcm column is unsupported: ssn = '123456789'"),
                 message)
             },
             _ => panic!("TEST FAIL")
@@ -648,7 +637,7 @@ mod tests {
         match pplan {
             PhysicalPlan::Error(box ZeroError::EncryptionError{message, ..}) => {
                 assert_eq!(
-                String::from("Unsupported operation between columns of AES_GCM encryption, expr: ssn = credit_card"),
+                String::from("Unsupported operation between columns of AesGcm encryption, expr: ssn = credit_card"),
                 message)
             },
             _ => panic!("TEST FAIL")
@@ -665,7 +654,7 @@ mod tests {
         match pplan {
             PhysicalPlan::Error(box ZeroError::EncryptionError{message, ..}) => {
                 assert_eq!(
-                String::from("Unsupported operation between columns of AES_GCM encryption, expr: l.ssn = r.ssn"),
+                String::from("Unsupported operation between columns of AesGcm encryption, expr: l.ssn = r.ssn"),
                 message)
             },
             _ => panic!("TEST FAIL")
@@ -701,22 +690,22 @@ mod tests {
                                         encryption: EncryptionType::NA,
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("first_name"), native_type: NativeType::Varchar(50),
-                                        encryption: EncryptionType::AES([0u8;12]),
+                                        encryption: EncryptionType::Aes([0u8;12]),
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("last_name"), native_type: NativeType::Varchar(50),
-                                        encryption: EncryptionType::AES([0u8;12]),
+                                        encryption: EncryptionType::Aes([0u8;12]),
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("ssn"), native_type: NativeType::Varchar(50),
-                                        encryption: EncryptionType::AES_GCM,
+                                        encryption: EncryptionType::AesGcm,
                                         key: [0u8; 32]},
                              ColumnMeta {name: String::from("credit_card"), native_type: NativeType::Varchar(50),
-                                        encryption: EncryptionType::AES_GCM,
+                                        encryption: EncryptionType::AesGcm,
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("age"), native_type: NativeType::U64,
-                                        encryption: EncryptionType::AES([0u8;12]),
+                                        encryption: EncryptionType::Aes([0u8;12]),
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("sex"), native_type: NativeType::Varchar(50),
-                                        encryption: EncryptionType::AES([0u8;12]),
+                                        encryption: EncryptionType::Aes([0u8;12]),
                                         key: [0u8; 32]},
                         ]
                     }))
@@ -731,10 +720,10 @@ mod tests {
                                         encryption: EncryptionType::NA,
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("item_code"), native_type: NativeType::U64,
-                                        encryption: EncryptionType::AES([0u8;12]),
+                                        encryption: EncryptionType::Aes([0u8;12]),
                                         key: [0u8; 32]},
                             ColumnMeta {name: String::from("amount"), native_type: NativeType::F64,
-                                        encryption: EncryptionType::AES([0u8;12]),
+                                        encryption: EncryptionType::Aes([0u8;12]),
                                         key: [0u8; 32]},
                         ]
                     }))

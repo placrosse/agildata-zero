@@ -1,6 +1,4 @@
-// use super::super::parser::sql_writer::*;
-// use super::super::parser::sql_parser::{SQLExpr, LiteralExpr, DataType};
-use query::{Writer, ExprWriter, ASTNode, MySQLColumnQualifier, LiteralToken, Token};
+use query::{Writer, ExprWriter, ASTNode, MySQLColumnQualifier, LiteralToken};
 use query::MySQLDataType::*;
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -57,7 +55,7 @@ impl<'a> ExprWriter for LiteralEncryptionWriter<'a> {
                             let encrypted = match plan.data_type {
                                 NativeType::U64 => {
                                     match lit {
-                                        &LiteralToken::LiteralLong(ref i, ref v) => {
+                                        &LiteralToken::LiteralLong(_, ref v) => {
 
                                             let val = u64::from_str(v).map_err(map_err_to_zero)?;
                                             val.encrypt(&plan.encryption, &key)?
@@ -99,7 +97,7 @@ impl<'a> ExprWriter for LiteralEncryptionWriter<'a> {
                                 },
                                 NativeType::F64 => {
                                     match lit {
-                                        &LiteralToken::LiteralDouble(ref i, ref v) => {
+                                        &LiteralToken::LiteralDouble(_, ref v) => {
                                             let val = f64::from_str(v).map_err(map_err_to_zero)?;
                                             val.encrypt(&plan.encryption, &key)?
                                         },
@@ -111,11 +109,11 @@ impl<'a> ExprWriter for LiteralEncryptionWriter<'a> {
                                 },
                                 NativeType::D128 => {
                                     match lit {
-                                        &LiteralToken::LiteralDouble(ref i, ref val) => {
+                                        &LiteralToken::LiteralDouble(_, ref val) => {
                                             let v = match d128::from_str(val) {
                                                 Ok(d) => d,
                                                 // Note: d128::from_str e is a ()
-                                                Err(e) => return Err(ZeroError::EncryptionError {
+                                                Err(_) => return Err(ZeroError::EncryptionError {
                                                     message: format!("Failed to coerce {} to d128", val).into(),
                                                     code: "1064".into()
                                                 }.into())
@@ -131,7 +129,7 @@ impl<'a> ExprWriter for LiteralEncryptionWriter<'a> {
                                 },
                                 NativeType::BOOL => {
                                     match lit {
-                                        &LiteralToken::LiteralBool(ref i, ref v) => {
+                                        &LiteralToken::LiteralBool(_, ref v) => {
                                             let val = bool::from_str(v).map_err(map_err_to_zero)?;
                                             val.encrypt(&plan.encryption, &key)?
                                         },
@@ -143,7 +141,7 @@ impl<'a> ExprWriter for LiteralEncryptionWriter<'a> {
                                 },
                                 NativeType::Varchar(..) | NativeType::Char(..) => {
                                     match lit {
-                                        &LiteralToken::LiteralString(ref i, ref val) => {
+                                        &LiteralToken::LiteralString(_, ref val) => {
                                             val.clone().encrypt(&plan.encryption, &key)?
                                         },
                                         _ => return Err(ZeroError::EncryptionError {
@@ -154,7 +152,7 @@ impl<'a> ExprWriter for LiteralEncryptionWriter<'a> {
                                 },
                                 NativeType::DATE => {
                                     match lit {
-                                        &LiteralToken::LiteralString(ref i, ref val) => {
+                                        &LiteralToken::LiteralString(_, ref val) => {
                                             let v = match UTC.datetime_from_str(&format!("{} 00:00:00",val), "%Y-%m-%d %H:%M:%S") {
                                                 Ok(v) => v,
                                                 Err(e) => return Err(ZeroError::EncryptionError {
@@ -173,7 +171,7 @@ impl<'a> ExprWriter for LiteralEncryptionWriter<'a> {
                                 },
                                 NativeType::DATETIME(..) => {
                                     match lit {
-                                        &LiteralToken::LiteralString(ref i, ref val) => {
+                                        &LiteralToken::LiteralString(_, ref val) => {
                                             let v = match UTC.datetime_from_str(val, "%Y-%m-%d %H:%M:%S%.f") {
                                                 Ok(v) => v,
                                                 Err(e) => return Err(ZeroError::EncryptionError {
@@ -222,7 +220,7 @@ impl<'a> ExprWriter for LiteralReplacingWriter<'a> {
                 let index = i as u32;
                 self.optionally_write_literal(&index, builder)
             },
-            &ASTNode::SQLUnary{ref operator, expr: box ASTNode::SQLLiteral(i)} => {
+            &ASTNode::SQLUnary{ expr: box ASTNode::SQLLiteral(i), .. } => {
                 // This value was encrypted as a signed value, so do not write the unary...
                 let index = i as u32;
                 if self.encrypted_literals.contains_key(&index as &u32) {
@@ -356,7 +354,7 @@ impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
 impl<'a> CreateTranslatingWriter<'a> {
 	fn translate_type(&self, data_type: &ASTNode, encryption: &EncryptionType) -> Result<ASTNode, Box<ZeroError>> {
 		match (data_type, encryption) {
-			(&ASTNode::MySQLDataType(ref dt), &EncryptionType::AES(_)) | (&ASTNode::MySQLDataType(ref dt), &EncryptionType::AES_GCM) => match dt {
+			(&ASTNode::MySQLDataType(ref dt), &EncryptionType::Aes(_)) | (&ASTNode::MySQLDataType(ref dt), &EncryptionType::AesGcm) => match dt {
                 &Bit{..} | &TinyInt{..} |
                 &SmallInt{..} | &MediumInt{..} |
                 &Int{..} | &BigInt{..}  => {

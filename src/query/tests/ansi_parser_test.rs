@@ -590,7 +590,7 @@ fn insert_invalid() {
 	println!("{:#?}", parsed);
 
 	assert!(parsed.is_err());
-	assert_eq!(parsed.err().unwrap().to_string(), "Expected column list paren, received Some(Keyword(\"VALUES\"))");
+	assert_eq!(parsed.err().unwrap().to_string(), "[1064] Expected column list paren, received Some(Keyword(\"VALUES\"))");
 }
 
 

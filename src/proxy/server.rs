@@ -6,18 +6,12 @@ use tokio_core::net::{TcpStream, TcpListener};
 use tokio_core::reactor::{Core};
 use byteorder::*;
 
-use bytes::{Buf, Take};
-use std::mem;
 use std::net::{SocketAddr};
 use std::io::Cursor;
-use std::str::FromStr;
 use std::collections::HashMap;
-use std::env;
 use std::rc::Rc;
-use std::error::Error;
-use std::ops::Deref;
 
-use config::{Config, TConfig, ColumnConfig};
+use config::{Config, TConfig};
 use error::ZeroError;
 use encrypt::{Decrypt, NativeType, EncryptionType};
 
@@ -30,10 +24,10 @@ use super::physical_planner::*;
 use query::{Tokenizer, Parser, Writer, SQLWriter, ASTNode, LiteralToken};
 use query::dialects::mysqlsql::*;
 use query::dialects::ansisql::*;
-use query::planner::{Planner, TupleType, HasTupleType, RelVisitor, Rel};
+use query::planner::{Planner};
 
 use decimal::*;
-use chrono::{DateTime, TimeZone, NaiveDateTime};
+use chrono::{DateTime};
 
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -110,8 +104,6 @@ impl Proxy {
 
 #[derive(Debug)]
 enum HandlerState {
-    /// Expect response from the server
-    ExpectServerResponse,
     /// Done processing expected results, waiting for next request from client
     ExpectClientRequest,
     /// Expecting a connection handshake packet
@@ -363,15 +355,15 @@ impl PacketHandler for ZeroHandler {
                 let decrypt_result_set = match plan.as_ref() {
                     &PhysicalPlan::Plan(ref p) => {
                         p.projection.iter().filter(|e| match e.encryption {
-                            EncryptionType::AES(_) => true,
-                            EncryptionType::AES_GCM => true,
+                            EncryptionType::Aes(_) => true,
+                            EncryptionType::AesGcm => true,
                             EncryptionType::NA => false,
                         }).count() > 0
                     },
                     _ => false
                 };
 
-                let mut pstmt = PStmt {
+                let pstmt = PStmt {
                     param_types: Vec::with_capacity(num_params as usize),
                     column_types: Vec::with_capacity(num_columns as usize),
                     plan: plan.clone(),
@@ -556,10 +548,10 @@ impl PacketHandler for ZeroHandler {
                                                     let v = r.read_lenenc_bytes().unwrap();
 
                                                     match encryption {
-                                                        &EncryptionType::AES(_) | &EncryptionType::AES_GCM => {
+                                                        &EncryptionType::Aes(_) | &EncryptionType::AesGcm => {
                                                             match write_decrypted(&pp.projection[i], v, &mut w) {
                                                                 Ok(()) => {},
-                                                                Err(e) => return create_error(String::from("Failed to decrypt result row"))
+                                                                Err(e) => return create_error(format!("Failed to decrypt result row: {}", e))
                                                             }
                                                         },
                                                         _ => {
@@ -939,8 +931,8 @@ impl ZeroHandler {
 
                 // do we need to decrypt anything?
                 let decrypt_result_set = tt.iter().filter(|e| match e.encryption {
-                    EncryptionType::AES(_) => true,
-                    EncryptionType::AES_GCM => true,
+                    EncryptionType::Aes(_) => true,
+                    EncryptionType::AesGcm => true,
                     EncryptionType::NA => false,
                 }).count() > 0;
 
@@ -1168,7 +1160,7 @@ impl MySQLPacketWriter {
         } else if l < 2^16 {
             // two bytes to represent length
             self.payload.push(0xfc);
-            self.payload.write_u16::<LittleEndian>(l as u16);
+            self.payload.write_u16::<LittleEndian>(l as u16).unwrap();
         } else {
             panic!("no support yet for length >= 2^16");
         }
@@ -1209,13 +1201,13 @@ trait MySQLEncoder {
 
 impl MySQLEncoder for u64 {
     fn encode(&self, w: &mut MySQLPacketWriter) {
-        w.payload.write_u64::<LittleEndian>(*self);
+        w.payload.write_u64::<LittleEndian>(*self).unwrap();
     }
 }
 
 impl MySQLEncoder for i64 {
     fn encode(&self, w: &mut MySQLPacketWriter) {
-        w.payload.write_i64::<LittleEndian>(*self);
+        w.payload.write_i64::<LittleEndian>(*self).unwrap();
     }
 }
 
@@ -1223,7 +1215,7 @@ impl MySQLEncoder for f64 {
     fn encode(&self, w: &mut MySQLPacketWriter) {
         //MYSQL_TYPE_FLOAT stores a floating point in IEEE 754 single precision format
         //TODO: is this the correct encoding?
-        w.payload.write_f64::<LittleEndian>(*self);
+        w.payload.write_f64::<LittleEndian>(*self).unwrap();
     }
 }
 

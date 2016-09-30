@@ -15,8 +15,8 @@ use std::str::from_utf8_unchecked;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum EncryptionType {
-	AES([u8;12]), // AES equality, with IV
-	AES_GCM, // Full AES gcm
+	Aes([u8;12]), // AES equality, with IV
+	AesGcm, // Full AES gcm
 	NA, // None
 }
 
@@ -42,7 +42,6 @@ pub enum NativeType {
 	LONGTEXT(u64),
 
 	// Unknown
-	NULL,
 	UNKNOWN
 }
 
@@ -75,7 +74,7 @@ impl Decrypt for bool {
 
 	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<bool, Box<ZeroError>> {
 		match scheme {
-			&EncryptionType::AES(_) | &EncryptionType::AES_GCM => {
+			&EncryptionType::Aes(_) | &EncryptionType::AesGcm => {
 				let decrypted = decrypt(key, value)?;
 				match Cursor::new(decrypted).read_u8().unwrap() {
 					0 => Ok(false),
@@ -102,7 +101,7 @@ impl Decrypt for u64 {
 
 	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<u64, Box<ZeroError>> {
 		match scheme {
-			&EncryptionType::AES(_) | &EncryptionType::AES_GCM => {
+			&EncryptionType::Aes(_) | &EncryptionType::AesGcm => {
 				let decrypted = decrypt(key, value)?;
                 Ok(Cursor::new(decrypted).read_u64::<BigEndian>().unwrap())
 			},
@@ -127,7 +126,7 @@ impl Decrypt for i64 {
 
 	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<i64, Box<ZeroError>> {
 		match scheme {
-			&EncryptionType::AES(_) | &EncryptionType::AES_GCM => {
+			&EncryptionType::Aes(_) | &EncryptionType::AesGcm => {
 				let decrypted = decrypt(key, value)?;
 				Ok(Cursor::new(decrypted).read_i64::<BigEndian>().unwrap())
 			},
@@ -152,7 +151,7 @@ impl Decrypt for f64 {
 
 	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<f64, Box<ZeroError>> {
 		match scheme {
-			&EncryptionType::AES(_) | &EncryptionType::AES_GCM => {
+			&EncryptionType::Aes(_) | &EncryptionType::AesGcm => {
 				let decrypted = decrypt(key, value)?;
 				Ok(Cursor::new(decrypted).read_f64::<BigEndian>().unwrap())
 			},
@@ -177,13 +176,13 @@ impl Decrypt for d128 {
 
 	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<d128, Box<ZeroError>> {
 		match scheme {
-			&EncryptionType::AES(_) | &EncryptionType::AES_GCM => {
+			&EncryptionType::Aes(_) | &EncryptionType::AesGcm => {
 				let decrypted = decrypt(key, value)?;
 
 				let hex_str = decrypted.iter().rev()
 					.map(|b| format!("{:02x}", b))
 					.collect::<Vec<String>>()
-					.connect("");
+					.join("");
 
 				Ok(d128::from_hex(&hex_str))
 			},
@@ -225,7 +224,7 @@ impl Decrypt for String {
 
 	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<String, Box<ZeroError>>{
         match scheme {
-			&EncryptionType::AES(_) | &EncryptionType::AES_GCM => {
+			&EncryptionType::Aes(_) | &EncryptionType::AesGcm => {
 				let decrypted = decrypt(key, value)?;
 				Ok(String::from_utf8(decrypted).expect("Invalid UTF-8"))
 
@@ -247,7 +246,7 @@ impl Decrypt for DateTime<UTC> {
 
 	fn decrypt(value: &[u8], scheme: &EncryptionType, key: &[u8; 32]) -> Result<DateTime<UTC>, Box<ZeroError>>{
 		match scheme {
-			&EncryptionType::AES(_) | &EncryptionType::AES_GCM => {
+			&EncryptionType::Aes(_) | &EncryptionType::AesGcm => {
 
 				let decrypted = decrypt(key, value)?;
 				let mut curs = Cursor::new(decrypted);
@@ -326,8 +325,8 @@ pub fn hex_to_iv(hex: &str) -> [u8; 12] {
 
 pub fn make_nonce(scheme: &EncryptionType) -> Result<[u8; 12], Box<ZeroError>> {
 	match scheme {
-		&EncryptionType::AES(ref iv) => Ok(iv.clone()),
-		&EncryptionType::AES_GCM => Ok(gcm_nonce()),
+		&EncryptionType::Aes(ref iv) => Ok(iv.clone()),
+		&EncryptionType::AesGcm => Ok(gcm_nonce()),
 		_ => return Err(ZeroError::EncryptionError{message: format!("Encryption not supported {:?}", scheme), code: "123".into()}.into())
 	}
 }
@@ -344,12 +343,6 @@ pub fn gcm_nonce() -> [u8; 12] {
 
 	nonce
 }
-
-// Create an equality preserving nonce
-pub fn aes_eq_nonce() -> [u8;12] {
-	[0_u8; 12] // TODO
-}
-
 
 pub fn encrypt(key: &[u8], buf: &[u8], nonce: [u8; 12]) -> Result<Vec<u8>, Box<ZeroError>> {
     let mut cipher = AesGcm::new(KeySize::KeySize256, key, &nonce, &[]);
@@ -397,14 +390,14 @@ mod test {
 	fn test_encrypt_u64() {
 		let value = 12345_u64;
 		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
-		let enc = EncryptionType::AES([0u8;12]);
+		let enc = EncryptionType::Aes([0u8;12]);
 		let encrypted = value.encrypt(&enc, &key).unwrap();
 
 		let decrypted = u64::decrypt(&encrypted, &enc, &key).unwrap();
 
 		assert_eq!(decrypted, value);
 
-		let enc = EncryptionType::AES_GCM;
+		let enc = EncryptionType::AesGcm;
 		let encrypted = value.encrypt(&enc, &key).unwrap();
 		let decrypted = u64::decrypt(&encrypted, &enc, &key).unwrap();
 		assert_eq!(decrypted, value);
@@ -415,14 +408,14 @@ mod test {
 	fn test_encrypt_i64() {
 		let value = -12345_i64;
 		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
-		let enc = EncryptionType::AES([0u8;12]);
+		let enc = EncryptionType::Aes([0u8;12]);
 		let encrypted = value.encrypt(&enc, &key).unwrap();
 
 		let decrypted = i64::decrypt(&encrypted, &enc, &key).unwrap();
 
 		assert_eq!(decrypted, value);
 
-		let enc = EncryptionType::AES_GCM;
+		let enc = EncryptionType::AesGcm;
 		let encrypted = value.encrypt(&enc, &key).unwrap();
 		let decrypted = i64::decrypt(&encrypted, &enc, &key).unwrap();
 		assert_eq!(decrypted, value);
@@ -432,14 +425,14 @@ mod test {
 	fn test_encrypt_string() {
 		let value = String::from("Ima a sensitive string...");
 		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
-		let enc = EncryptionType::AES([0u8;12]);
+		let enc = EncryptionType::Aes([0u8;12]);
 		let encrypted = value.clone().encrypt(&enc, &key).unwrap();
 
 		let decrypted = String::decrypt(&encrypted, &enc, &key).unwrap();
 
 		assert_eq!(decrypted, value.clone());
 
-		let enc = EncryptionType::AES_GCM;
+		let enc = EncryptionType::AesGcm;
 		let encrypted = value.clone().encrypt(&enc, &key).unwrap();
 		let decrypted = String::decrypt(&encrypted, &enc, &key).unwrap();
 		assert_eq!(decrypted, value.clone());
@@ -449,14 +442,14 @@ mod test {
 	fn test_encrypt_f64() {
 		let value = 12345.6789_f64;
 		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
-		let enc = EncryptionType::AES([0u8;12]);
+		let enc = EncryptionType::Aes([0u8;12]);
 		let encrypted = value.encrypt(&enc, &key).unwrap();
 
 		let decrypted = f64::decrypt(&encrypted, &enc, &key).unwrap();
 
 		assert_eq!(decrypted, value);
 
-		let enc = EncryptionType::AES_GCM;
+		let enc = EncryptionType::AesGcm;
 		let encrypted = value.encrypt(&enc, &key).unwrap();
 		let decrypted = f64::decrypt(&encrypted, &enc, &key).unwrap();
 		assert_eq!(decrypted, value);
@@ -466,7 +459,7 @@ mod test {
 	fn test_encrypt_datetime() {
 		let value = String::from("2015-01-24 15:22:06");
 		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
-		let enc = EncryptionType::AES([0u8;12]);
+		let enc = EncryptionType::Aes([0u8;12]);
 		let datetime = UTC.datetime_from_str(&value, "%Y-%m-%d %H:%M:%S").unwrap();
 
 		let encrypted = datetime.encrypt(&enc, &key).unwrap();
@@ -478,7 +471,7 @@ mod test {
 		assert_eq!(rewritten, value);
 
 		let value = String::from("2015-01-24 15:22:06");
-		let enc = EncryptionType::AES_GCM;
+		let enc = EncryptionType::AesGcm;
 		let encrypted = datetime.encrypt(&enc, &key).unwrap();
 		let decrypted = DateTime::decrypt(&encrypted, &enc, &key).unwrap();
 		assert_eq!(decrypted, datetime);
@@ -490,7 +483,7 @@ mod test {
 	fn test_encrypt_datetime_fsp() {
 		let value = String::from("2014-11-28 21:00:09.778");
 		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
-		let enc = EncryptionType::AES([0u8;12]);
+		let enc = EncryptionType::Aes([0u8;12]);
 		let datetime = UTC.datetime_from_str(&value, "%Y-%m-%d %H:%M:%S%.f").unwrap();
 
 		let encrypted = datetime.encrypt(&enc, &key).unwrap();
@@ -503,7 +496,7 @@ mod test {
 
 		let value = String::from("2014-11-28 21:00:09.778");
 
-		let enc = EncryptionType::AES_GCM;
+		let enc = EncryptionType::AesGcm;
 		let encrypted = datetime.encrypt(&enc, &key).unwrap();
 		let decrypted = DateTime::decrypt(&encrypted, &enc, &key).unwrap();
 		assert_eq!(decrypted, datetime);
@@ -515,7 +508,7 @@ mod test {
 	fn test_encrypt_date() {
 		let value = String::from("2016-09-15");
 		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
-		let enc = EncryptionType::AES([0u8;12]);
+		let enc = EncryptionType::Aes([0u8;12]);
 		let datetime = UTC.datetime_from_str(&format!("{} 00:00:00",&value), "%Y-%m-%d %H:%M:%S").unwrap();
 
 		let encrypted = datetime.encrypt(&enc, &key).unwrap();
@@ -529,7 +522,7 @@ mod test {
 
 		let value = String::from("2016-09-15");
 
-		let enc = EncryptionType::AES_GCM;
+		let enc = EncryptionType::AesGcm;
 		let encrypted = datetime.encrypt(&enc, &key).unwrap();
 		let decrypted = DateTime::decrypt(&encrypted, &enc, &key).unwrap();
 		assert_eq!(decrypted, datetime);
@@ -541,14 +534,14 @@ mod test {
 	fn test_encrypt_bool() {
 		let value = true;
 		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
-		let enc = EncryptionType::AES([0u8;12]);
+		let enc = EncryptionType::Aes([0u8;12]);
 
 		let encrypted = value.encrypt(&enc, &key).unwrap();
 
 		let decrypted = bool::decrypt(&encrypted, &enc, &key).unwrap();
 		assert_eq!(decrypted, value);
 
-		let enc = EncryptionType::AES_GCM;
+		let enc = EncryptionType::AesGcm;
 		let encrypted = value.encrypt(&enc, &key).unwrap();
 		let decrypted = bool::decrypt(&encrypted, &enc, &key).unwrap();
 		assert_eq!(decrypted, value);
@@ -559,7 +552,7 @@ mod test {
 		let src_string = String::from("10.2345");
 		let value = d128::from_str(&src_string).unwrap();
 		let key = hex_key("44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
-		let enc = EncryptionType::AES([0u8;12]);
+		let enc = EncryptionType::Aes([0u8;12]);
 
 		let encrypted = value.encrypt(&enc, &key).unwrap();
 		let decrypted = d128::decrypt(&encrypted, &enc, &key).unwrap();
@@ -567,7 +560,7 @@ mod test {
 		assert_eq!(decrypted, value);
 		assert_eq!(decrypted.to_string(), src_string);
 
-		let enc = EncryptionType::AES_GCM;
+		let enc = EncryptionType::AesGcm;
 		let encrypted = value.encrypt(&enc, &key).unwrap();
 		let decrypted = d128::decrypt(&encrypted, &enc, &key).unwrap();
 		assert_eq!(decrypted, value);

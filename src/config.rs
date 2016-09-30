@@ -7,7 +7,7 @@ use self::xml::Xml;
 
 use encrypt::*;
 
-use query::{Tokenizer, ASTNode, MySQLColumnQualifier, MySQLDataType};
+use query::{Tokenizer, ASTNode, MySQLColumnQualifier};
 use query::MySQLDataType::*;
 use query::dialects::ansisql::*;
 use query::dialects::mysqlsql::*;
@@ -28,7 +28,7 @@ pub fn parse_config(path: &str) -> Config {
 	let mut rdr = match File::open(path) {
         Ok(file) => file,
         Err(err) => {
-            println!("Unable to open configuration file: {}", path);
+            println!("Unable to open configuration file '{}': {}", path, err);
             process::exit(1);
         }
     };
@@ -288,12 +288,12 @@ fn determine_encryption(encryption: &String, iv: Option<[u8;12]>) -> EncryptionT
 	match &encryption.to_uppercase() as &str {
 		"AES" => {
 			match iv {
-				Some(nonce)=> EncryptionType::AES(nonce),
+				Some(nonce)=> EncryptionType::Aes(nonce),
 				None => panic!("iv attribute required for AES encryption")
 			}
 		},
 		// "AES-SALTED" => EncryptionType::AES_SALT,
-		"AES_GCM" => EncryptionType::AES_GCM,
+		"AES_GCM" => EncryptionType::AesGcm,
 		"NONE" => EncryptionType::NA,
 		_ => panic!("Unsupported encryption type {}", encryption)
 	}
