@@ -7,7 +7,7 @@ use self::xml::Xml;
 
 use encrypt::*;
 
-use query::{Tokenizer, ASTNode, MySQLColumnQualifier, MySQLDataType};
+use query::{Tokenizer, ASTNode, MySQLColumnQualifier};
 use query::MySQLDataType::*;
 use query::dialects::ansisql::*;
 use query::dialects::mysqlsql::*;
@@ -28,7 +28,7 @@ pub fn parse_config(path: &str) -> Config {
 	let mut rdr = match File::open(path) {
         Ok(file) => file,
         Err(err) => {
-            println!("Unable to open configuration file: {}", path);
+            println!("Unable to open configuration file '{}': {}", path, err);
             process::exit(1);
         }
     };

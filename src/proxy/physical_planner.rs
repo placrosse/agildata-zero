@@ -1,16 +1,9 @@
-use query::planner::{Rel, Rex, TupleType, Element, HasTupleType};
+use query::planner::{Rel, Rex};
 use encrypt::{NativeType, EncryptionType};
-use query::{Token, ASTNode, LiteralToken, Operator};
+use query::{ASTNode, LiteralToken, Operator};
 use error::ZeroError;
 
 use std::collections::HashMap;
-
-#[derive(Debug, PartialEq)]
-pub enum ValueType {
-    BOUND_PARAM(u32),
-    LITERAL(u32),
-    COLUMN
-}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct EncryptionPlan {
@@ -91,7 +84,7 @@ impl PhysicalPlanner {
     fn plan_rel(&self, rel: &Rel, builder: &mut PhysicalPlanBuilder, literals: &Vec<LiteralToken>) -> Result<(), Box<ZeroError>> {
         match *rel {
             Rel::Projection { box ref project, box ref input, ref tt } => {
-                self.plan_rex(project, builder, tt, literals)?;
+                self.plan_rex(project, builder, literals)?;
                 self.plan_rel(input, builder, literals)?;
 
                 // push projection encryption types into builder
@@ -107,41 +100,41 @@ impl PhysicalPlanner {
                 }
             },
             Rel::Selection { box ref expr, box ref input } => {
-                self.plan_rex(expr, builder, input.tt(), literals)?;
+                self.plan_rex(expr, builder, literals)?;
                 self.plan_rel(input, builder, literals)?;
             },
             Rel::TableScan { .. } => {},
-            Rel::Join { box ref left, box ref right, ref on_expr, ref tt, .. } => {
+            Rel::Join { box ref left, box ref right, ref on_expr, .. } => {
                 self.plan_rel(left, builder, literals)?;
                 self.plan_rel(right, builder, literals)?;
                 match on_expr {
-                    &Some(box ref o) => self.plan_rex(o, builder, tt, literals)?,
+                    &Some(box ref o) => self.plan_rex(o, builder, literals)?,
                     &None => {}
                 }
             },
             Rel::AliasedRel { box ref input, .. } => self.plan_rel(input, builder, literals)?,
             Rel::Dual { .. } => {},
-            Rel::Update { ref table, box ref set_stmts, ref selection, ref tt } => {
+            Rel::Update { box ref set_stmts, ref selection, .. } => {
                 match set_stmts {
                     &Rex::RexExprList(ref list) => {
                         for e in list.iter() {
-                            self.plan_rex(e, builder, tt, literals);
+                            self.plan_rex(e, builder, literals);
                         }
                     },
                     _ => {}
                 }
                 match selection {
-                    &Some(box ref s) => self.plan_rex(s, builder, tt, literals)?,
+                    &Some(box ref s) => self.plan_rex(s, builder, literals)?,
                     &None => {}
                 }
             },
-            Rel::Delete { ref table, ref selection, ref tt } => {
+            Rel::Delete { ref selection, .. } => {
                 match selection {
-                    &Some(box ref s) => self.plan_rex(s, builder, tt, literals)?,
+                    &Some(box ref s) => self.plan_rex(s, builder, literals)?,
                     &None => {}
                 }
             },
-            Rel::Insert { ref table, box ref columns, box ref values, .. } => {
+            Rel::Insert { box ref columns, box ref values, .. } => {
                 match (columns, values) {
                     ( & Rex::RexExprList( ref c_list), & Rex::RexExprList( ref v_list)) => {
                         let mut it = c_list.iter().zip(v_list.iter());
@@ -182,7 +175,7 @@ impl PhysicalPlanner {
         }.into()
     }
 
-    fn plan_rex(&self, rex: &Rex, builder: &mut PhysicalPlanBuilder, tt: &TupleType, literals: &Vec<LiteralToken>) -> Result<(), Box<ZeroError>>  {
+    fn plan_rex(&self, rex: &Rex, builder: &mut PhysicalPlanBuilder, literals: &Vec<LiteralToken>) -> Result<(), Box<ZeroError>>  {
         match self.get_encryption_scheme(rex, builder, &mut None, literals) {
             Ok(_) => Ok(()),
             Err(e) => Err(e)
@@ -291,7 +284,7 @@ impl PhysicalPlanner {
                             (EncScheme::Encrypted(ref e, ref dt, ref k), EncScheme::Potential) | (EncScheme::Potential, EncScheme::Encrypted(ref e, ref dt, ref k)) => {
 
                                 match e {
-                                    &EncryptionType::AES(ref iv) => {
+                                    &EncryptionType::AES(_) => {
                                         let ps = potentials_builder.unwrap().build();
                                         for p in ps.params {
                                             let enc_plan = EncryptionPlan {
@@ -357,7 +350,7 @@ impl PhysicalPlanner {
 
                 }
             },
-            Rex::RexFunctionCall { ref name, ref args } => {
+            Rex::RexFunctionCall { ref args, .. } => {
                 for arg in args {
                     self.get_encryption_scheme(&arg, builder, potentials, literals);
                 }
@@ -458,17 +451,13 @@ impl PotentialsBuilder {
 mod tests {
 
     use super::*;
-    use config;
     use error::ZeroError;
-    use std::collections::HashMap;
     use query::dialects::ansisql::*;
     use query::dialects::mysqlsql::*;
-    use query::{Tokenizer, Parser, SQLWriter, Writer, ASTNode, LiteralToken};
-    use query::planner::{Planner, RelVisitor, Rel, SchemaProvider, TableMeta, ColumnMeta};
+    use query::{Tokenizer, Parser, ASTNode, LiteralToken};
+    use query::planner::{Planner, Rel, SchemaProvider, TableMeta, ColumnMeta};
     use encrypt::{EncryptionType, NativeType};
     use std::rc::Rc;
-    use std::error::Error;
-    use super::super::writers::*;
 
     #[test]
     fn test_physical_plan() {

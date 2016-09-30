@@ -42,7 +42,6 @@ pub enum NativeType {
 	LONGTEXT(u64),
 
 	// Unknown
-	NULL,
 	UNKNOWN
 }
 
@@ -183,7 +182,7 @@ impl Decrypt for d128 {
 				let hex_str = decrypted.iter().rev()
 					.map(|b| format!("{:02x}", b))
 					.collect::<Vec<String>>()
-					.connect("");
+					.join("");
 
 				Ok(d128::from_hex(&hex_str))
 			},
@@ -344,12 +343,6 @@ pub fn gcm_nonce() -> [u8; 12] {
 
 	nonce
 }
-
-// Create an equality preserving nonce
-pub fn aes_eq_nonce() -> [u8;12] {
-	[0_u8; 12] // TODO
-}
-
 
 pub fn encrypt(key: &[u8], buf: &[u8], nonce: [u8; 12]) -> Result<Vec<u8>, Box<ZeroError>> {
     let mut cipher = AesGcm::new(KeySize::KeySize256, key, &nonce, &[]);

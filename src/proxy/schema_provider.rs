@@ -8,9 +8,7 @@ use query::dialects::ansisql::*;
 use query::dialects::mysqlsql::*;
 use encrypt::{NativeType, EncryptionType};
 use std::rc::Rc;
-use std::error::Error;
 use error::ZeroError;
-//extern crate mysql;
 use mysql;
 
 // Mysql and config backed provider

@@ -1,7 +1,6 @@
 use std::sync::Mutex;
 use std::rc::Rc;
 use std::collections::HashMap;
-use error::ZeroError;
 use query::{Token};
 
 use super::physical_planner::{PhysicalPlan};
