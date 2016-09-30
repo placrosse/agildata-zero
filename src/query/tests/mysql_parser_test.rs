@@ -3,6 +3,7 @@ use super::super::ASTNode::*;
 use super::super::MySQLKeyDef::*;
 use super::super::MySQLDataType::*;
 use super::super::MySQLColumnQualifier::*;
+use super::super::Operator::*;
 use super::super::{Tokenizer, Parser, SQLWriter, Writer};
 use super::super::dialects::ansisql::*;
 use super::super::dialects::mysqlsql::*;
@@ -846,6 +847,42 @@ fn test_integration() {
 	println!("{:#?}", parsed);
 
     let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
+	let mysql_writer = MySQLWriter{};
+	let writer = SQLWriter::new(vec![&mysql_writer, &ansi_writer]);
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+	println!("Rewritten: {:?}", rewritten);
+
+}
+
+#[test]
+fn test_unary() {
+	let ansi = AnsiSQLDialect::new();
+	let dialect = MySQLDialect::new(&ansi);
+	let sql = String::from("SELECT +1, -1, 1-1, 1--1");
+	let tokens = sql.tokenize(&dialect).unwrap();
+	let parsed = tokens.parse().unwrap();
+
+	assert_eq!(
+		SQLSelect {
+			expr_list: Box::new(SQLExprList(vec![
+				SQLUnary { operator: ADD, expr: Box::new(SQLLiteral(0)) },
+				SQLUnary { operator: SUB, expr: Box::new(SQLLiteral(1)) },
+				SQLBinary { left: Box::new(SQLLiteral(2)), op: SUB, right: Box::new(SQLLiteral(3)) },
+				SQLBinary { left: Box::new(SQLLiteral(4)), op: SUB, right: Box::new(SQLUnary { operator: SUB, expr: Box::new(SQLLiteral(5)) }) }
+			])),
+			relation: None,
+			selection: None,
+			order: None,
+			for_update: false,
+		},
+		parsed
+	);
+
+	println!("{:#?}", parsed);
+
+	let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
 	let mysql_writer = MySQLWriter{};
 	let writer = SQLWriter::new(vec![&mysql_writer, &ansi_writer]);
 	let rewritten = writer.write(&parsed).unwrap();
