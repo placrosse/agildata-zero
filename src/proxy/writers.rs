@@ -354,7 +354,7 @@ impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
 impl<'a> CreateTranslatingWriter<'a> {
 	fn translate_type(&self, data_type: &ASTNode, encryption: &EncryptionType) -> Result<ASTNode, Box<ZeroError>> {
 		match (data_type, encryption) {
-			(&ASTNode::MySQLDataType(ref dt), &EncryptionType::AES(_)) | (&ASTNode::MySQLDataType(ref dt), &EncryptionType::AES_GCM) => match dt {
+			(&ASTNode::MySQLDataType(ref dt), &EncryptionType::Aes(_)) | (&ASTNode::MySQLDataType(ref dt), &EncryptionType::AesGcm) => match dt {
                 &Bit{..} | &TinyInt{..} |
                 &SmallInt{..} | &MediumInt{..} |
                 &Int{..} | &BigInt{..}  => {

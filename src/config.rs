@@ -288,12 +288,12 @@ fn determine_encryption(encryption: &String, iv: Option<[u8;12]>) -> EncryptionT
 	match &encryption.to_uppercase() as &str {
 		"AES" => {
 			match iv {
-				Some(nonce)=> EncryptionType::AES(nonce),
+				Some(nonce)=> EncryptionType::Aes(nonce),
 				None => panic!("iv attribute required for AES encryption")
 			}
 		},
 		// "AES-SALTED" => EncryptionType::AES_SALT,
-		"AES_GCM" => EncryptionType::AES_GCM,
+		"AES_GCM" => EncryptionType::AesGcm,
 		"NONE" => EncryptionType::NA,
 		_ => panic!("Unsupported encryption type {}", encryption)
 	}

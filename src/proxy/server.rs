@@ -355,8 +355,8 @@ impl PacketHandler for ZeroHandler {
                 let decrypt_result_set = match plan.as_ref() {
                     &PhysicalPlan::Plan(ref p) => {
                         p.projection.iter().filter(|e| match e.encryption {
-                            EncryptionType::AES(_) => true,
-                            EncryptionType::AES_GCM => true,
+                            EncryptionType::Aes(_) => true,
+                            EncryptionType::AesGcm => true,
                             EncryptionType::NA => false,
                         }).count() > 0
                     },
@@ -548,7 +548,7 @@ impl PacketHandler for ZeroHandler {
                                                     let v = r.read_lenenc_bytes().unwrap();
 
                                                     match encryption {
-                                                        &EncryptionType::AES(_) | &EncryptionType::AES_GCM => {
+                                                        &EncryptionType::Aes(_) | &EncryptionType::AesGcm => {
                                                             match write_decrypted(&pp.projection[i], v, &mut w) {
                                                                 Ok(()) => {},
                                                                 Err(e) => return create_error(format!("Failed to decrypt result row: {}", e))
@@ -931,8 +931,8 @@ impl ZeroHandler {
 
                 // do we need to decrypt anything?
                 let decrypt_result_set = tt.iter().filter(|e| match e.encryption {
-                    EncryptionType::AES(_) => true,
-                    EncryptionType::AES_GCM => true,
+                    EncryptionType::Aes(_) => true,
+                    EncryptionType::AesGcm => true,
                     EncryptionType::NA => false,
                 }).count() > 0;
 
