@@ -47,7 +47,9 @@ pub struct Element {
 #[derive(Debug, Clone)]
 /// Relational expression
 pub enum Rex {
-    /// Alias { name: String, expr: Box<Rex> },
+    /// An aliased expression
+    Alias { name: String, expr: Box<Rex> },
+    /// An identifier
     Identifier { id: Vec<String>, el: Element },
     /// literal value with index
     Literal(usize),
@@ -71,6 +73,7 @@ impl Rex {
 
     pub fn get_element(&self) -> Result<Element, Box<ZeroError>> {
         match self {
+            &Rex::Alias { box ref expr, ..} => expr.get_element(),
             &Rex::Identifier{ref el, ..} => Ok(el.clone()),
             &Rex::Literal(_) => {
                 Ok(Element {
@@ -138,6 +141,7 @@ impl Rex {
 
     pub fn to_readable(&self, literals: &Vec<LiteralToken>) -> String {
         match *self {
+            Rex::Alias{ref name, box ref expr} => format!("{} as {}", expr.to_readable(literals), name),
             Rex::Identifier{ref id, ..} => id.join("."),
             Rex::Literal(ref index) => format!("{}", literals.get(index.clone()).unwrap().to_readable()),
             Rex::BoundParam(_) => "?".into(),
@@ -223,34 +227,58 @@ impl<'a> Planner<'a> {
                     _ => (Some(&parts[0]), &parts[1])
                 };
 
-                let element = tt.elements.iter()
-                    .filter(|e| {
-                        if &e.name == name {
-                            match relation {
-                                Some(r) => {
-                                    if &e.relation == r {
-                                        true
-                                    } else {
-                                        match e.p_relation {
-                                            Some(ref pr) => r == pr,
-                                            None => false
-                                        }
-                                    }
-                                },
-                                None => true
-                            }
-                        } else {
-                            false
-                        }
-                    })
-                    .next();
+                if id.starts_with("@") {
+                    let element = Element {
+                        name : id.clone(),
+                        encryption: EncryptionType::NA,
+                        key: [0_u8; 32],
+                        data_type: NativeType::UNKNOWN,
+                        relation: String::from("SYS"),
+                        p_name: None,
+                        p_relation: None
+                    };
 
-                match element {
-                    Some(e) => Ok(Rex::Identifier{id: parts.clone(), el: e.clone()}),
-                    None => Err(ZeroError::ParseError{
-                        message: format!("Invalid identifier {}", id).into(),// TODO better..
-                        code: "1064".into()
-                    }.into())
+                    Ok(Rex::Identifier { id: parts.clone(), el: element })
+                } else {
+                    let element = tt.elements.iter()
+                        .filter(|e| {
+                            if &e.name == name {
+                                match relation {
+                                    Some(r) => {
+                                        if &e.relation == r {
+                                            true
+                                        } else {
+                                            match e.p_relation {
+                                                Some(ref pr) => r == pr,
+                                                None => false
+                                            }
+                                        }
+                                    },
+                                    None => true
+                                }
+                            } else {
+                                false
+                            }
+                        })
+                        .next();
+                    match element {
+                        Some(e) => Ok(Rex::Identifier { id: parts.clone(), el: e.clone() }),
+                        None => Err(ZeroError::ParseError {
+                            message: format!("Invalid identifier {}", id).into(), // TODO better..
+                            code: "1064".into()
+                        }.into())
+                    }
+                }
+            },
+            &ASTNode::SQLAlias { box ref expr, box ref alias } => {
+                match alias {
+                    &ASTNode::SQLIdentifier { ref id, .. } => {
+                        Ok(Rex::Alias {
+                            expr: Box::new(self.sql_to_rex(expr, tt)?),
+                            name: format!("{}", id)
+                        })
+                    },
+                    _ => panic!("TBD")
                 }
             },
             &ASTNode::SQLBinary{box ref left, ref op, box ref right} => {
@@ -287,7 +315,7 @@ impl<'a> Planner<'a> {
                 Ok(Rex::RelationalExpr(self.sql_to_rel(sql)?))
             },
             _ => Err(ZeroError::ParseError{
-                message: format!("Unsupported expr {:?}", sql).into(),
+                message: format!("Unsupported rex expr for planning {:?}", sql).into(),
                 code: "1064".into()
             }.into())
         }
@@ -446,7 +474,7 @@ impl<'a> Planner<'a> {
             },
 
             _ => Err(ZeroError::ParseError {
-                    message: format!("Unsupported expr for planning {:?}", sql).into(),
+                    message: format!("Unsupported rel expr for planning {:?}", sql).into(),
                     code: "1064".into()
                 }.into())
 
@@ -644,6 +672,16 @@ mod tests {
     fn plan_insert_with_nulls() {
 
         let sql = String::from("INSERT INTO users  (id, first_name, last_name, ssn, age, sex) VALUES(NULL, null, null, NULL, null, NULL)");
+        let res = parse_and_plan(sql).unwrap();
+        let plan = res.1;
+
+        println!("Plan {:#?}", plan);
+    }
+
+    #[test]
+    fn plan_with_alias() {
+
+        let sql = String::from("SELECT @@foo as bar, @@bar as foo");
         let res = parse_and_plan(sql).unwrap();
         let plan = res.1;
 

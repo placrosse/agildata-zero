@@ -194,6 +194,7 @@ impl PhysicalPlanner {
                     el.key.clone()
                 ))
             },
+            Rex::Alias { box ref expr, .. } => self.get_encryption_scheme(expr, builder, potentials, literals),
             // Potential of the literal value
             Rex::Literal(ref i) => {
                 // Add self to the list of potentially encryptable values
