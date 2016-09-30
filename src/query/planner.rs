@@ -315,7 +315,7 @@ impl<'a> Planner<'a> {
                 Ok(Rex::RelationalExpr(self.sql_to_rel(sql)?))
             },
             _ => Err(ZeroError::ParseError{
-                message: format!("Unsupported expr {:?}", sql).into(),
+                message: format!("Unsupported rex expr for planning {:?}", sql).into(),
                 code: "1064".into()
             }.into())
         }
@@ -474,7 +474,7 @@ impl<'a> Planner<'a> {
             },
 
             _ => Err(ZeroError::ParseError {
-                    message: format!("Unsupported expr for planning {:?}", sql).into(),
+                    message: format!("Unsupported rel expr for planning {:?}", sql).into(),
                     code: "1064".into()
                 }.into())
 
