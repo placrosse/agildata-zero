@@ -134,33 +134,34 @@ impl PhysicalPlanner {
                     &None => {}
                 }
             },
-            Rel::Insert { box ref columns, box ref values, .. } => {
-                match (columns, values) {
-                    ( & Rex::RexExprList( ref c_list), & Rex::RexExprList( ref v_list)) => {
-                        let mut it = c_list.iter().zip(v_list.iter());
+            Rel::Insert { box ref columns, ref values, .. } => {
+                for value_list in values.iter() {
+                    match (columns, value_list) {
+                        (&Rex::RexExprList(ref c_list), &Rex::RexExprList(ref v_list)) => {
+                            let mut it = c_list.iter().zip(v_list.iter());
 
-                        // create encryption plans for insert values reconciled to column list
-                        while let Some((ref column_expr, ref value_expr)) = it.next() {
-                            match *column_expr {
-                                &Rex::Identifier { ref el, .. } => {
+                            // create encryption plans for insert values reconciled to column list
+                            while let Some((ref column_expr, ref value_expr)) = it.next() {
+                                match *column_expr {
+                                    &Rex::Identifier { ref el, .. } => {
+                                        let enc_plan = EncryptionPlan {
+                                            data_type: el.data_type.clone(),
+                                            encryption: el.encryption.clone(),
+                                            key: Some(el.key.clone())
+                                        };
 
-                                    let enc_plan = EncryptionPlan {
-                                        data_type: el.data_type.clone(),
-                                        encryption: el.encryption.clone(),
-                                        key: Some(el.key.clone())
-                                    };
-
-                                    match *value_expr {
-                                        &Rex::Literal(i) => builder.push_literal(i.clone(), enc_plan),
-                                        &Rex::BoundParam(i) => builder.push_param(i.clone(), enc_plan),
-                                        _ => self.plan_rex(value_expr, builder, literals)?
-                                    }
-                                },
-                                _ => return Err(self.zero_error("1064", format!("Unsupported expression for INSERT column name: {:?}", *column_expr))),
+                                        match *value_expr {
+                                            &Rex::Literal(i) => builder.push_literal(i.clone(), enc_plan),
+                                            &Rex::BoundParam(i) => builder.push_param(i.clone(), enc_plan),
+                                            _ => self.plan_rex(value_expr, builder, literals)?
+                                        }
+                                    },
+                                    _ => return Err(self.zero_error("1064", format!("Unsupported expression for INSERT column name: {:?}", *column_expr))),
+                                }
                             }
-                        }
-                    },
-                    _ => {}
+                        },
+                        _ => {}
+                    }
                 }
             },
             Rel::MySQLCreateTable => {} // TODO eventually build plans for Defaults, etc

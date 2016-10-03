@@ -526,7 +526,7 @@ fn insert() {
 					SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}
 				]
 			)),
-			values_list: Box::new(SQLExprList(
+			values_list: vec!(SQLExprList(
 				vec![
 					SQLLiteral(0),
 					SQLLiteral(1),
@@ -566,7 +566,7 @@ fn insert_with_comments() {
 					SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}
 				]
 			)),
-			values_list: Box::new(SQLExprList(
+			values_list: vec!(SQLExprList(
 				vec![
 					SQLLiteral(0),
 					SQLLiteral(1),
@@ -812,5 +812,39 @@ fn select_with_variables() {
 	let rewritten = writer.write(&parsed).unwrap();
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 }
+
+#[test]
+fn bulk_insert() {
+	let dialect = AnsiSQLDialect::new();
+	let sql = String::from("INSERT INTO new_orders (no_o_id, no_d_id, no_w_id) VALUES (1,2,3), (4,5,6)");
+
+	let tokens = sql.tokenize(&dialect).unwrap();
+	let parsed = tokens.parse().unwrap();
+
+	assert_eq!(
+		SQLInsert{
+			table: Box::new(SQLIdentifier{id: String::from("new_orders"), parts: vec![String::from("new_orders")]}),
+			insert_mode: InsertMode::INSERT,
+			column_list: Box::new(SQLExprList(
+				vec![
+					SQLIdentifier{id: String::from("no_o_id"), parts: vec![String::from("no_o_id")]},
+					SQLIdentifier{id: String::from("no_d_id"), parts: vec![String::from("no_d_id")]},
+					SQLIdentifier{id: String::from("no_w_id"), parts: vec![String::from("no_w_id")]}
+				]
+			)),
+			values_list: vec!(
+				SQLExprList(vec![SQLLiteral(0), SQLLiteral(1), SQLLiteral(2)]),
+				SQLExprList(vec![SQLLiteral(3), SQLLiteral(4), SQLLiteral(5)])
+			)
+		},
+		parsed
+	);
+
+	let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
+	let writer = SQLWriter::new(vec![&ansi_writer]);
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+}
+
 
 

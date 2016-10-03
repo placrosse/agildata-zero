@@ -257,7 +257,7 @@ pub enum ASTNode {
         table: Box<ASTNode>,
 		insert_mode: InsertMode,
         column_list: Box<ASTNode>,
-        values_list: Box<ASTNode>
+        values_list: Vec<ASTNode>
     },
     SQLUpdate {
         table: Box<ASTNode>,
