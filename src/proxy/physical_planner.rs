@@ -153,7 +153,7 @@ impl PhysicalPlanner {
                                     match *value_expr {
                                         &Rex::Literal(i) => builder.push_literal(i.clone(), enc_plan),
                                         &Rex::BoundParam(i) => builder.push_param(i.clone(), enc_plan),
-                                        _ => return Err(self.zero_error("1064", format!("Unsupported expression for INSERT value expression: {:?}", *value_expr)))
+                                        _ => self.plan_rex(value_expr, builder, literals)?
                                     }
                                 },
                                 _ => return Err(self.zero_error("1064", format!("Unsupported expression for INSERT column name: {:?}", *column_expr))),
@@ -237,6 +237,20 @@ impl PhysicalPlanner {
                     self.get_encryption_scheme(e, builder, potentials, literals)?;
                 }
                 Ok(EncScheme::Inconsequential)
+            },
+            Rex::RexUnary { box ref rex, .. } => {
+                let mut potentials_builder = Some(PotentialsBuilder::new());
+                let r = self.get_encryption_scheme(rex, builder, &mut potentials_builder, literals)?;
+                match r {
+                    EncScheme::Encrypted(..) => {
+                        Err(self.zero_error(
+                            "1064",
+                            format!("Unsupported operation on encrypted column: {}", rex.to_readable(literals))
+                        ))
+                    },
+                    // Otherwise delegate to mysql
+                    _ => Ok(EncScheme::UnencryptedOperation)
+                }
             },
             // Evaluate binary
             Rex::BinaryExpr{box ref left, ref op, box ref right} => {
@@ -394,10 +408,6 @@ impl PhysicalPlanner {
                     ))
                 }
             },
-            _ => Err(self.zero_error(
-                "1064",
-                format!("Unsupported expr: {}", rex.to_readable(literals))
-            ))
         }
 
     }
