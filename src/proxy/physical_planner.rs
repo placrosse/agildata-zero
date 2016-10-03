@@ -153,10 +153,7 @@ impl PhysicalPlanner {
                                     match *value_expr {
                                         &Rex::Literal(i) => builder.push_literal(i.clone(), enc_plan),
                                         &Rex::BoundParam(i) => builder.push_param(i.clone(), enc_plan),
-                                        _ => {
-                                            self.plan_rex(value_expr, builder, literals)?;
-                                            //return Err(self.zero_error("1064", format!("Unsupported expression for INSERT value expression: {:?}", *value_expr)))
-                                        }
+                                        _ => self.plan_rex(value_expr, builder, literals)?
                                     }
                                 },
                                 _ => return Err(self.zero_error("1064", format!("Unsupported expression for INSERT column name: {:?}", *column_expr))),
