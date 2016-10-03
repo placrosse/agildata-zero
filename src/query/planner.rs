@@ -172,7 +172,7 @@ pub enum Rel {
     AliasedRel{alias: String, input: Box<Rel>, tt: TupleType},
     Join{left: Box<Rel>, join_type: JoinType, right: Box<Rel>, on_expr: Option<Box<Rex>>, tt: TupleType},
     Dual { tt: TupleType },
-    Insert {table: String, columns: Box<Rex>, values: Box<Rex>, tt: TupleType},
+    Insert {table: String, columns: Box<Rex>, values: Vec<Rex>, tt: TupleType},
 	Update {table: String, set_stmts: Box<Rex>, selection: Option<Box<Rex>>, tt: TupleType},
 	Delete {table: String, selection: Option<Box<Rex>>, tt: TupleType},
     MySQLCreateTable // TODO really implement to handle defaults, etc
@@ -346,13 +346,14 @@ impl<'a> Planner<'a> {
                     tt: project_tt
                 })
             },
-            ASTNode::SQLInsert {box ref table, box ref column_list, box ref values_list, .. } => {
+            ASTNode::SQLInsert {box ref table, box ref column_list, ref values_list, .. } => {
                 match self.sql_to_rel(table)? {
                     Rel::TableScan {table, tt} => {
+                        let values: Result<Vec<_>, _> = values_list.iter().map(|v| self.sql_to_rex(v, &tt)).collect();
                         Ok(Rel::Insert{
                             table: table,
                             columns: Box::new(self.sql_to_rex(column_list, &tt)?),
-                            values: Box::new(self.sql_to_rex(values_list, &tt)?),
+                            values: values?,
                             tt: tt
                         })
                     },

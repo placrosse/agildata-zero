@@ -343,15 +343,22 @@ impl AnsiSQLDialect {
 		};
 
 		tokens.consume_keyword("VALUES");
-		tokens.consume_punctuator("(");
-		let values = try!(self.parse_expr_list(tokens));
-		tokens.consume_keyword(")");
+        tokens.consume_punctuator("(");
+
+        let mut values : Vec<ASTNode> = vec![];
+		loop {
+            values.push(try!(self.parse_expr_list(tokens)));
+            tokens.consume_keyword(")");
+            if !tokens.consume_keyword(",") {
+                break
+            }
+        }
 
 		Ok(ASTNode::SQLInsert {
 			table: Box::new(table),
 			insert_mode: insert_mode,
 			column_list: Box::new(columns),
-			values_list: Box::new(values)
+			values_list: values
 		})
 
 	}
@@ -766,7 +773,7 @@ impl<'a> ExprWriter for AnsiSQLWriter<'a> {
                 }
 
 			},
-			&ASTNode::SQLInsert{box ref table, ref insert_mode, box ref column_list, box ref values_list} => {
+			&ASTNode::SQLInsert{box ref table, ref insert_mode, box ref column_list, ref values_list} => {
 				builder.push_str("INSERT ");
 				match *insert_mode {
 					InsertMode::IGNORE => builder.push_str("IGNORE "),
@@ -776,9 +783,18 @@ impl<'a> ExprWriter for AnsiSQLWriter<'a> {
 				writer._write(builder, table)?;
 				builder.push_str(" (");
 				writer._write(builder, column_list)?;
-				builder.push_str(") VALUES(");
-				writer._write(builder, values_list)?;
-				builder.push_str(")");
+				builder.push_str(") VALUES ");
+
+                let mut i = 0;
+                for values in values_list.iter() {
+                    if i > 0 {
+                        builder.push_str(", ");
+                    }
+                    i += 1;
+                    builder.push_str("(");
+                    writer._write(builder, values)?;
+                    builder.push_str(")");
+                }
 			},
 			&ASTNode::SQLUpdate{box ref table, box ref assignments, ref selection} => {
 				builder.push_str("UPDATE");

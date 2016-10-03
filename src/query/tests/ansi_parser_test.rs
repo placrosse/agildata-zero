@@ -526,7 +526,7 @@ fn insert() {
 					SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}
 				]
 			)),
-			values_list: Box::new(SQLExprList(
+			values_list: vec!(SQLExprList(
 				vec![
 					SQLLiteral(0),
 					SQLLiteral(1),
@@ -566,7 +566,7 @@ fn insert_with_comments() {
 					SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}
 				]
 			)),
-			values_list: Box::new(SQLExprList(
+			values_list: vec!(SQLExprList(
 				vec![
 					SQLLiteral(0),
 					SQLLiteral(1),
@@ -812,5 +812,20 @@ fn select_with_variables() {
 	let rewritten = writer.write(&parsed).unwrap();
 	assert_eq!(format_sql(&rewritten), format_sql(&sql));
 }
+
+#[test]
+fn bulk_insert() {
+	let dialect = AnsiSQLDialect::new();
+	let sql = String::from("INSERT INTO new_orders (no_o_id, no_d_id, no_w_id) VALUES (-1,-2,-3), (4, 5, 6)");
+
+	let tokens = sql.tokenize(&dialect).unwrap();
+	let parsed = tokens.parse().unwrap();
+
+	let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
+	let writer = SQLWriter::new(vec![&ansi_writer]);
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+}
+
 
 
