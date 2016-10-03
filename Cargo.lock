@@ -14,7 +14,7 @@ dependencies = [
  "log4rs 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "mio 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "mysql 7.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "mysql-proxy 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "mysql-proxy 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rust-crypto 0.2.36 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-core 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -316,7 +316,7 @@ dependencies = [
 
 [[package]]
 name = "mysql-proxy"
-version = "0.1.9"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "byteorder 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -751,7 +751,7 @@ dependencies = [
 "checksum mio 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "2dadd39d4b47343e10513ac2a731c979517a4761224ecb6bbd243602300c9537"
 "checksum miow 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "d5bfc6782530ac8ace97af10a540054a37126b63b0702ddaaa243b73b5745b9a"
 "checksum mysql 7.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "ea0f022eac5d590b32c6594be7a62722fb4a1783c2ecaa35598841ddf1d26b4a"
-"checksum mysql-proxy 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)" = "1c36812cf5bb04c4a1ea427efe61f0a1b1b95ffa71289d7c323fdb97ded0ac2e"
+"checksum mysql-proxy 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "e3010b313454a84aef5454706b00d1cd4ee0f8c99de36ab64ac03b6847737c11"
 "checksum net2 0.2.26 (registry+https://github.com/rust-lang/crates.io-index)" = "5edf9cb6be97212423aed9413dd4729d62b370b5e1c571750e882cebbbc1e3e2"
 "checksum nix 0.3.10 (registry+https://github.com/rust-lang/crates.io-index)" = "4762dd6918cf86f2a8dd0b08fca650541493ac109c8a6dd2bcfc3337625838eb"
 "checksum nix 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "7a7bb1da2be7da3cbffda73fc681d509ffd9e665af478d2bee1907cee0bc64b2"

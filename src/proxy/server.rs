@@ -228,7 +228,9 @@ fn read_u16_le(buf: &[u8]) -> u16 {
 impl PacketHandler for ZeroHandler {
 
     fn handle_request(&mut self, p: &Packet) -> Action {
-//        let action = if self.state == HandlerState::Handshake {
+
+        print_packet_chars("handle_request", &p.bytes);
+
         let action = if let HandlerState::Handshake = self.state {
             self.state = HandlerState::ComQueryResponse;
 
@@ -477,7 +479,7 @@ impl PacketHandler for ZeroHandler {
                 }
             },
             HandlerState::StmtExecuteResultRow(ref pstmt) => {
-                    print_packet_chars("StmtExecuteResultRow", &p.bytes);
+                print_packet_chars("StmtExecuteResultRow", &p.bytes);
                 match p.bytes[4] {
                     0xfe | 0xff => (Some(HandlerState::ExpectClientRequest), Action::Forward),
                     0x00 => {
