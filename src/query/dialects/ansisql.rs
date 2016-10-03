@@ -342,24 +342,31 @@ impl AnsiSQLDialect {
             }.into())
 		};
 
-		tokens.consume_keyword("VALUES");
-        tokens.consume_punctuator("(");
+		if tokens.consume_keyword("VALUES") || tokens.consume_keyword("VALUE") {
 
-        let mut values : Vec<ASTNode> = vec![];
-		loop {
-            values.push(try!(self.parse_expr_list(tokens)));
-            tokens.consume_keyword(")");
-            if !tokens.consume_keyword(",") {
-                break
+            let mut values : Vec<ASTNode> = vec![];
+            loop {
+                tokens.consume_punctuator("(");
+                values.push(try!(self.parse_expr_list(tokens)));
+                tokens.consume_punctuator(")");
+                if !tokens.consume_punctuator(",") {
+                    break
+                }
             }
-        }
 
-		Ok(ASTNode::SQLInsert {
-			table: Box::new(table),
-			insert_mode: insert_mode,
-			column_list: Box::new(columns),
-			values_list: values
-		})
+            Ok(ASTNode::SQLInsert {
+                table: Box::new(table),
+                insert_mode: insert_mode,
+                column_list: Box::new(columns),
+                values_list: values
+            })
+
+        } else {
+            return Err(ZeroError::ParseError {
+                message: format!("Expected VALUE | VALUES, received {:?}", &tokens.peek()).into(),
+                code: "1064".into()
+            }.into())
+        }
 
 	}
 
@@ -616,7 +623,7 @@ impl AnsiSQLDialect {
 			Some(&Token::Punctuator(ref v)) => match &v as &str {
 				")" => {tokens.next();},
 				_ => return Err(ZeroError::ParseError{
-                     message: format!("Expected , punctuator, received {}", v).into(),
+                     message: format!("Expected ) punctuator, received {}", v).into(),
                      code: "1064".into()
                  }.into())
 
