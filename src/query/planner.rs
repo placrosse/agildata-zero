@@ -239,6 +239,11 @@ impl<'a> Planner<'a> {
                     };
 
                     Ok(Rex::Identifier { id: parts.clone(), el: element })
+                } else if id == "*" {
+                    // translate wildcard into list of columns for the table
+                    Ok(Rex::RexExprList(tt.elements.iter()
+                        .map(|e| Rex::Identifier { id: vec![e.name.clone()], el: e.clone() })
+                    .collect::<Vec<Rex>>()))
                 } else {
                     let element = tt.elements.iter()
                         .filter(|e| {
@@ -339,6 +344,34 @@ impl<'a> Planner<'a> {
                 }
 
                 let project_list = self.sql_to_rex(expr_list, &input.tt() )?;
+
+                let project_list = match project_list {
+                    Rex::RexExprList(ref list) => {
+                        let mut foo : Vec<Rex> = vec![];
+                        for rex in list {
+                            match rex {
+                                &Rex::RexExprList(ref list) => {
+                                    for e in list {
+                                        foo.push(e.clone())
+                                    }
+                                },
+                                _ => foo.push(rex.clone())
+                            }
+                        }
+                        Rex::RexExprList(foo)
+
+
+//                        let foo = list.iter()
+//                            .flat_map(|rex| match rex {
+//                                Rex::RexExprList(expr_list) => expr_list.into_iter(),
+//                                _ => panic!("Invalid projection expression")//vec![rex].into_iter()
+//                            }).collect::<Vec<Rex>>();
+////                        Rex::RexExprList(foo)
+//                        panic!("Invalid projection expression")
+                    },
+                    _ => panic!("Invalid projection expression")
+                };
+
                 let project_tt = reconcile_tt(&project_list)?;
                 Ok(Rel::Projection {
                     project: Box::new(project_list),
