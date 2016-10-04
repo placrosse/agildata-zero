@@ -175,6 +175,7 @@ pub enum Rel {
     Insert {table: String, columns: Box<Rex>, values: Vec<Rex>, tt: TupleType},
     Update {table: String, set_stmts: Box<Rex>, selection: Option<Box<Rex>>, tt: TupleType},
     Delete {table: String, selection: Option<Box<Rex>>, tt: TupleType},
+    MySQLDropTable,
     MySQLCreateTable // TODO really implement to handle defaults, etc
 }
 
@@ -194,7 +195,7 @@ impl HasTupleType for Rel {
             Rel::Join { ref tt, ..} => tt,
             Rel::Update { ref tt, ..} => tt,
             Rel::Delete { ref tt, ..} => tt,
-            Rel::MySQLCreateTable => panic!("No tuple type")
+            _ => panic!("No tuple type")
         }
     }
 }
@@ -457,6 +458,7 @@ impl<'a> Planner<'a> {
                     }.into())
                 }
             },
+            ASTNode::MySQLDropTable{..} => Ok(Rel::MySQLDropTable),
             ASTNode::MySQLCreateTable{..} => Ok(Rel::MySQLCreateTable),
 
             ASTNode::SQLUpdate{ box ref table, box ref assignments, ref selection } => {

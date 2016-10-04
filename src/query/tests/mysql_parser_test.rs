@@ -700,6 +700,24 @@ fn create_tail_keys() {
 }
 
 #[test]
+fn drop_table() {
+
+	let ansi = AnsiSQLDialect::new();
+	let dialect = MySQLDialect::new(&ansi);
+
+	let sql = String::from("DROP TABLE IF EXISTS foo, bar RESTRICT");
+
+	let tokens = sql.tokenize(&dialect).unwrap();
+	let parsed = tokens.parse().unwrap();
+
+	let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
+	let mysql_writer = MySQLWriter{};
+	let writer = SQLWriter::new(vec![&mysql_writer, &ansi_writer]);
+	let rewritten = writer.write(&parsed).unwrap();
+	assert_eq!(format_sql(&rewritten), format_sql(&sql));
+}
+
+#[test]
 fn create_tail_constraints() {
 
     let ansi = AnsiSQLDialect::new();

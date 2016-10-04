@@ -96,8 +96,7 @@ impl<'a, D: 'a + Dialect> Tokens<'a, D> {
         }
     }
 
-    fn consume_keyword(&self, text: &str) -> bool
-         {
+	fn consume_keyword(&self, text: &str) -> bool {
 
         match self.peek() {
             Some(&Token::Keyword(ref v)) | Some(&Token::Identifier(ref v)) => {
@@ -273,6 +272,13 @@ pub enum ASTNode {
     SQLFunctionCall{identifier: Box<ASTNode>, args: Vec<ASTNode>},
 
     // MySQL
+    MySQLDropTable {
+        temporary: bool,
+        if_exists: bool,
+        restrict: bool,
+        cascade: bool,
+        tables: Vec<ASTNode>
+    },
     MySQLCreateTable{
         table: Box<ASTNode>,
         column_list: Vec<ASTNode>,
