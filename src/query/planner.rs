@@ -347,27 +347,18 @@ impl<'a> Planner<'a> {
 
                 let project_list = match project_list {
                     Rex::RexExprList(ref list) => {
-                        let mut foo : Vec<Rex> = vec![];
+                        let mut new_list : Vec<Rex> = vec![];
                         for rex in list {
                             match rex {
                                 &Rex::RexExprList(ref list) => {
                                     for e in list {
-                                        foo.push(e.clone())
+                                        new_list.push(e.clone())
                                     }
                                 },
-                                _ => foo.push(rex.clone())
+                                _ => new_list.push(rex.clone())
                             }
                         }
-                        Rex::RexExprList(foo)
-
-
-//                        let foo = list.iter()
-//                            .flat_map(|rex| match rex {
-//                                Rex::RexExprList(expr_list) => expr_list.into_iter(),
-//                                _ => panic!("Invalid projection expression")//vec![rex].into_iter()
-//                            }).collect::<Vec<Rex>>();
-////                        Rex::RexExprList(foo)
-//                        panic!("Invalid projection expression")
+                        Rex::RexExprList(new_list)
                     },
                     _ => panic!("Invalid projection expression")
                 };
