@@ -239,6 +239,11 @@ impl<'a> Planner<'a> {
                     };
 
                     Ok(Rex::Identifier { id: parts.clone(), el: element })
+                } else if id == "*" {
+                    // translate wildcard into list of columns for the table
+                    Ok(Rex::RexExprList(tt.elements.iter()
+                        .map(|e| Rex::Identifier { id: vec![e.name.clone()], el: e.clone() })
+                    .collect::<Vec<Rex>>()))
                 } else {
                     let element = tt.elements.iter()
                         .filter(|e| {
@@ -339,6 +344,25 @@ impl<'a> Planner<'a> {
                 }
 
                 let project_list = self.sql_to_rex(expr_list, &input.tt() )?;
+
+                let project_list = match project_list {
+                    Rex::RexExprList(ref list) => {
+                        let mut new_list : Vec<Rex> = vec![];
+                        for rex in list {
+                            match rex {
+                                &Rex::RexExprList(ref list) => {
+                                    for e in list {
+                                        new_list.push(e.clone())
+                                    }
+                                },
+                                _ => new_list.push(rex.clone())
+                            }
+                        }
+                        Rex::RexExprList(new_list)
+                    },
+                    _ => panic!("Invalid projection expression")
+                };
+
                 let project_tt = reconcile_tt(&project_list)?;
                 Ok(Rel::Projection {
                     project: Box::new(project_list),
