@@ -6,7 +6,7 @@ use std::str::Chars;
 use std::str::FromStr;
 use std::fmt::Write;
 
-static KEYWORDS: &'static [&'static str] = &["SHOW", "CREATE", "TABLE", "PRECISION",
+static KEYWORDS: &'static [&'static str] = &["SHOW", "CREATE", "DROP", "TABLE", "PRECISION",
     "PRIMARY", "KEY", "UNIQUE", "FULLTEXT", "FOREIGN", "REFERENCES", "CONSTRAINT", "USE",
     "COMMIT", "ROLLBACK", "BEGIN"];
 
@@ -53,6 +53,7 @@ impl <'d> Dialect for MySQLDialect<'d> {
         match tokens.peek() {
             Some(&Token::Keyword(ref v)) => match &v as &str {
                 "CREATE" => Ok(Some(self.parse_create(tokens)?)),
+				"DROP" => Ok(Some(self.parse_drop(tokens)?)),
                 "USE" => Ok(Some(self.parse_use(tokens)?)),
                 _ => self.ansi.parse_prefix(tokens)
             },
@@ -77,6 +78,47 @@ impl<'d> MySQLDialect<'d> {
 
         assert!(tokens.consume_keyword("USE"));
         Ok(ASTNode::MySQLUse(Box::new(self.ansi.parse_identifier(tokens)?)))
+    }
+
+    fn parse_drop<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  Box<ZeroError>>
+    {
+        tokens.consume_keyword("DROP");
+
+        // optional keyword
+        let temp = tokens.consume_keyword("TEMPORARY");
+
+        if tokens.consume_keyword("TABLE") {
+
+            // optional keywords
+            let if_exists = tokens.consume_keyword("IF") && tokens.consume_keyword("EXISTS");
+
+            let mut tables : Vec<ASTNode> = vec![];
+
+            loop {
+                tables.push(self.ansi.parse_identifier(tokens)?);
+                if !tokens.consume_punctuator(",") {
+                    break;
+                }
+            }
+
+            // optional keywords (can only be one or the other)
+            let restrict = tokens.consume_keyword("RESTRICT");
+            let cascade = tokens.consume_keyword("CASCASE");
+
+            Ok(ASTNode::MySQLDropTable {
+                temporary: temp,
+                if_exists: if_exists,
+                tables: tables,
+                restrict: restrict,
+                cascade: cascade
+            })
+
+        } else {
+            return  Err(ZeroError::ParseError{
+                message: format!("Expected keyword TABLE after DROP, received token {:?}", tokens.peek()).into(),
+                code: "1064".into()
+            }.into())
+        }
     }
 
     fn parse_create<'a, D:  Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode,  Box<ZeroError>>
@@ -598,6 +640,29 @@ pub struct MySQLWriter{}
 impl ExprWriter for MySQLWriter {
     fn write(&self, writer: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool,  Box<ZeroError>> {
         match node {
+            &ASTNode::MySQLDropTable { temporary, if_exists, ref tables, restrict, cascade } => {
+                builder.push_str("DROP ");
+                if temporary {
+                    builder.push_str("TEMPORARY ");
+                }
+                builder.push_str("TABLE ");
+                if if_exists {
+                    builder.push_str("IF EXISTS ");
+                }
+                let mut i = 0;
+                for table in tables.iter() {
+                    if i > 0 {
+                        builder.push_str(", ");
+                    }
+                    i += 1;
+                    writer._write(builder, table)?;
+                }
+                if restrict {
+                    builder.push_str("RESTRICT");
+                } else if cascade {
+                    builder.push_str("CASCADE");
+                }
+            },
             &ASTNode::MySQLCreateTable{box ref table, ref column_list, ref keys, ref table_options} => {
                 builder.push_str("CREATE TABLE");
                 writer._write(builder, table)?;
