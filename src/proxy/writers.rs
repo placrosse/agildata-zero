@@ -214,9 +214,9 @@ pub struct LiteralReplacingWriter<'a> {
 }
 
 impl<'a> ExprWriter for LiteralReplacingWriter<'a> {
-	fn write(&self, _: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, Box<ZeroError>> {
-		match node {
-			&ASTNode::SQLLiteral(i) => {
+    fn write(&self, _: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, Box<ZeroError>> {
+        match node {
+            &ASTNode::SQLLiteral(i) => {
                 let index = i as u32;
                 self.optionally_write_literal(&index, builder)
             },
@@ -229,79 +229,79 @@ impl<'a> ExprWriter for LiteralReplacingWriter<'a> {
                   Ok(false)
                 }
             },
-			_ => Ok(false)
-		}
-	}
+            _ => Ok(false)
+        }
+    }
 }
 
 impl<'a> LiteralReplacingWriter<'a> {
-	fn optionally_write_literal(&self, index: &u32, builder: &mut String) -> Result<bool, Box<ZeroError>> {
-		match self.encrypted_literals.get(index) {
-			Some(value) => {
-				write!(builder, "X'{}'", to_hex_string(value)).unwrap();
-				Ok(true)
-			},
-			None => Ok(false),
-		}
-	}
+    fn optionally_write_literal(&self, index: &u32, builder: &mut String) -> Result<bool, Box<ZeroError>> {
+        match self.encrypted_literals.get(index) {
+            Some(value) => {
+                write!(builder, "X'{}'", to_hex_string(value)).unwrap();
+                Ok(true)
+            },
+            None => Ok(false),
+        }
+    }
 }
 
 pub struct CreateTranslatingWriter<'a> {
-	pub config: &'a Config,
-	pub schema: &'a String
+    pub config: &'a Config,
+    pub schema: &'a String
 }
 
 impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
-	fn write(&self, writer: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, Box<ZeroError>> {
-		match node {
-			&ASTNode::MySQLCreateTable{box ref table, ref column_list, ref keys, ref table_options} => {
-				let table_name = match table {
-					&ASTNode::SQLIdentifier{id: ref t, ..} => t,
-					_ => return  Err(ZeroError::ParseError{
+    fn write(&self, writer: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, Box<ZeroError>> {
+        match node {
+            &ASTNode::MySQLCreateTable{box ref table, ref column_list, ref keys, ref table_options} => {
+                let table_name = match table {
+                    &ASTNode::SQLIdentifier{id: ref t, ..} => t,
+                    _ => return  Err(ZeroError::ParseError{
                             message: format!("Expected identifier, received {:?}", table).into(),
                             code: "1064".into()
                         }.into())
-				};
+                };
 
-				builder.push_str("CREATE TABLE");
-				writer._write(builder, table)?;
-				builder.push_str("(");
+                builder.push_str("CREATE TABLE");
+                writer._write(builder, table)?;
+                builder.push_str("(");
 
-				let mut sep = "";
-				for c in column_list.iter() {
-					builder.push_str(sep);
+                let mut sep = "";
+                for c in column_list.iter() {
+                    builder.push_str(sep);
 
-					let column_name = match c {
-						&ASTNode::MySQLColumnDef{box ref column, ..} => match column {
-							&ASTNode::SQLIdentifier{id: ref t, ..} => t,
-							_ => return  Err(ZeroError::ParseError{
+                    let column_name = match c {
+                        &ASTNode::MySQLColumnDef{box ref column, ..} => match column {
+                            &ASTNode::SQLIdentifier{id: ref t, ..} => t,
+                            _ => return  Err(ZeroError::ParseError{
                         message: format!("Expected identifier, received {:?}", table).into(),
                         code: "1064".into()
                     }.into())
-						},
-						_ => return  Err(ZeroError::ParseError{
+                        },
+                        _ => return  Err(ZeroError::ParseError{
                                 message: format!("Expected column definition, received {:?}", table).into(),
                                 code: "1064".into()
                             }.into())
-					};
+                    };
 
-					let col = self.config.get_column_config(&self.schema, &table_name, &column_name);
-					match col {
-						Some(config) => {
-							match c {
-								&ASTNode::MySQLColumnDef{box ref column, box ref data_type, ref qualifiers} => {
-									writer._write(builder, column)?;
+                    let col = self.config.get_column_config(&self.schema, &table_name, &column_name);
+                    match col {
+                        Some(config) => {
+                            match c {
+                                &ASTNode::MySQLColumnDef{box ref column, box ref data_type, ref qualifiers} => {
+                                    writer._write(builder, column)?;
 
-									let encryption_type = &config.encryption;
-									match encryption_type {
-										&EncryptionType::NA => writer._write(builder, data_type)?,
-										_ => writer._write(builder, &self.translate_type(data_type, &config.encryption)?)?
-									}
+                                    let encryption_type = &config.encryption;
+                                    match encryption_type {
+                                        &EncryptionType::NA => writer._write(builder, data_type)?,
+                                        _ => writer._write(builder, &self.translate_type(data_type, &config.encryption)?)?
+                                    }
 
 
-									match qualifiers {
-										&Some(ref list) => {
-											for q in list.iter() {
+                                    match qualifiers {
+                                        &Some(ref list) => {
+                                            for q in list.iter() {
                                                 if let &ASTNode::MySQLColumnQualifier(ref qual) = q {
                                                     match qual {
                                                         &MySQLColumnQualifier::Signed | &MySQLColumnQualifier::Unsigned => {
@@ -312,55 +312,55 @@ impl<'a> ExprWriter for CreateTranslatingWriter<'a> {
                                                         _ => writer._write(builder, q)?
                                                     }
                                                 }
-											}
-										},
-										_=> {}
-									}
+                                            }
+                                        },
+                                        _=> {}
+                                    }
 
-								},
-								_ => return Err(ZeroError::ParseError{
+                                },
+                                _ => return Err(ZeroError::ParseError{
                                         message: format!("Expected column definition, received {:?}", c).into(),
                                         code: "1064".into()
                                     }.into())
-							}
-						},
-						_ => {
-							writer._write(builder, c)?;
-						}
-					}
+                            }
+                        },
+                        _ => {
+                            writer._write(builder, c)?;
+                        }
+                    }
 
-					sep = ", "
-				}
+                    sep = ", "
+                }
 
-				for k in keys.iter() {
-					builder.push_str(sep);
-					writer._write(builder, k)?;
-				}
+                for k in keys.iter() {
+                    builder.push_str(sep);
+                    writer._write(builder, k)?;
+                }
 
-				builder.push_str(")");
+                builder.push_str(")");
 
-				for o in table_options.iter() {
-					writer._write(builder, o)?;
-				}
+                for o in table_options.iter() {
+                    writer._write(builder, o)?;
+                }
 
-				Ok(true)
-			},
-			_ => Ok(false)
-		}
-	}
+                Ok(true)
+            },
+            _ => Ok(false)
+        }
+    }
 }
 
 // TODO needs to do some real length/display math for different encryption types
 impl<'a> CreateTranslatingWriter<'a> {
-	fn translate_type(&self, data_type: &ASTNode, encryption: &EncryptionType) -> Result<ASTNode, Box<ZeroError>> {
-		match (data_type, encryption) {
-			(&ASTNode::MySQLDataType(ref dt), &EncryptionType::Aes(_)) | (&ASTNode::MySQLDataType(ref dt), &EncryptionType::AesGcm) => match dt {
+    fn translate_type(&self, data_type: &ASTNode, encryption: &EncryptionType) -> Result<ASTNode, Box<ZeroError>> {
+        match (data_type, encryption) {
+            (&ASTNode::MySQLDataType(ref dt), &EncryptionType::Aes(_)) | (&ASTNode::MySQLDataType(ref dt), &EncryptionType::AesGcm) => match dt {
                 &Bit{..} | &TinyInt{..} |
                 &SmallInt{..} | &MediumInt{..} |
                 &Int{..} | &BigInt{..}  => {
-					// TODO currently all are stored as 8 bytes
-					Ok(ASTNode::MySQLDataType(Binary{length: Some(8 + 28)}))
-				},
+                    // TODO currently all are stored as 8 bytes
+                    Ok(ASTNode::MySQLDataType(Binary{length: Some(8 + 28)}))
+                },
                 &Bool => Ok(ASTNode::MySQLDataType(Binary{length: Some(1 + 28)})),
                 &Decimal{..} => Ok(ASTNode::MySQLDataType(Binary{length: Some(16 + 28)})),
                 &Float{..} | &Double{..} => Ok(ASTNode::MySQLDataType(Binary{length: Some(8 + 28)})),
@@ -368,105 +368,105 @@ impl<'a> CreateTranslatingWriter<'a> {
                     let l = length.unwrap_or(1) + 28;
                     Ok(ASTNode::MySQLDataType(VarBinary{length: Some(l)}))
                 },
-				&Varchar{ref length} | &NVarchar{ref length} => {
-					Ok(ASTNode::MySQLDataType(VarBinary{length: Some(self.get_encrypted_string_length(length))}))
-				},
+                &Varchar{ref length} | &NVarchar{ref length} => {
+                    Ok(ASTNode::MySQLDataType(VarBinary{length: Some(self.get_encrypted_string_length(length))}))
+                },
                 &Date | &DateTime{..} => Ok(ASTNode::MySQLDataType(Binary{length: Some(12 + 28)})),
-				_ => Err(ZeroError::EncryptionError{
+                _ => Err(ZeroError::EncryptionError{
                         message: format!("Unsupported data type for AES translation {:?}", dt).into(),
                         code: "1064".into()
                     }.into())
-			},
-			_ => Err(ZeroError::EncryptionError{
+            },
+            _ => Err(ZeroError::EncryptionError{
                     message: format!("Expected data type and encryption, received data_type: {:?}, encryption: {:?}", data_type, encryption).into(),
                     code: "1064".into()
                 }.into())
-               		}
-	}
+                    }
+    }
 
-	// TODO delegate to crypt module
-	fn get_encrypted_string_length(&self, len: &Option<u32>) -> u32 {
-		if len.is_some() {
-			len.unwrap() + 28
-		} else {
-			1024 + 28
-		}
-	}
+    // TODO delegate to crypt module
+    fn get_encrypted_string_length(&self, len: &Option<u32>) -> u32 {
+        if len.is_some() {
+            len.unwrap() + 28
+        } else {
+            1024 + 28
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
 
-	use super::{CreateTranslatingWriter};
-	use query::{Writer, SQLWriter, Tokenizer, Parser};
+    use super::{CreateTranslatingWriter};
+    use query::{Writer, SQLWriter, Tokenizer, Parser};
     use query::dialects::mysqlsql::*;
     use query::dialects::ansisql::*;
     use config;
 
-	#[test]
-	fn simple_users() {
+    #[test]
+    fn simple_users() {
         let ansi = AnsiSQLDialect::new();
         let dialect = MySQLDialect::new(&ansi);
 
-		let config = config::parse_config("zero-config.xml");
-		let schema = String::from("zero");
+        let config = config::parse_config("zero-config.xml");
+        let schema = String::from("zero");
 
-		let sql = String::from("CREATE TABLE users (
-			id INTEGER PRIMARY KEY,
-			first_name VARCHAR(50),
-			last_name VARCHAR(50),
-			ssn VARCHAR(50),
-			age INTEGER,
-			sex VARCHAR(50)
-		)");
+        let sql = String::from("CREATE TABLE users (
+            id INTEGER PRIMARY KEY,
+            first_name VARCHAR(50),
+            last_name VARCHAR(50),
+            ssn VARCHAR(50),
+            age INTEGER,
+            sex VARCHAR(50)
+        )");
 
         let tokens = sql.tokenize(&dialect).unwrap();
-		let parsed = tokens.parse().unwrap();
+        let parsed = tokens.parse().unwrap();
 
-		let translator = CreateTranslatingWriter {
-			config: &config,
-			schema: &schema
-		};
+        let translator = CreateTranslatingWriter {
+            config: &config,
+            schema: &schema
+        };
         let mysql = MySQLWriter{};
         let ansi = AnsiSQLWriter{literal_tokens: &tokens.literals};
 
-		let writer = SQLWriter::new(vec![&translator, &mysql, &ansi]);
+        let writer = SQLWriter::new(vec![&translator, &mysql, &ansi]);
 
-		let expected = "CREATE TABLE users (
-			id INTEGER PRIMARY KEY,
-			first_name VARBINARY(78),
-			last_name VARBINARY(78),
-			ssn VARBINARY(78),
-			age BINARY(36),
-			sex VARBINARY(78)
-		)";
+        let expected = "CREATE TABLE users (
+            id INTEGER PRIMARY KEY,
+            first_name VARBINARY(78),
+            last_name VARBINARY(78),
+            ssn VARBINARY(78),
+            age BINARY(36),
+            sex VARBINARY(78)
+        )";
 
-		let rewritten = writer.write(&parsed).unwrap();
+        let rewritten = writer.write(&parsed).unwrap();
 
-		println!("REWRITTEN {}", rewritten);
+        println!("REWRITTEN {}", rewritten);
 
-		assert_eq!(format_sql(&rewritten), format_sql(&expected));
+        assert_eq!(format_sql(&rewritten), format_sql(&expected));
 
-	}
+    }
 
-	fn format_sql(sql: &str) -> String {
+    fn format_sql(sql: &str) -> String {
 
-		sql.to_uppercase()
+        sql.to_uppercase()
 
-			// unify datatype synonymns
-			.replace("BOOLEAN", "BOOL").replace("BOOL", "BOOLEAN") // done twice intentionally
-			.replace("INTEGER", "INT").replace(" INT", " INTEGER")
-			.replace("PRECISION", "")
-			.replace("DECIMAL", "DEC").replace("DEC", "DECIMAL")
-			.replace("CHARACTER VARYING", "VARCHAR")
-			.replace("NATIONAL CHARACTER", "NCHAR")
-			.replace("NATIONAL CHAR", "NCHAR")
-			.replace("NATIONAL VARCHAR", "NVARCHAR")
-			.replace("CHARACTER", "CHAR")
+            // unify datatype synonymns
+            .replace("BOOLEAN", "BOOL").replace("BOOL", "BOOLEAN") // done twice intentionally
+            .replace("INTEGER", "INT").replace(" INT", " INTEGER")
+            .replace("PRECISION", "")
+            .replace("DECIMAL", "DEC").replace("DEC", "DECIMAL")
+            .replace("CHARACTER VARYING", "VARCHAR")
+            .replace("NATIONAL CHARACTER", "NCHAR")
+            .replace("NATIONAL CHAR", "NCHAR")
+            .replace("NATIONAL VARCHAR", "NVARCHAR")
+            .replace("CHARACTER", "CHAR")
 
-			// strip whitespace
-			.replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "")
+            // strip whitespace
+            .replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "")
 
 
-	}
+    }
 }

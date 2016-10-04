@@ -157,12 +157,12 @@ pub enum ProtocolBinary {
     Time = 0x0b,
     DateTime = 0x0c,
     Year = 0x0d,
-    //	NewDate = 0x0e, -- not used in protocol
+    //  NewDate = 0x0e, -- not used in protocol
     Varchar = 0x0f,
     Bit = 0x10,
-    //	Timestamp2 = 0x11, -- not used in protocol
-    //	Datetime2 = 0x12, -- not used in protocol
-    //	Time2 = 0x13, -- not used in protocol
+    //  Timestamp2 = 0x11, -- not used in protocol
+    //  Datetime2 = 0x12, -- not used in protocol
+    //  Time2 = 0x13, -- not used in protocol
     NewDecimal = 0xf6,
     Enum = 0xf7,
     Set = 0xf8,

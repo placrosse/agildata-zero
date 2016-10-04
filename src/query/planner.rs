@@ -173,8 +173,8 @@ pub enum Rel {
     Join{left: Box<Rel>, join_type: JoinType, right: Box<Rel>, on_expr: Option<Box<Rex>>, tt: TupleType},
     Dual { tt: TupleType },
     Insert {table: String, columns: Box<Rex>, values: Vec<Rex>, tt: TupleType},
-	Update {table: String, set_stmts: Box<Rex>, selection: Option<Box<Rex>>, tt: TupleType},
-	Delete {table: String, selection: Option<Box<Rex>>, tt: TupleType},
+    Update {table: String, set_stmts: Box<Rex>, selection: Option<Box<Rex>>, tt: TupleType},
+    Delete {table: String, selection: Option<Box<Rex>>, tt: TupleType},
     MySQLCreateTable // TODO really implement to handle defaults, etc
 }
 
