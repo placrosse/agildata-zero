@@ -5,5 +5,8 @@ title: AgilData Zero - Installation Instructions
 
 # Installation
 
-TBD
+```
+curl the thing
+run the thing
+```
 
