@@ -18,7 +18,7 @@ mk_tarball() {
 
   # update this part to copy the artifacts that make sense for your project
   # NOTE All Cargo build artifacts will be under the 'target/$TARGET/{debug,release}'
-  cp target/$TARGET/release/spyglass $temp_dir
+  cp target/$TARGET/release/agildata-zero $temp_dir
 
   pushd $temp_dir
 

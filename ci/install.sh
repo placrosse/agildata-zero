@@ -1,7 +1,7 @@
 # `install` phase: install stuff needed for the `script` phase
 
 set -ex
-export NIGHTLY_VERSION=2016-04-14
+export NIGHTLY_VERSION=2016-09-12
 
 case "$TRAVIS_OS_NAME" in
   linux)
@@ -45,12 +45,15 @@ install_musl() {
 }
 
 install_rustup() {
-  curl -O https://static.rust-lang.org/rustup.sh
-  chmod +x rustup.sh
-  ./rustup.sh -y -v
+  curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain nightly
+  rustup override set nightly-${NIGHTLY_VERSION}
+  rustup target add x86_64-unknown-linux-musl
 
-  ./rustup.sh --channel=nightly --date=2016-09-12
-  ./rustup.sh --add-target=x86_64-unknown-linux-musl
+#  curl -O https://static.rust-lang.org/rustup.sh
+#  chmod +x rustup.sh
+#  ./rustup.sh --yes --verbose
+#  ./rustup.sh --channel=nightly --date=${NIGHTLY_VERSION}
+#  ./rustup.sh --add-target=x86_64-unknown-linux-musl
 
   rustc -V
   cargo -V
