@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="UTF-8">
+    <title>AgilData Zero by AgilData</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+  </head>
+  <body>
+    <section class="page-header">
+      <h1 class="project-name">AgilData Zero</h1>
+      <h2 class="project-tagline">Zero-knowledge encryption for MySQL and MariaDB</h2>
+      <a href="https://github.com/AgilData/agildata-zero" class="btn">View on GitHub</a>
+      <a href="https://github.com/AgilData/agildata-zero/zipball/master" class="btn">Download .zip</a>
+      <a href="https://github.com/AgilData/agildata-zero/tarball/master" class="btn">Download .tar.gz</a>
+    </section>
+
+    <section class="main-content">
+      <p>AgilData Zero is an encryption gateway for MySQL and MariaDB that encrypts sensitive data on the way into the database, and decrypts result sets on the way back out.</p>
+
+<p>Even if the database server is compromised and an unauthorized user is able to login and run SQL queries, no sensitive data is revealed. This contrasts greatly with the traditional approach that databases take, where data is only encrypted in-transit and at-rest, but is available in plain text if someone can login and run queries.</p>
+
+<h1>
+<a id="project-status" class="anchor" href="#project-status" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Project Status</h1>
+
+<p>This is a work-in-progress and not suitable for production use yet. The main limitations currently are:</p>
+
+<ul>
+<li>Subset of MySQL syntax supported (just enough to run TPC-C benchmarks)</li>
+<li>Depends on rust-crypto which has not been verified as secure yet</li>
+<li>Query planner only handles subset of validation required to ensure no unencrypted data can leak to the database server</li>
+</ul>
+
+<h1>
+<a id="security-versus-functionality" class="anchor" href="#security-versus-functionality" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Security versus Functionality</h1>
+
+<p>One of the challenges with storing encrypted data in a database is that it reduces the databases ability to operate on that data. For example, if data is encrypted with AES-256 then it changes the sort order of that data, so it is no longer possible for the database to perform range queries or sort that data with an <code>ORDER BY</code> clause. Weaker forms of encryption exist that can preserve the sort order, but order-preserving encryption is known to leak knowledge about the data, as demonstrated in [cite that paper here]. </p>
+
+<p>AgilData Zero takes a pragmatic approach to the problem by supporting encyrption schemes that allow for some basic operations to be performed by the database. AgilData Zero also validates queries and fails any queries that attempt to perform an operation on encrypted data, rather than just returning the wrong results.</p>
+
+<h1>
+<a id="supported-encryption-algorithms" class="anchor" href="#supported-encryption-algorithms" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Supported Encryption Algorithms</h1>
+
+<p>AgilData Zero currently supports the following types of encryption:</p>
+
+<h2>
+<a id="aes-256-with-column-specific-iv" class="anchor" href="#aes-256-with-column-specific-iv" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>AES-256 with column-specific IV</h2>
+
+<p>A single initialization-vector (IV) and key is used to encrypt all values in the column. This type of encryption supports equality checks, meaning that simple predicates of the form <code>WHERE ssn = ?</code> can still be performed efficiently by the database. AgilData encrypts the query parameters so that the database never sees unencrypted data.</p>
+
+<p>If two columns share the same key and IV then <code>JOIN</code> operations can also be performed natively by the database.</p>
+
+<h2>
+<a id="aes-256-with-unique-iv-per-encrypted-value" class="anchor" href="#aes-256-with-unique-iv-per-encrypted-value" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>AES-256 with unique IV per encrypted value</h2>
+
+<p>This form of encryption uses a unique IV per row. This is a stronger form of encryption but adds additional restrictions on functionality. Equality checks can no longer be performed.</p>
+
+<h1>
+<a id="architecture" class="anchor" href="#architecture" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Architecture</h1>
+
+<p>AgilData is implemented in the Rust programming language since this ensures that the product is not susceptible to exploits that rely on buffer overflow / overrun errors. Also, Rust can be run on bare metal for additional security.</p>
+
+<h1>
+<a id="performance" class="anchor" href="#performance" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Performance</h1>
+
+<p>Performance will naturally depend greatly on the specific application and the encryption schemes chosen, but the general overhead of parsing and planning queries (excluding encryption) adds approximately 10% overhead compared to running an applicaton directly against MySQL.</p>
+
+<h1>
+<a id="roadmap" class="anchor" href="#roadmap" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Roadmap</h1>
+
+<p>We use github issues to track the roadmap for this product. Some of major themes are:</p>
+
+<ul>
+<li>Add query engine in the gateway to allow for increased functionality against strongly encrypted data</li>
+<li>Add support for caching unencrypted index data in the gateway to support efficient range queries and sort operations</li>
+<li>Improving coverage of MySQL/MariaDB SQL syntax</li>
+<li>Develop tools to make recommendations for encryption schemes based on current query access patterns</li>
+</ul>
+
+<h1>
+<a id="running-agildata-zero" class="anchor" href="#running-agildata-zero" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Running AgilData Zero</h1>
+
+<p>We recommend using rustc 1.13.0-nightly.</p>
+
+<p>Simply modify zero-config.xml to specify the MySQL connection details and specify which columns should be encrypted. </p>
+
+<pre><code>cargo run --release
+</code></pre>
+
+      <footer class="site-footer">
+        <span class="site-footer-owner"><a href="https://github.com/AgilData/agildata-zero">AgilData Zero</a> is maintained by <a href="https://github.com/AgilData">AgilData</a>.</span>
+
+        <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the <a href="https://github.com/jasonlong/cayman-theme">Cayman theme</a> by <a href="https://twitter.com/jasonlong">Jason Long</a>.</span>
+      </footer>
+
+    </section>
+
+  
+  </body>
+</html>
