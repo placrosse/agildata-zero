@@ -49,8 +49,8 @@ install_rustup() {
   chmod +x rustup.sh
   ./rustup.sh -y -v
 
-  ./rustup.sh default --revision=nightly-${NIGHTLY_VERSION}
-  ./rustup.sh default --add-target=x86_64-unknown-linux-musl
+  ./rustup.sh --channel=nightly --date=2016-09-12
+  ./rustup.sh --add-target=x86_64-unknown-linux-musl
 
   rustc -V
   cargo -V
