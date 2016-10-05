@@ -4,10 +4,13 @@ AgilData Zero is an encryption gateway for MySQL and MariaDB that encrypts sensi
 
 Even if the database server is compromised and an unauthorized user is able to login and run SQL queries, no sensitive data is revealed. This contrasts greatly with the traditional approach that databases take, where data is only encrypted in-transit and at-rest, but is available in plain text if someone can login and run queries.
 
-# Use cases for Zero-Knowledge Encryption
+# Project Status
 
-- Hosting databases in the cloud
-- Sharing healthcare data in the cloud
+This is a work-in-progress and not suitable for production use yet. The main limitations currently are:
+
+- Subset of MySQL syntax supported (just enough to run TPC-C benchmarks)
+- Depends on rust-crypto which has not been verified as secure yet
+- Query planner only handles subset of validation required to ensure no unencrypted data can leak to the database server
 
 # Security versus Functionality
 
