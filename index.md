@@ -3,7 +3,7 @@ layout: default
 title: AgilData Zero
 ---
 
-# AgilData Zero - Zero-Knowledge Encryption for MySQL
+# AgilData Zero - Zero-Knowledge Encryption for MySQL!
 
 AgilData Zero is an encryption gateway for MySQL that encrypts sensitive data on the way into the database, and decrypts result sets on the way back out.
 
