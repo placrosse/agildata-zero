@@ -45,7 +45,7 @@ install_musl() {
 }
 
 install_rustup() {
-  curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain nightly
+  curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly
   rustup override set nightly-${NIGHTLY_VERSION}
   rustup target add x86_64-unknown-linux-musl
 
