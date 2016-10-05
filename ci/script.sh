@@ -14,11 +14,12 @@ run_test_suite() {
   export PATH=$PATH:/usr/local/musl/bin
   which musl-gcc
 
+  source ~/.cargo/env
   cargo build --release --target $TARGET
   cargo test --release --target $TARGET
 
   # sanity check the file type
-  file target/$TARGET/release/spyglass
+  file target/$TARGET/release/agildata-zero
 }
 
 main() {

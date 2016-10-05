@@ -30,6 +30,7 @@ mk_tarball() {
 }
 
 main() {
+  source ~/.cargo/env
   mk_artifacts
   mk_tarball
 }
