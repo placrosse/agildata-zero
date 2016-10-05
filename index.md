@@ -1,3 +1,8 @@
+---
+layout: default
+title: AgilData Zero
+---
+
 # AgilData Zero - Zero-Knowledge Encryption for MySQL
 
 [![Build Status](https://travis-ci.org/AgilData/agildata-zero.svg?branch=master)](https://travis-ci.org/AgilData/agildata-zero)
