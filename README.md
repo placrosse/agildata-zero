@@ -1,6 +1,11 @@
-# Zero-Knowledge Encryption for MySQL and MariaDB
+# AgilData Zero - Zero-Knowledge Encryption for MySQL
 
-AgilData Zero is an encryption gateway for MySQL and MariaDB that encrypts sensitive data on the way into the database, and decrypts result sets on the way back out.
+[![Build Status](https://travis-ci.org/AgilData/agildata-zero.svg?branch=master)](https://travis-ci.org/AgilData/agildata-zero)
+
+|i686-apple-darwin|i686-unknown-linux-gnu|x86_64-apple-darwin|x86_64-unknown-linux-gnu|x86_64-unknown-linux-musl|
+|:---------------:|:--------------------:|:-----------------:|:----------------------:|:-----------------------:|
+
+AgilData Zero is an encryption gateway for MySQL that encrypts sensitive data on the way into the database, and decrypts result sets on the way back out.
 
 Even if the database server is compromised and an unauthorized user is able to login and run SQL queries, no sensitive data is revealed. This contrasts greatly with the traditional approach that databases take, where data is only encrypted in-transit and at-rest, but is available in plain text if someone can login and run queries.
 
