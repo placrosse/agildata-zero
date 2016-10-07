@@ -3,7 +3,9 @@ layout: default
 title: AgilData Zero
 ---
 
-# AgilData Zero - Zero-Knowledge Encryption for MySQL!
+# AgilData Zero
+
+## Zero-Knowledge Encryption for MySQL
 
 AgilData Zero is an encryption gateway for MySQL that encrypts sensitive data on the way into the database, and decrypts result sets on the way back out.
 
@@ -53,17 +55,6 @@ We use github issues to track the roadmap for this product. Some of major themes
 - Add support for caching unencrypted index data in the gateway to support efficient range queries and sort operations
 - Improving coverage of MySQL/MariaDB SQL syntax
 - Develop tools to make recommendations for encryption schemes based on current query access patterns
-
-# Running AgilData Zero
-
-We recommend using rustc 1.13.0-nightly.
-
-Simply modify zero-config.xml to specify the MySQL connection details and specify which columns should be encrypted. 
-
-```
-cargo run --release
-```
-
 
 
 
