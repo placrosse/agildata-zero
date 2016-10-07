@@ -425,7 +425,7 @@ mod tests {
         let config = config::parse_config("zero-config.xml");
         let schema = String::from("zero");
 
-        let sql = String::from("CREATE TABLE users (
+        let sql = String::from("CREATE TABLE user (
             id INTEGER PRIMARY KEY,
             first_name VARCHAR(50),
             last_name VARCHAR(50),
@@ -446,7 +446,7 @@ mod tests {
 
         let writer = SQLWriter::new(vec![&translator, &mysql, &ansi]);
 
-        let expected = "CREATE TABLE users (
+        let expected = "CREATE TABLE user (
             id INTEGER PRIMARY KEY,
             first_name VARBINARY(78),
             last_name VARBINARY(78),
