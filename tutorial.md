@@ -5,8 +5,6 @@ title: AgilData Zero - Installation Instructions
 
 # AgilData Zero Tutorial
 
-## THIS IS A WORK IN PROGRESS ##
-
 In this tutorial we will walk through creating a schema with some encrypted columns and demonstrate how AgilData Zero works.
 
 To follow along with this tutorial you will need access to a MySQL instance and have permissions to create databases and tables. This MySQL instance can be local or remote.
