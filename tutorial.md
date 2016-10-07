@@ -19,9 +19,8 @@ Edit the provided `zero-config.xml` and modify the MySQL connection details:
 
 ``` xml
 <connection>
-	<property name="dbms" value="mysql"/>
 	<property name="host" value="127.0.0.1"/>
-	<property name="schema" value="tpcc"/>
+	<property name="schema" value="myschema"/>
 	<property name="user" value="myuser"/>
 	<property name="password" value="mypassword"/>
 </connection>
