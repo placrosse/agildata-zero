@@ -18,13 +18,14 @@ mk_tarball() {
 
   # update this part to copy the artifacts that make sense for your project
   # NOTE All Cargo build artifacts will be under the 'target/$TARGET/{debug,release}'
-  cp target/$TARGET/release/agildata-zero $temp_dir
-  cp zero-config.xml $temp_dir
-  cp doc/README.md $temp_dir
+  mkdir -p $temp_dir/agildata-zero
+  cp target/$TARGET/release/agildata-zero $temp_dir/agildata-zero
+  cp zero-config.xml $temp_dir/agildata-zero
+  cp doc/README.md $temp_dir/agildata-zero
 
   pushd $temp_dir
 
-  # release tarball will look like 'rust-everywhere-v1.2.3-x86_64-unknown-linux-musl.tar.gz'
+  # release tarball will look like 'agildata-zero-v0.1.0-x86_64-unknown-linux-musl.tar.gz'
   tar czf $out_dir/${PROJECT_NAME}-${TRAVIS_TAG}-${TARGET}.tar.gz *
 
   popd $temp_dir
