@@ -19,7 +19,7 @@ Use the [installation instructions](install.html) to install a binary release or
 
 Edit the provided `zero-config.xml` and modify the MySQL connection details:
 
-```xml
+``` xml
 <connection>
 	<property name="dbms" value="mysql"/>
 	<property name="host" value="127.0.0.1"/>
@@ -64,6 +64,8 @@ NOTE: AgilData Zero does not yet support `CREATE DATABASE` so you'll need to run
 
 For each column where encryption is required it is necessary to include the column in this configuration section and specify the encryption scheme to be used (currently only `AES` is supported) along with the initialization vector (iv) and key. It is not necessary to provide configuration information for columns in the table that will not be encrypted.
 
+Here is the encryption schema for our tutorial database, ommitting the keys and initialization vectors.
+
 ```xml
 <schema name="zero">
 	<table name="user">
@@ -88,6 +90,8 @@ For each column where encryption is required it is necessary to include the colu
 </schema>
 ```
 
+With the encryption schema defined we can go ahead and create tables) making sure we are connected via the AgilData Zero gateway rather than connecting directly to MySQL).
+
 ```sql
 CREATE TABLE user (
 id INTEGER NOT NULL,
@@ -98,9 +102,24 @@ age INTEGER,
 sex VARCHAR(1),
 PRIMARY KEY (id)
 );
+
+CREATE TABLE user_purchase (
+id INTEGER NOT NULL,
+user_id INTEGER NOT NULL,
+item_code INTEGER NOT NULL,
+amount INTEGER NOT NULL,
+PRIMARY KEY (id)
+);
+
+CREATE TABLE item (
+item_code INTEGER NOT NULL,
+item_name VARCHAR(50),
+description VARCHAR(50),
+PRIMARY KEY (item_code)
+);
 ```
 
-With the table created, let's go ahead and insert some data and select it back out:
+With the tables created, let's go ahead and insert some data and select it back out:
 
 ```sql
 INSERT INTO user (id, first_name, last_name, ssn, age, sex) VALUES (1, 'Janice', 'Joplin', '1234567890', 27, 'F');
@@ -139,6 +158,12 @@ mysql> SELECT * FROM user;
 ```
 
 This demonstrates how AgilData Zero is encrypting data being inserted into the table and automatically decrypting the data being returned in result sets.
+
+## 5. Functionality for encrypted columns
+
+TBD
+
+
 
 
 
