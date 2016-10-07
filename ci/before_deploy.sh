@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # `before_deploy` phase: here we package the build artifacts
 
 set -ex
@@ -20,8 +21,8 @@ mk_tarball() {
   # NOTE All Cargo build artifacts will be under the 'target/$TARGET/{debug,release}'
   mkdir -p $temp_dir/agildata-zero
   cp target/$TARGET/release/agildata-zero $temp_dir/agildata-zero
-  cp zero-config.xml $temp_dir/agildata-zero
-  cp doc/README.md $temp_dir/agildata-zero
+  cp dist/zero-config.xml $temp_dir/agildata-zero
+  cp dist/README.md $temp_dir/agildata-zero
 
   pushd $temp_dir
 
