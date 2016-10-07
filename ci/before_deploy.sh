@@ -22,6 +22,7 @@ mk_tarball() {
   mkdir -p $temp_dir/agildata-zero
   cp target/$TARGET/release/agildata-zero $temp_dir/agildata-zero
   cp dist/zero-config.xml $temp_dir/agildata-zero
+  cp dist/log.toml $temp_dir/agildata-zero
   cp dist/README.md $temp_dir/agildata-zero
 
   pushd $temp_dir
