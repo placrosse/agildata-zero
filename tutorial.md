@@ -158,7 +158,26 @@ This demonstrates how AgilData Zero is encrypting data being inserted into the t
 
 ## 5. Functionality for encrypted columns
 
-TBD
+### 5.1 Equality
+
+When AES is used with a shared IV for all values in a column then it is possible to use equality predicates in queries. For example, the following query is supported:
+
+``` sql
+SELECT * FROM user WHERE first_name = 'Janice' and last_name = 'Joplin'
+```
+
+The gateway will rewrite the query, replacing the literal values with encrypted values, ensuring that the database never sees the clear text values.
+
+
+### 5.2 Joins
+
+If two columns share the same encryption key and IV then they can can be used in an equi-join.
+
+### 5.3 Unsupported Operations
+
+Any attempt at using an unsupported operation on an encrypted column should result in the gateway rejecting the query and returning an error to the client.
+
+
 
 
 
