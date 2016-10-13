@@ -20,9 +20,9 @@ use std::str::Chars;
 use std::str::FromStr;
 use std::fmt::Write;
 
-static KEYWORDS: &'static [&'static str] = &["SHOW", "CREATE", "DROP", "TABLE", "PRECISION",
-    "PRIMARY", "KEY", "UNIQUE", "FULLTEXT", "FOREIGN", "REFERENCES", "CONSTRAINT", "USE",
-    "COMMIT", "ROLLBACK", "BEGIN"];
+static KEYWORDS: &'static [&'static str] = &["SHOW", "CREATE", "DROP", "DATABASE", "TABLE",
+    "PRECISION", "PRIMARY", "KEY", "UNIQUE", "FULLTEXT", "FOREIGN", "REFERENCES", "CONSTRAINT",
+    "USE", "COMMIT", "ROLLBACK", "BEGIN"];
 
 
 
@@ -101,10 +101,15 @@ impl<'d> MySQLDialect<'d> {
         // optional keyword
         let temp = tokens.consume_keyword("TEMPORARY");
 
-        if tokens.consume_keyword("TABLE") {
+        if tokens.consume_keyword("DATABASE") || tokens.consume_keyword("SCHEMA") {
+            let if_exists = tokens.consume_keyword_sequence(vec!["IF", "EXISTS"]);
+            let db = self.ansi.parse_identifier(tokens)?;
+            Ok(ASTNode::MySQLDropDatabase { if_exists: if_exists, database: Box::new(db) })
+
+        } else  if tokens.consume_keyword("TABLE") {
 
             // optional keywords
-            let if_exists = tokens.consume_keyword("IF") && tokens.consume_keyword("EXISTS");
+            let if_exists = tokens.consume_keyword_sequence(vec!["IF", "EXISTS"]);
 
             let mut tables : Vec<ASTNode> = vec![];
 
@@ -141,7 +146,11 @@ impl<'d> MySQLDialect<'d> {
         tokens.consume_keyword("CREATE");
         tokens.consume_keyword("TEMPORARY");
         
-        if tokens.consume_keyword("TABLE") {
+        if tokens.consume_keyword("DATABASE") {
+            let db = self.ansi.parse_identifier(tokens)?;
+            Ok(ASTNode::MySQLCreateDatabase { database: Box::new(db) })
+
+        } else if tokens.consume_keyword("TABLE") {
             let table = self.ansi.parse_identifier(tokens)?;
             tokens.consume_punctuator("(");
 
@@ -649,6 +658,17 @@ impl<'d> MySQLDialect<'d> {
 }
 
 
+/// unwraps a SQLIdentifier from a Box<ASTNode>
+fn unbox_identifier<'a>(node: &'a ASTNode) -> Result<&'a ASTNode, ZeroError> {
+    match node {
+        id @ &ASTNode::SQLIdentifier { .. } => Ok(id),
+        _ => Err(ZeroError::ParseError{
+            message: format!("Expected identifier, received {:?}", node).into(),
+            code: "1064".into()
+        }.into())
+    }
+}
+
 pub struct MySQLWriter{}
 
 impl ExprWriter for MySQLWriter {
@@ -676,6 +696,10 @@ impl ExprWriter for MySQLWriter {
                 } else if cascade {
                     builder.push_str("CASCADE");
                 }
+            },
+            &ASTNode::MySQLCreateDatabase { box ref database } => {
+                builder.push_str("CREATE DATABASE");
+                writer._write(builder, unbox_identifier(database)?)?;
             },
             &ASTNode::MySQLCreateTable{box ref table, ref column_list, ref keys, ref table_options} => {
                 builder.push_str("CREATE TABLE");
