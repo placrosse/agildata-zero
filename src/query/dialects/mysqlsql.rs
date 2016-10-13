@@ -697,6 +697,13 @@ impl ExprWriter for MySQLWriter {
                     builder.push_str("CASCADE");
                 }
             },
+            &ASTNode::MySQLDropDatabase { if_exists, ref database } => {
+                builder.push_str("DROP DATABASE ");
+                if if_exists {
+                    builder.push_str("IF EXISTS ");
+                }
+                writer._write(builder, database)?;
+            },
             &ASTNode::MySQLCreateDatabase { box ref database } => {
                 builder.push_str("CREATE DATABASE");
                 writer._write(builder, unbox_identifier(database)?)?;

@@ -938,3 +938,18 @@ fn create_database() {
     let rewritten = writer.write(&parsed).unwrap();
     assert_eq!(format_sql(&rewritten), format_sql(&sql));
 }
+
+#[test]
+fn drop_database() {
+    let ansi = AnsiSQLDialect::new();
+    let dialect = MySQLDialect::new(&ansi);
+    let sql = String::from("DROP DATABASE IF EXISTS foo");
+    let tokens = sql.tokenize(&dialect).unwrap();
+    let parsed = tokens.parse().unwrap();
+
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
+    let mysql_writer = MySQLWriter{};
+    let writer = SQLWriter::new(vec![&mysql_writer, &ansi_writer]);
+    let rewritten = writer.write(&parsed).unwrap();
+    assert_eq!(format_sql(&rewritten), format_sql(&sql));
+}
