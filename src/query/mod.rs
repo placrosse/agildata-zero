@@ -110,6 +110,28 @@ impl<'a, D: 'a + Dialect> Tokens<'a, D> {
         }
     }
 
+	fn consume_keyword_sequence(&self, text: Vec<&str>) -> bool {
+        let index = self.index.load(Ordering::SeqCst) as usize;
+        // check that there are enough tokens left
+        if index + text.len() >= self.tokens.len() {
+            return false;
+        }
+        // see if all keywords match
+        for i in 0..text.len() {
+            match &self.tokens[index + i] {
+                &Token::Keyword(ref v) | &Token::Identifier(ref v) => {
+                    if !text[i].eq_ignore_ascii_case(&v) {
+                        return false;
+                    }
+                },
+                _ => return false
+            }
+        }
+        // if we got this far, all keywords matched
+        self.index.fetch_add(text.len() as u32, Ordering::SeqCst);
+        true
+    }
+
 	fn consume_keyword(&self, text: &str) -> bool {
 
         match self.peek() {
@@ -286,6 +308,13 @@ pub enum ASTNode {
     SQLFunctionCall{identifier: Box<ASTNode>, args: Vec<ASTNode>},
 
     // MySQL
+    MySQLCreateDatabase {
+        database: Box<ASTNode>,
+    },
+    MySQLDropDatabase {
+        database: Box<ASTNode>,
+        if_exists: bool,
+    },
     MySQLDropTable {
         temporary: bool,
         if_exists: bool,
