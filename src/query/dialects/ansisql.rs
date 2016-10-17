@@ -350,10 +350,7 @@ impl AnsiSQLDialect {
             tokens.consume_punctuator(")");
             ret
         } else {
-            return Err(ZeroError::ParseError {
-                message: format!("Expected column list paren, received {:?}", &tokens.peek()).into(),
-                code: "1064".into()
-            }.into())
+            ASTNode::SQLExprList(Vec::new())
         };
 
         if tokens.consume_keyword("VALUES") || tokens.consume_keyword("VALUE") {
@@ -802,9 +799,18 @@ impl<'a> ExprWriter for AnsiSQLWriter<'a> {
                 }
                 builder.push_str("INTO");
                 writer._write(builder, table)?;
-                builder.push_str(" (");
-                writer._write(builder, column_list)?;
-                builder.push_str(") VALUES ");
+
+                // optional column list
+                match column_list {
+                    &ASTNode::SQLExprList(ref v) => if v.len() > 0 {
+                        builder.push_str(" (");
+                        writer._write(builder, column_list)?;
+                        builder.push_str(")");
+                    },
+                    _ => {}
+                }
+
+                builder.push_str(" VALUES ");
 
                 let mut i = 0;
                 for values in values_list.iter() {

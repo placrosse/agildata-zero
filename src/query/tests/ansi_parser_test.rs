@@ -575,9 +575,6 @@ fn insert_implicit_column_list() {
             insert_mode: InsertMode::INSERT,
             column_list: Box::new(SQLExprList(
                 vec![
-//                    SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]},
-//                    SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]},
-//                    SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}
                 ]
             )),
             values_list: vec!(SQLExprList(
@@ -632,21 +629,6 @@ fn insert_with_comments() {
     );
 
 }
-
-#[test]
-fn insert_invalid() {
-
-    let dialect = AnsiSQLDialect::new();
-    let sql = String::from("INSERT INTO foo VALUES(1, 20.45, 'abcdefghijk')");
-    let tokens = sql.tokenize(&dialect).unwrap();
-    let parsed = tokens.parse();
-
-    println!("{:#?}", parsed);
-
-    assert!(parsed.is_err());
-    assert_eq!(parsed.err().unwrap().to_string(), "[1064] Expected column list paren, received Some(Keyword(\"VALUES\"))");
-}
-
 
 #[test]
 fn update() {
