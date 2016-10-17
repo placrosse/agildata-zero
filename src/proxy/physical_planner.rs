@@ -179,7 +179,9 @@ impl PhysicalPlanner {
                 }
             },
             Rel::MySQLDropTable => {},
-            Rel::MySQLCreateTable => {} // TODO eventually build plans for Defaults, etc
+            Rel::MySQLCreateTable => {},
+            Rel::MySQLDropDatabase => {},
+            Rel::MySQLCreateDatabase => {},
         }
         Ok(())
     }
