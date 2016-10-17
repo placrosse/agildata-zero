@@ -117,6 +117,18 @@ impl PhysicalPlanner {
                 self.plan_rex(expr, builder, literals)?;
                 self.plan_rel(input, builder, literals)?;
             },
+            Rel::Sort { box ref input, box ref sort_expr } => {
+                let sort_rex = self.plan_rex(sort_expr, builder, literals)?;
+                let sort_rel = self.plan_rel(input, builder, literals)?;
+
+//                sort_expr
+//                Rex::RexExprList(ref list) => {
+//                for e in list {
+//                self.get_encryption_scheme(e, builder, potentials, literals)?;
+//                }
+
+                sort_rel
+            },
             Rel::TableScan { .. } => {},
             Rel::Join { box ref left, box ref right, ref on_expr, .. } => {
                 self.plan_rel(left, builder, literals)?;
