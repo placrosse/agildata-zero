@@ -189,8 +189,11 @@ pub enum Rel {
     Insert {table: String, columns: Box<Rex>, values: Vec<Rex>, tt: TupleType},
     Update {table: String, set_stmts: Box<Rex>, selection: Option<Box<Rex>>, tt: TupleType},
     Delete {table: String, selection: Option<Box<Rex>>, tt: TupleType},
+    // MySQL-specific variants:
     MySQLDropTable,
-    MySQLCreateTable // TODO really implement to handle defaults, etc
+    MySQLCreateTable,
+    MySQLDropDatabase,
+    MySQLCreateDatabase,
 }
 
 pub trait HasTupleType {
@@ -492,6 +495,8 @@ impl<'a> Planner<'a> {
             },
             ASTNode::MySQLDropTable{..} => Ok(Rel::MySQLDropTable),
             ASTNode::MySQLCreateTable{..} => Ok(Rel::MySQLCreateTable),
+            ASTNode::MySQLDropDatabase{..} => Ok(Rel::MySQLDropDatabase),
+            ASTNode::MySQLCreateDatabase{..} => Ok(Rel::MySQLCreateDatabase),
 
             ASTNode::SQLUpdate{ box ref table, box ref assignments, ref selection } => {
                 let (table, tt) = match self.sql_to_rel(table)? {
