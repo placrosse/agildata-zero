@@ -562,6 +562,46 @@ fn insert() {
 }
 
 #[test]
+fn insert_implicit_column_list() {
+
+    let dialect = AnsiSQLDialect::new();
+    let sql = String::from("INSERT INTO foo VALUES(1, 20.45, ?)");
+    let tokens = sql.tokenize(&dialect).unwrap();
+    let parsed = tokens.parse().unwrap();
+
+    assert_eq!(
+        SQLInsert{
+            table: Box::new(SQLIdentifier{id: String::from("foo"), parts: vec![String::from("foo")]}),
+            insert_mode: InsertMode::INSERT,
+            column_list: Box::new(SQLExprList(
+                vec![
+//                    SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]},
+//                    SQLIdentifier{id: String::from("b"), parts: vec![String::from("b")]},
+//                    SQLIdentifier{id: String::from("c"), parts: vec![String::from("c")]}
+                ]
+            )),
+            values_list: vec!(SQLExprList(
+                vec![
+                    SQLLiteral(0),
+                    SQLLiteral(1),
+                    SQLBoundParam(0)
+                ]
+            ))
+        },
+        parsed
+    );
+
+    println!("{:#?}", parsed);
+
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
+    let writer = SQLWriter::new(vec![&ansi_writer]);
+    let rewritten = writer.write(&parsed).unwrap();
+    assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+    println!("Rewritten: {:?}", rewritten);
+}
+
+#[test]
 fn insert_with_comments() {
 
     let dialect = AnsiSQLDialect::new();
