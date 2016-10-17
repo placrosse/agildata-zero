@@ -389,12 +389,30 @@ impl<'a> Planner<'a> {
                 match self.sql_to_rel(table)? {
                     Rel::TableScan {table, tt} => {
                         let values: Result<Vec<_>, _> = values_list.iter().map(|v| self.sql_to_rex(v, &tt)).collect();
-                        Ok(Rel::Insert{
-                            table: table,
-                            columns: Box::new(self.sql_to_rex(column_list, &tt)?),
-                            values: values?,
-                            tt: tt
-                        })
+                        match column_list {
+                            &ASTNode::SQLExprList(ref v) => if v.len() == 0 {
+                                let columns = Rex::RexExprList(tt.elements.iter()
+                                    .map(|e| Rex::Identifier { id: vec![e.name.clone()], el: e.clone() })
+                                    .collect::<Vec<Rex>>());
+                                Ok(Rel::Insert {
+                                    table: table,
+                                    columns: Box::new(columns),
+                                    values: values?,
+                                    tt: tt
+                                })
+                            } else {
+                                Ok(Rel::Insert {
+                                    table: table,
+                                    columns: Box::new(self.sql_to_rex(column_list, &tt)?),
+                                    values: values?,
+                                    tt: tt
+                                })
+                            },
+                            _ => Err(ZeroError::ParseError {
+                                message: format!("Unsupported expr for column list").into(),
+                                code: "1064".into()
+                            }.into())
+                        }
                     },
                     other @ _ => return Err(ZeroError::ParseError{
                         message: format!("Unsupported table relation for INSERT {:?}", other).into(),
