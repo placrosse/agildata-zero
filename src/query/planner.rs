@@ -339,6 +339,9 @@ impl<'a> Planner<'a> {
             &ASTNode::SQLSelect{..} | &ASTNode::SQLUnion{..} => {
                 Ok(Rex::RelationalExpr(self.sql_to_rel(sql)?))
             },
+            &ASTNode::SQLOrderBy { box ref expr, .. } => {
+              self.sql_to_rex(expr, tt)
+            },
             _ => Err(ZeroError::ParseError{
                 message: format!("Unsupported rex expr for planning {:?}", sql).into(),
                 code: "1064".into()
@@ -384,8 +387,9 @@ impl<'a> Planner<'a> {
 
                 let project_tt = reconcile_tt(&project_list)?;
 
+                // order: Option<Box<ASTNode>>
                 match order {
-                    &Some(ref o) => {
+                    &Some(box ref o) => {
                         let sort_expr = Box::new(self.sql_to_rex(o, &input.tt()).unwrap());
                         Ok(Rel::Sort {
                             input: Box::new(Rel::Projection {
@@ -396,12 +400,13 @@ impl<'a> Planner<'a> {
                             sort_expr: sort_expr
                         })
                     },
-                    _ =>
+                    &None => {
                         Ok(Rel::Projection {
                             project: Box::new(project_list),
                             input: Box::new(input),
                             tt: project_tt
                         })
+                    }
                 }
 
             },
