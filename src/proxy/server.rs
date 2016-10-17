@@ -142,8 +142,33 @@ enum HandlerState {
     IgnoreFurtherResults,
     /// Forward any further packets
     ForwardAll,
-    /// Expect an OK or ERR packet
-    OkErrResponse,
+    /// Expect an OK or ERR packet, sets an optional state to transition to after ok packet
+    OkErrResponse{next: Option<Box<HandlerState>>},
+}
+
+impl Clone for HandlerState {
+    fn clone(&self) -> Self {
+        match *self {
+            HandlerState::ExpectClientRequest => HandlerState::ExpectClientRequest,
+            HandlerState::Handshake => HandlerState::Handshake,
+            HandlerState::ComQueryResponse => HandlerState::ComQueryResponse,
+            HandlerState::ComQueryFieldPacket(ref c) => HandlerState::ComQueryFieldPacket(AtomicU32::new(c.load(Ordering::SeqCst))),
+            HandlerState::ExpectResultRow => HandlerState::ExpectResultRow,
+            HandlerState::StmtPrepareResponse(ref pp) => HandlerState::StmtPrepareResponse(pp.clone()),
+            HandlerState::StmtPrepareFieldPacket(ref i, ref pstmt, ref c1, ref c2) => HandlerState::StmtPrepareFieldPacket(
+                i.clone(),
+                pstmt.clone(),
+                AtomicU32::new(c1.load(Ordering::SeqCst)),
+                AtomicU32::new(c2.load(Ordering::SeqCst))
+            ),
+            HandlerState::StmtExecuteResponse(ref pstmt) => HandlerState::StmtExecuteResponse(pstmt.clone()),
+            HandlerState::StmtExecuteFieldPacket(ref i, ref pstmt) => HandlerState::StmtExecuteFieldPacket(i.clone(), pstmt.clone()),
+            HandlerState::StmtExecuteResultRow(ref pstmt) => HandlerState::StmtExecuteResultRow(pstmt.clone()),
+            HandlerState::IgnoreFurtherResults => HandlerState::IgnoreFurtherResults,
+            HandlerState::ForwardAll => HandlerState::ForwardAll,
+            HandlerState::OkErrResponse{ref next} => HandlerState::OkErrResponse{next: next.clone()}
+        }
+    }
 }
 
 #[derive(Debug,Clone)]
@@ -197,7 +222,16 @@ struct ZeroHandler {
     parsing_mode: ParsingMode,
     tt: Option<Vec<EncryptionPlan>>,
     stmt_map: HashMap<u16, Box<PStmt>>,
-    stmt_cache: Rc<StatementCache>
+    stmt_cache: Rc<StatementCache>,
+    server_version: MySQLVersion
+}
+
+#[derive(Debug, PartialEq, Clone)]
+enum MySQLVersion {
+    V56,
+    V57,
+    Unsupported,
+    Unknown
 }
 
 impl ZeroHandler {
@@ -214,7 +248,8 @@ impl ZeroHandler {
             parsing_mode: parsing_mode,
             tt: None,
             stmt_map: HashMap::new(),
-            stmt_cache: stmt_cache
+            stmt_cache: stmt_cache,
+            server_version: MySQLVersion::Unknown
         }
     }
 }
@@ -279,7 +314,7 @@ impl PacketHandler for ZeroHandler {
                     Action::Forward
                 },
                 Ok(PacketType::ComStmtReset) => {
-                    self.state = HandlerState::OkErrResponse;
+                    self.state = HandlerState::OkErrResponse{next: None};
                     Action::Forward
                 },
                 _ => {
@@ -297,7 +332,28 @@ impl PacketHandler for ZeroHandler {
         print_packet_chars("handle_response", &p.bytes);
 
         let (state, action) = match self.state {
-            HandlerState::Handshake => (None, Action::Forward),
+            HandlerState::Handshake => {
+                let mut r = MySQLPacketParser::new(&p.bytes);
+                let p_version = r.read_byte().unwrap();
+                let version = r.read_c_string().unwrap();
+                let v_split = version.split(".").collect::<Vec<&str>>();
+                let server_version = match (&v_split[0] as &str, &v_split[1] as &str) {
+                    ("5", "6") => MySQLVersion::V56,
+                    ("5", "7") => MySQLVersion::V57,
+                    _ => MySQLVersion::Unsupported
+                };
+
+                if p_version != 10 || server_version == MySQLVersion::Unsupported {
+                    (Some(HandlerState::IgnoreFurtherResults),
+                     create_error(format!("Unsupported protocol version {} and server version {}", p_version, version)))
+                } else {
+                    self.server_version = server_version;
+                    debug!("Handshake protocol version = {}, server version = {}", p_version, version);
+                    (None, Action::Forward)
+                }
+
+
+            },
             HandlerState::ComQueryResponse => {
                 print_packet_chars("ComQueryResponse", &p.bytes);
                 // this logic only applies to the very first response packet after a request
@@ -330,7 +386,11 @@ impl PacketHandler for ZeroHandler {
             },
             HandlerState::ComQueryFieldPacket(ref mut n) => {
                 if n.load(Ordering::SeqCst) == 1 {
-                    (Some(HandlerState::ExpectResultRow), Action::Forward)
+                    match self.server_version {
+                        MySQLVersion::V56 => (Some(HandlerState::OkErrResponse{next: Some(Box::new(HandlerState::ExpectResultRow))}),
+                                              Action::Forward),
+                        _ => (Some(HandlerState::ExpectResultRow), Action::Forward)
+                    }
                 } else {
                     n.fetch_sub(1, Ordering::SeqCst);
                     //TODO: need to rewrite field packet to change data type for encrypted columns
@@ -604,10 +664,16 @@ impl PacketHandler for ZeroHandler {
                                      create_error(format!("invalid packet type {:?} for StmtExecuteResultRow", p.bytes[4])))
                 }
             },
-            HandlerState::OkErrResponse => {
+            HandlerState::OkErrResponse{ref next} => {
                 print_packet_chars("OkErrResponse", &p.bytes);
                 match p.bytes[4] {
-                    0x00 | 0xff => (Some(HandlerState::ExpectClientRequest), Action::Forward),
+                    0x00 | 0xff | 0xfe => {
+                        match *next {
+                            Some(box ref n) => (Some(n.clone()), Action::Forward),
+                            _ => (Some(HandlerState::ExpectClientRequest), Action::Forward)
+
+                        }
+                    },
                     _ => (Some(HandlerState::IgnoreFurtherResults),
                                  create_error(format!("invalid packet type {:?} for OkErrResponse", p.bytes[4])))
                 }
@@ -620,6 +686,8 @@ impl PacketHandler for ZeroHandler {
             }
 
         };
+
+        debug!("State from {:?} to {:?}", self.state, state);
 
         match state {
             Some(s) => {self.state = s},
