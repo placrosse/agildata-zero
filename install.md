@@ -25,7 +25,7 @@ To run agildata-zero in docker alongside a mysql instance first pull and start a
 
 ``` bash
 docker pull mysql
-docker run --name mysql-server -e MYSQL_USER=agiluser -e MYSQL_PASSWORD=password123 -e MYSQL_DATABASE=zero -e MYSQL_ROOT_PASSWORD=password123 -d mysql:latest
+docker run --name mysql-server -e MYSQL_USER=myuser -e MYSQL_PASSWORD=mypassword -e MYSQL_DATABASE=zero -e MYSQL_ROOT_PASSWORD=password -d mysql:latest
 ```
 
 Now that the mysql container is up and running we will pull the latest agildata:zero
@@ -39,8 +39,8 @@ You can now test the agildata-zero container by connecting directly with a mysql
 
 ```bash
 {% raw %}
-mysql -h$(docker inspect --format '{{ .NetworkSettings.IPAddress }}' agildata) -P 3307 -u agiluser -ppassword123
+mysql -h$(docker inspect --format '{{ .NetworkSettings.IPAddress }}' agildata) -P 3307 -u myuser -pmypassword
 {% endraw %}
 # OR with another container
-docker run -it --link agildata:mysql --rm mysql sh -c 'exec mysql -h"$MYSQL_PORT_3307_TCP_ADDR" -P"$MYSQL_PORT_3307_TCP_PORT" -uagiluser -ppassword123'
+docker run -it --link agildata:mysql --rm mysql sh -c 'exec mysql -h"$MYSQL_PORT_3307_TCP_ADDR" -P"$MYSQL_PORT_3307_TCP_PORT" -umyuser -pmypassword'
 ```
