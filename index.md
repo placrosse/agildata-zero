@@ -1,6 +1,7 @@
 ---
 layout: default
 title: AgilData Zero
+active: index
 ---
 
 # AgilData Zero
@@ -21,7 +22,7 @@ This is a work-in-progress and not suitable for production use yet. The main lim
 
 # Security versus Functionality
 
-One of the challenges with storing encrypted data in a database is that it reduces the databases ability to operate on that data. For example, if data is encrypted with AES-256 then it changes the sort order of that data, so it is no longer possible for the database to perform range queries or sort that data with an `ORDER BY` clause. Weaker forms of encryption exist that can preserve the sort order, but order-preserving encryption is known to leak knowledge about the data, as demonstrated in [cite that paper here]. 
+One of the challenges with storing encrypted data in a database is that it reduces the databases ability to operate on that data. For example, if data is encrypted with AES-256 then it changes the sort order of that data, so it is no longer possible for the database to perform range queries or sort that data with an `ORDER BY` clause. Weaker forms of encryption exist that can preserve the sort order, but order-preserving encryption is known to leak knowledge about the data, as demonstrated in [cite that paper here].
 
 AgilData Zero takes a pragmatic approach to the problem by supporting encyrption schemes that allow for some basic operations to be performed by the database. AgilData Zero also validates queries and fails any queries that attempt to perform an operation on encrypted data, rather than just returning the wrong results.
 
@@ -29,7 +30,7 @@ AgilData Zero takes a pragmatic approach to the problem by supporting encyrption
 
 AgilData Zero currently supports the following types of encryption:
 
-## AES-256 with column-specific IV 
+## AES-256 with column-specific IV
 
 A single initialization-vector (IV) and key is used to encrypt all values in the column. This type of encryption supports equality checks, meaning that simple predicates of the form `WHERE ssn = ?` can still be performed efficiently by the database. AgilData encrypts the query parameters so that the database never sees unencrypted data.
 
@@ -55,12 +56,3 @@ We use github issues to track the roadmap for this product. Some of major themes
 - Add support for caching unencrypted index data in the gateway to support efficient range queries and sort operations
 - Improving coverage of MySQL/MariaDB SQL syntax
 - Develop tools to make recommendations for encryption schemes based on current query access patterns
-
-
-
-
-
-
-
-
-

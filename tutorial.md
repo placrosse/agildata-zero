@@ -1,6 +1,7 @@
 ---
 layout: default
 title: AgilData Zero - Installation Instructions
+active: tutorial
 ---
 
 # AgilData Zero Tutorial
@@ -46,7 +47,7 @@ It should now be possible to run the gateway and connect to it. To run the gatew
 Next, use the MySQL console to connect to the proxy.
 
 ```
-mysql -h 127.0.0.1 -P 3307 -u username -p 
+mysql -h 127.0.0.1 -P 3307 -u username -p
 ```
 
 If this fails, try connecting to MySQL directly to confirm that the gateway is configured with the correct connection details.
@@ -74,7 +75,7 @@ Here is the encryption schema for our tutorial database, ommitting the keys and 
 		<column name="sex" type="VARCHAR(1)" encryption="AES" iv="..." key="..."/>
 	</table>
 	<table name="user_purchase">
-		<column name="id" type="INTEGER" encryption="none" pkOrdinal="0"/>	
+		<column name="id" type="INTEGER" encryption="none" pkOrdinal="0"/>
 		<column name="user_id" type="INTEGER" encryption="none"/>
 		<column name="item_code" type="INTEGER" encryption="AES" iv="..." key="..."/>
 		<column name="amount" type="DOUBLE" encryption="AES" iv="..." key="..."/>
@@ -141,7 +142,7 @@ mysql> SELECT * FROM user;
 If everything has been configured correctly, the data stored in MySQL is actually encrypted. To see if this is the case we can connect directly to MySQL and query the data there.
 
 ```
-mysql -h 127.0.0.1 -P 3307 -u username -p 
+mysql -h 127.0.0.1 -P 3307 -u username -p
 ```
 
 ```sql
@@ -176,10 +177,3 @@ If two columns share the same encryption key and IV then they can can be used in
 ### 5.3 Unsupported Operations
 
 Any attempt at using an unsupported operation on an encrypted column should result in the gateway rejecting the query and returning an error to the client.
-
-
-
-
-
-
-

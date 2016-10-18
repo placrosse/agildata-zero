@@ -34,15 +34,31 @@
 							        <span class="icon-bar"></span>
 							        <span class="icon-bar"></span>
 							      </button>
-							      <a class="navbar-brand" href="#">AGILDATA | ZERO</a>
+							      <a class="navbar-brand" href="index.html">AGILDATA | ZERO</a>
 							    </div>
 								<!-- Collect the nav links, forms, and other content for toggling -->
 		    				<div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
 					    		<ul class="nav navbar-nav">
-					        		<li><a href="index.html">Home</a></li>
-						        	<li><a href="install.html">Installation</a></li>
-						        	<li><a href="tutorial.html">Tutorial</a></li>
-					        		<li><a href="contributing.html">Contributing</a></li>
+										{% if page.active == "index" %}
+					        			<li class="active"><a href="index.html">Home</a></li>
+										{% else %}
+												<li><a href="index.html">Home</a></li>
+										{% endif %}
+										{% if page.active == "install" %}
+						        	<li class="active"><a href="install.html">Installation</a></li>
+										{% else %}
+											<li><a href="install.html">Installation</a></li>
+										{% endif %}
+										{% if page.active == "tutorial" %}
+						        	<li class="active"><a href="tutorial.html">Tutorial</a></li>
+										{% else %}
+											<li><a href="tutorial.html">Tutorial</a></li>
+										{% endif %}
+										{% if page.active == "contributing" %}
+					        		<li class="active"><a href="contributing.html">Contributing</a></li>
+										{% else %}
+											<li><a href="contributing.html">Contributing</a></li>
+										{% endif %}
 					        		<li><a href="https://github.com/AgilData/agildata-zero">Source Code</a></li>
 					    		</ul>
 								</div><!-- /.navbar-collapse -->
@@ -66,9 +82,17 @@
 					</div>
 				</div>
 			</div>
-			<!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+				<!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
     		<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
     		<!-- Include all compiled plugins (below), or include individual files as needed -->
     		<script src="js/bootstrap.min.js"></script>
+				<!-- active nav controller - this doesn't work with Jekyll see if else statements above instead (Might be a better way)
+				<script type="text/javascript">
+					$(".nav a").on("click", function(){
+ 						$(".nav").find(".active").removeClass("active");
+ 						$(this).parent().addClass("active");
+					});
+				</script>
+				-->
 		</body>
 	</html>

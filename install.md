@@ -1,6 +1,7 @@
 ---
 layout: default
 title: AgilData Zero - Installation Instructions
+active: install
 ---
 
 # Installation
@@ -43,4 +44,3 @@ mysql -h$(docker inspect --format '{{ .NetworkSettings.IPAddress }}' agildata) -
 # OR with another container
 docker run -it --link agildata:mysql --rm mysql sh -c 'exec mysql -h"$MYSQL_PORT_3307_TCP_ADDR" -P"$MYSQL_PORT_3307_TCP_PORT" -uagiluser -ppassword123'
 ```
-

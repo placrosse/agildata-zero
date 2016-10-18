@@ -1,6 +1,7 @@
 ---
 layout: default
 title: AgilData Zero - Configuration
+active: configuration
 ---
 
 # Configuration
@@ -12,4 +13,3 @@ Edit the XML
   <is>
      <awesome>
 ```
-
