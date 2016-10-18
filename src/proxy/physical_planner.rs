@@ -404,6 +404,9 @@ impl PhysicalPlanner {
                 }
                 Ok(EncScheme::Inconsequential)
             },
+            Rex::RexOrderBy { box ref expr, .. } => {
+                self.get_encryption_scheme(expr, builder, potentials, literals)
+            },
             Rex::RelationalExpr(ref rel) => {
 
                 // TODO this can be improved

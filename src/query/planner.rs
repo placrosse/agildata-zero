@@ -80,7 +80,9 @@ pub enum Rex {
     /// Function call
     RexFunctionCall{name: String, args: Vec<Rex>},
     /// Nested expression
-    RexNested(Box<Rex>)
+    RexNested(Box<Rex>),
+    /// Order by
+    RexOrderBy { expr: Box<Rex>, is_asc: bool }
 }
 
 impl Rex {
@@ -173,7 +175,9 @@ impl Rex {
                     args.iter().map(|e| e.to_readable(literals)).collect::<Vec<String>>().join(", ")
                 )
             },
-            Rex::RexNested(box ref expr) => format!("({})", expr.to_readable(literals))
+            Rex::RexNested(box ref expr) => format!("({})", expr.to_readable(literals)),
+            Rex::RexOrderBy { box ref expr, is_asc } =>
+                format!("{}{}", expr.to_readable(literals), if is_asc { "" } else { " DESC" }),
         }
     }
 }
@@ -339,8 +343,8 @@ impl<'a> Planner<'a> {
             &ASTNode::SQLSelect{..} | &ASTNode::SQLUnion{..} => {
                 Ok(Rex::RelationalExpr(self.sql_to_rel(sql)?))
             },
-            &ASTNode::SQLOrderBy { box ref expr, .. } => {
-              self.sql_to_rex(expr, tt)
+            &ASTNode::SQLOrderBy { box ref expr, is_asc } => {
+                Ok(Rex::RexOrderBy { expr: Box::new(self.sql_to_rex(expr, tt)?), is_asc: is_asc })
             },
             _ => Err(ZeroError::ParseError{
                 message: format!("Unsupported rex expr for planning {:?}", sql).into(),
