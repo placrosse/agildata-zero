@@ -80,7 +80,9 @@ pub enum Rex {
     /// Function call
     RexFunctionCall{name: String, args: Vec<Rex>},
     /// Nested expression
-    RexNested(Box<Rex>)
+    RexNested(Box<Rex>),
+    /// Order by
+    RexOrderBy { expr: Box<Rex>, is_asc: bool }
 }
 
 impl Rex {
@@ -173,7 +175,9 @@ impl Rex {
                     args.iter().map(|e| e.to_readable(literals)).collect::<Vec<String>>().join(", ")
                 )
             },
-            Rex::RexNested(box ref expr) => format!("({})", expr.to_readable(literals))
+            Rex::RexNested(box ref expr) => format!("({})", expr.to_readable(literals)),
+            Rex::RexOrderBy { box ref expr, is_asc } =>
+                format!("{}{}", expr.to_readable(literals), if is_asc { "" } else { " DESC" }),
         }
     }
 }
@@ -181,6 +185,7 @@ impl Rex {
 #[derive(Debug, Clone)]
 pub enum Rel {
     Projection { project: Box<Rex>, input: Box<Rel> , tt: TupleType},
+    Sort { input: Box<Rel>, sort_expr: Box<Rex> },
     Selection { expr: Box<Rex>, input: Box<Rel> },
     TableScan { table: String, tt: TupleType },
     AliasedRel{alias: String, input: Box<Rel>, tt: TupleType},
@@ -205,6 +210,7 @@ impl HasTupleType for Rel {
         match *self {
             Rel::Projection { ref tt, .. } => tt,
             Rel::Selection { ref input, .. } => input.tt(),
+            Rel::Sort { ref input, .. } => input.tt(),
             Rel::TableScan { ref tt, .. } => tt,
             Rel::Dual { ref tt, .. } => tt,
             Rel::Insert {ref tt, ..} => tt,
@@ -337,6 +343,9 @@ impl<'a> Planner<'a> {
             &ASTNode::SQLSelect{..} | &ASTNode::SQLUnion{..} => {
                 Ok(Rex::RelationalExpr(self.sql_to_rel(sql)?))
             },
+            &ASTNode::SQLOrderBy { box ref expr, is_asc } => {
+                Ok(Rex::RexOrderBy { expr: Box::new(self.sql_to_rex(expr, tt)?), is_asc: is_asc })
+            },
             _ => Err(ZeroError::ParseError{
                 message: format!("Unsupported rex expr for planning {:?}", sql).into(),
                 code: "1064".into()
@@ -346,8 +355,7 @@ impl<'a> Planner<'a> {
 
     pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Rel, Box<ZeroError>> {
         match *sql {
-            ASTNode::SQLSelect { box ref expr_list, ref relation, ref selection, ..  } => {
-
+            ASTNode::SQLSelect { box ref expr_list, ref relation, ref selection, ref order, ..  } => {
                 let mut input = match relation {
                     &Some(box ref r) => self.sql_to_rel(r)?,
                     &None => Rel::Dual { tt: TupleType { elements: vec![] } }
@@ -356,16 +364,16 @@ impl<'a> Planner<'a> {
                 match selection {
                     &Some(box ref expr) => {
                         let filter = self.sql_to_rex(expr, input.tt())?;
-                        input = Rel::Selection { expr: Box::new(filter), input: Box::new(input)}
+                        input = Rel::Selection { expr: Box::new(filter), input: Box::new(input) }
                     },
                     &None => {}
                 }
 
-                let project_list = self.sql_to_rex(expr_list, &input.tt() )?;
+                let project_list = self.sql_to_rex(expr_list, &input.tt())?;
 
                 let project_list = match project_list {
                     Rex::RexExprList(ref list) => {
-                        let mut new_list : Vec<Rex> = vec![];
+                        let mut new_list: Vec<Rex> = vec![];
                         for rex in list {
                             match rex {
                                 &Rex::RexExprList(ref list) => {
@@ -382,11 +390,29 @@ impl<'a> Planner<'a> {
                 };
 
                 let project_tt = reconcile_tt(&project_list)?;
-                Ok(Rel::Projection {
-                    project: Box::new(project_list),
-                    input: Box::new(input),
-                    tt: project_tt
-                })
+
+                // order: Option<Box<ASTNode>>
+                match order {
+                    &Some(box ref o) => {
+                        let sort_expr = Box::new(self.sql_to_rex(o, &input.tt()).unwrap());
+                        Ok(Rel::Sort {
+                            input: Box::new(Rel::Projection {
+                                project: Box::new(project_list),
+                                input: Box::new(input),
+                                tt: project_tt
+                            }),
+                            sort_expr: sort_expr
+                        })
+                    },
+                    &None => {
+                        Ok(Rel::Projection {
+                            project: Box::new(project_list),
+                            input: Box::new(input),
+                            tt: project_tt
+                        })
+                    }
+                }
+
             },
             ASTNode::SQLInsert {box ref table, box ref column_list, ref values_list, .. } => {
                 match self.sql_to_rel(table)? {

@@ -117,6 +117,21 @@ impl PhysicalPlanner {
                 self.plan_rex(expr, builder, literals)?;
                 self.plan_rel(input, builder, literals)?;
             },
+            Rel::Sort { box ref input, box ref sort_expr } => {
+                self.plan_rex(sort_expr, builder, literals)?;
+                self.plan_rel(input, builder, literals)?;
+
+                if let &Rex::RexExprList(ref list) = sort_expr {
+                    for e in list {
+                        match self.get_encryption_scheme(e, builder, &mut None, literals)? {
+                            EncScheme::Encrypted(..) =>
+                                return Err(self.zero_error("1064",
+                                       format!("Cannot perform ORDER BY on encrypted column"))),
+                            _ => {}
+                        }
+                    }
+                }
+            },
             Rel::TableScan { .. } => {},
             Rel::Join { box ref left, box ref right, ref on_expr, .. } => {
                 self.plan_rel(left, builder, literals)?;
@@ -388,6 +403,9 @@ impl PhysicalPlanner {
                     self.get_encryption_scheme(&arg, builder, potentials, literals)?;
                 }
                 Ok(EncScheme::Inconsequential)
+            },
+            Rex::RexOrderBy { box ref expr, .. } => {
+                self.get_encryption_scheme(expr, builder, potentials, literals)
             },
             Rex::RelationalExpr(ref rel) => {
 
@@ -684,6 +702,23 @@ mod tests {
             PhysicalPlan::Error(box ZeroError::EncryptionError{message, ..}) => {
                 assert_eq!(
                 String::from("Unsupported operation between columns of AesGcm encryption, expr: l.ssn = r.ssn"),
+                message)
+            },
+            _ => panic!("TEST FAIL")
+        }
+
+        sql = String::from("SELECT id, age FROM users ORDER BY age");
+        res = parse_and_plan(sql).unwrap();
+        literals = res.0;
+        parsed = res.1;
+        plan = res.2;
+
+        pplan = planner.plan(plan, parsed, &literals);
+
+        match pplan {
+            PhysicalPlan::Error(box ZeroError::EncryptionError{message, ..}) => {
+                assert_eq!(
+                String::from("Cannot perform ORDER BY on encrypted column"),
                 message)
             },
             _ => panic!("TEST FAIL")
