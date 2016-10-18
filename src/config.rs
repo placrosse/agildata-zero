@@ -63,7 +63,7 @@ pub fn parse_config(path: &str) -> Config {
             Ok(e) => {
                 match e {
                     xml::Element{name: n, children: c, .. } => match &n as &str {
-                        "client-config" => parse_client_config(&mut b, c),
+                        "zero-config" => parse_client_config(&mut b, c),
                         _ => panic!("Unrecognized parent XML element {}", n)
                     }
                 }

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<client-config>
+<zero-config>
     <!-- eventually the config could use an element like this -->
     <client>
         <property name="host" value="127.0.0.1" />
@@ -201,4 +201,4 @@
         </table>
     </schema>
 
-</client-config>
+</zero-config>
