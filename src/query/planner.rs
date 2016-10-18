@@ -394,7 +394,7 @@ impl<'a> Planner<'a> {
                 // order: Option<Box<ASTNode>>
                 match order {
                     &Some(box ref o) => {
-                        let sort_expr = Box::new(self.sql_to_rex(o, &input.tt()).unwrap());
+                        let sort_expr = Box::new(self.sql_to_rex(o, &input.tt())?);
                         Ok(Rel::Sort {
                             input: Box::new(Rel::Projection {
                                 project: Box::new(project_list),
