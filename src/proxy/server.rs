@@ -1162,7 +1162,11 @@ impl<'a> MySQLPacketParser<'a> {
                 self.pos += 2;
                 len
             },
-            0xfd => panic!("no support yet for length >= 2^16"),
+            0xfd => {
+                let len = Cursor::new(&self.payload[self.pos..]).read_u32::<LittleEndian>().unwrap() as usize;
+                self.pos += 4;
+                len
+            },
             0xfe => panic!("no support yet for length >= 2^24"),
             _ => {
                 //debug!("read_len() returning {}", n);
@@ -1242,12 +1246,16 @@ impl MySQLPacketWriter {
         if l < 0xfc {
             // single byte to represent length
             self.payload.push(l as u8);
-        } else if l < 2^16 {
+        } else if l < 2_usize.pow(16) {
             // two bytes to represent length
             self.payload.push(0xfc);
             self.payload.write_u16::<LittleEndian>(l as u16).unwrap();
+        } else if l < 2_usize.pow(24) {
+            // write four byte length
+            self.payload.push(0xfd);
+            self.payload.write_u32::<LittleEndian>(l as u32).unwrap();
         } else {
-            panic!("no support yet for length >= 2^16");
+            panic!("no support yet for length >= 2^24");
         }
 
         // now write the actual data
