@@ -186,6 +186,7 @@ impl Rex {
 pub enum Rel {
     Projection { project: Box<Rex>, input: Box<Rel> , tt: TupleType},
     Sort { input: Box<Rel>, sort_expr: Box<Rex> },
+    Limit { input: Box<Rel>, limit_expr: Box<Rex>},
     Selection { expr: Box<Rex>, input: Box<Rel> },
     TableScan { table: String, tt: TupleType },
     AliasedRel{alias: String, input: Box<Rel>, tt: TupleType},
@@ -355,7 +356,7 @@ impl<'a> Planner<'a> {
 
     pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Rel, Box<ZeroError>> {
         match *sql {
-            ASTNode::SQLSelect { box ref expr_list, ref relation, ref selection, ref order, ..  } => {
+            ASTNode::SQLSelect { box ref expr_list, ref relation, ref selection, ref order, ref limit, ..  } => {
                 let mut input = match relation {
                     &Some(box ref r) => self.sql_to_rel(r)?,
                     &None => Rel::Dual { tt: TupleType { elements: vec![] } }
@@ -391,27 +392,35 @@ impl<'a> Planner<'a> {
 
                 let project_tt = reconcile_tt(&project_list)?;
 
-                // order: Option<Box<ASTNode>>
+                input = Rel::Projection {
+                    project: Box::new(project_list),
+                    input: Box::new(input),
+                    tt: project_tt
+                };
+
                 match order {
                     &Some(box ref o) => {
                         let sort_expr = Box::new(self.sql_to_rex(o, &input.tt())?);
-                        Ok(Rel::Sort {
-                            input: Box::new(Rel::Projection {
-                                project: Box::new(project_list),
-                                input: Box::new(input),
-                                tt: project_tt
-                            }),
-                            sort_expr: sort_expr
-                        })
-                    },
-                    &None => {
-                        Ok(Rel::Projection {
-                            project: Box::new(project_list),
+                        input = Rel::Sort{
                             input: Box::new(input),
-                            tt: project_tt
-                        })
-                    }
+                            sort_expr: sort_expr
+                        };
+                    },
+                    &None =>{}
                 }
+
+                match limit {
+                    &Some(box ref l) => {
+                        let limit_expr = Box::new(self.sql_to_rex(l, &input.tt())?);
+                        input = Rel::Limit {
+                            input: Box::new(input),
+                            limit_expr: limit_expr
+                        };
+                    },
+                    &None => {}
+                }
+
+                Ok(input)
 
             },
             ASTNode::SQLInsert {box ref table, box ref column_list, ref values_list, .. } => {
