@@ -924,7 +924,9 @@ impl ZeroHandler {
 
                                         // Allow passthrough for inconsequential SQL
                                         if q.starts_with("SET") || q.starts_with("SHOW") || q.starts_with("BEGIN")
-                                            || q.starts_with("COMMIT") || q.starts_with("ROLLBACK") {
+                                            || q.starts_with("COMMIT") || q.starts_with("ROLLBACK")
+                                            || q.starts_with("SELECT @@VERSION_COMMENT LIMIT 1")
+                                            || q.starts_with("SELECT DATABASE()") {
                                             debug!("In Strict mode, allowing use of SET and SHOW");
                                             PhysPlanResult{literals: vec![], physical_plan: Rc::new(PhysicalPlan::Passthrough)}
                                         } else {
