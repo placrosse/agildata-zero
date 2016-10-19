@@ -288,7 +288,7 @@ impl PacketHandler for ZeroHandler {
 
             let mut r = MySQLPacketParser::new(&p.bytes);
 
-            let capabilities = Cursor::new(&p.bytes[4..8]).read_u32::<BigEndian>().unwrap() as u32;
+            let capabilities = Cursor::new(&p.bytes[4..8]).read_u32::<LittleEndian>().unwrap() as u32;
 
             debug!("capabilities: raw={:?}, int={}", &p.bytes[4..8], capabilities);
 
@@ -320,6 +320,8 @@ impl PacketHandler for ZeroHandler {
                     debug!("HANDSHAKE: schema={}", schema);
                     self.schema = Some(schema);
                 }
+            } else {
+                debug!("HANDSHAKE: schema=None");
             }
 
             Action::Forward
