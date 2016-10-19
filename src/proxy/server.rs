@@ -287,18 +287,41 @@ impl PacketHandler for ZeroHandler {
             //NOTE: this code makes assumptions about what 'capabilities' are active
 
             let mut r = MySQLPacketParser::new(&p.bytes);
+
+            let capabilities = Cursor::new(&p.bytes[4..8]).read_u32::<LittleEndian>().unwrap() as u32;
+
+            debug!("capabilities: raw={:?}, int={}", &p.bytes[4..8], capabilities);
+
             r.skip(4); // capability flags, CLIENT_PROTOCOL_41 always set
             r.skip(4); // max-packet size
             r.skip(1); // character set
             r.skip(23); // reserved
             let username = r.read_c_string().unwrap(); // username
             debug!("user: {}", username);
-            let auth_response = r.read_lenenc_bytes().unwrap(); // auth-response
-            debug!("auth_response: {:?}", auth_response);
 
-            if let Some(schema) = r.read_c_string() {
-                debug!("HANDSHAKE: schema={}", schema);
-                self.schema = Some(schema);
+            // read auth_response
+            if (capabilities & 0x00200000) > 0 /*CapabilityFlags::ClientPluginAuthLenEncClientData*/ {
+                debug!("auth_response length-encoded bytes");
+                let _ = r.read_lenenc_bytes().unwrap();
+
+            } else if (capabilities & 0x00008000) > 0 /*CapabilityFlags::ClientSecureConnection*/ {
+                debug!("auth_response single-byte length");
+                let auth_response_len = r.read_byte().unwrap() as usize;
+                r.skip(auth_response_len);
+
+            } else {
+                debug!("auth_response null-terminated string");
+                let _ = r.read_c_string().unwrap();
+            }
+
+            // default schema
+            if (capabilities & 0x00000008) > 0 /*CapabilityFlags::ClientConnectWithDb*/ {
+                if let Some(schema) = r.read_c_string() {
+                    debug!("HANDSHAKE: schema={}", schema);
+                    self.schema = Some(schema);
+                }
+            } else {
+                debug!("HANDSHAKE: schema=None");
             }
 
             Action::Forward
@@ -924,7 +947,9 @@ impl ZeroHandler {
 
                                         // Allow passthrough for inconsequential SQL
                                         if q.starts_with("SET") || q.starts_with("SHOW") || q.starts_with("BEGIN")
-                                            || q.starts_with("COMMIT") || q.starts_with("ROLLBACK") {
+                                            || q.starts_with("COMMIT") || q.starts_with("ROLLBACK")
+                                            || q.starts_with("SELECT @@VERSION_COMMENT LIMIT 1")
+                                            || q.starts_with("SELECT DATABASE()") {
                                             debug!("In Strict mode, allowing use of SET and SHOW");
                                             PhysPlanResult{literals: vec![], physical_plan: Rc::new(PhysicalPlan::Passthrough)}
                                         } else {
