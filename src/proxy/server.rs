@@ -907,7 +907,6 @@ impl ZeroHandler {
                                             code: "1064".into()
                                         });
 
-                                        self.stmt_cache.put(tokens.tokens, PhysicalPlan::Error(err.clone()));
                                         PhysPlanResult{literals: vec![], physical_plan: Rc::new(PhysicalPlan::Error(err))}
 
                                     }
@@ -933,8 +932,6 @@ impl ZeroHandler {
                                                 message: format!("Failed to parse query {}, due to {:?}", query, e),
                                                 code: "1064".into()
                                             });
-
-                                            self.stmt_cache.put(tokens.tokens, PhysicalPlan::Error(err.clone()));
 
                                             PhysPlanResult{literals: vec![], physical_plan: Rc::new(PhysicalPlan::Error(err))}
                                         }
