@@ -9,7 +9,6 @@
 
 	<connection>
 		<property name="host" value="127.0.0.1"/>
-		<property name="schema" value="zero"/>
 		<property name="user" value="agiluser"/>
 		<property name="password" value="password123"/>
 	</connection>
