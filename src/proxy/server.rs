@@ -900,14 +900,15 @@ impl ZeroHandler {
                                             physical_plan: self.stmt_cache.put(tokens.tokens, physical_plan)
                                         }
                                     },
-                                    // If error, store a failure plan, return error
+                                    // If error return error
                                     Err(e) => {
                                         let err = Box::new(ZeroError::ParseError {
                                             message: format!("Failed to plan query {}, due to {:?}", query, e),
                                             code: "1064".into()
                                         });
 
-                                        self.stmt_cache.put(tokens.tokens, PhysicalPlan::Error(err.clone()));
+                                        // Do not cache the failure of planning stage
+                                        // as these failures may be transient and dependent on the dbms
                                         PhysPlanResult{literals: vec![], physical_plan: Rc::new(PhysicalPlan::Error(err))}
 
                                     }
