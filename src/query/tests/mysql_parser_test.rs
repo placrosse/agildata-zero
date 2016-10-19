@@ -871,6 +871,7 @@ fn test_integration() {
             relation: Some(Box::new(SQLIdentifier{id: String::from("foo"), parts: vec![String::from("foo")]})),
             selection: None,
             order: None,
+            limit: None,
             for_update: false
         },
         parsed
@@ -907,6 +908,7 @@ fn test_unary() {
             relation: None,
             selection: None,
             order: None,
+            limit: None,
             for_update: false,
         },
         parsed

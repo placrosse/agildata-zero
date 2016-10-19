@@ -132,6 +132,10 @@ impl PhysicalPlanner {
                     }
                 }
             },
+            Rel::Limit {box ref input, box ref limit_expr} => {
+                self.plan_rex(limit_expr, builder, literals)?;
+                self.plan_rel(input, builder, literals)?;
+            },
             Rel::TableScan { .. } => {},
             Rel::Join { box ref left, box ref right, ref on_expr, .. } => {
                 self.plan_rel(left, builder, literals)?;

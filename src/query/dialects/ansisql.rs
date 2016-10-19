@@ -429,7 +429,13 @@ impl AnsiSQLDialect {
             }
         };
 
-        // TODO limit
+        let lim = {
+          if tokens.consume_keyword(&"LIMIT") {
+              Some(Box::new(tokens.parse_expr(0)?))
+          }  else {
+              None
+          }
+        };
 
         let for_update = if tokens.consume_keyword("FOR") {
             if tokens.consume_keyword("UPDATE") {
@@ -444,7 +450,9 @@ impl AnsiSQLDialect {
             false
         };
 
-        Ok(ASTNode::SQLSelect{expr_list: proj, relation: from, selection: whr, order: ob, for_update: for_update})
+        Ok(ASTNode::SQLSelect{expr_list: proj, relation: from,
+            selection: whr, order: ob, limit: lim, for_update: for_update
+        })
     }
 
     fn parse_update<'a, D: Dialect>(&self, tokens: &Tokens<'a, D>) -> Result<ASTNode, Box<ZeroError>>
@@ -762,7 +770,7 @@ pub struct AnsiSQLWriter<'a>{
 impl<'a> ExprWriter for AnsiSQLWriter<'a> {
     fn write(&self, writer: &Writer, builder: &mut String, node: &ASTNode) -> Result<bool, Box<ZeroError>> {
         match node {
-            &ASTNode::SQLSelect{box ref expr_list, ref relation, ref selection, ref order, ref for_update} => {
+            &ASTNode::SQLSelect{box ref expr_list, ref relation, ref selection, ref order, ref limit, ref for_update} => {
                 builder.push_str("SELECT");
                 writer._write(builder, expr_list)?;
                 match relation {
@@ -782,6 +790,13 @@ impl<'a> ExprWriter for AnsiSQLWriter<'a> {
                 match order {
                     &Some(box ref e) => {
                         builder.push_str(" ORDER BY");
+                        writer._write(builder, e)?
+                    },
+                    &None => {}
+                }
+                match limit {
+                    &Some(box ref e) => {
+                        builder.push_str(" LIMIT");
                         writer._write(builder, e)?
                     },
                     &None => {}
