@@ -34,6 +34,7 @@ fn select_wildcard() {
             relation: Some(Box::new(SQLIdentifier{id: String::from("foo"), parts: vec![String::from("foo")]})),
             selection: None,
             order: None,
+            limit: None,
             for_update: false
         },
         parsed
@@ -63,6 +64,7 @@ fn select_1() {
             relation: None,
             selection: None,
             order: None,
+            limit: None,
             for_update: false
         },
         parsed
@@ -99,6 +101,7 @@ fn select_with_nulls() {
                 right: Box::new(SQLLiteral(1))
             })),
             order: None,
+            limit: None,
             for_update: false
         },
         parsed
@@ -183,6 +186,7 @@ fn sqlparser() {
                                     right:  Box::new(SQLIdentifier{id: String::from("a"), parts: vec![String::from("a")]})
                                 })),
                                 order: None,
+                                limit: None,
                                 for_update: false
                             })
                         )),
@@ -204,6 +208,7 @@ fn sqlparser() {
                         relation: Some( Box::new(SQLIdentifier{id: String::from("tThree"), parts: vec![String::from("tThree")]})),
                         selection: None,
                         order: None,
+                        limit: None,
                         for_update: false
                     })
                 )),
@@ -244,6 +249,7 @@ fn sqlparser() {
                     },
                 ]
             ))),
+            limit: None,
             for_update: false
         },
         parsed
@@ -307,6 +313,7 @@ fn sql_join() {
                                     right: Box::new(SQLLiteral(0))
                                 })),
                                 order: None,
+                                limit: None,
                                 for_update: false
                             })
                         )),
@@ -332,6 +339,7 @@ fn sql_join() {
                     }
                 ]
             ))),
+            limit: None,
             for_update: false
         },
         parsed
@@ -371,6 +379,7 @@ fn nasty() {
                                     relation: Some(Box::new(SQLIdentifier{id: String::from("tOne"), parts: vec![String::from("tOne")]})),
                                     selection: None,
                                     order: None,
+                                    limit: None,
                                     for_update: false
                                 }),
                                 union_type: UNION,
@@ -384,6 +393,7 @@ fn nasty() {
                                         relation: Some(Box::new(SQLIdentifier{id: String::from("tTwo"), parts: vec![String::from("tTwo")]})),
                                         selection: None,
                                         order: None,
+                                        limit: None,
                                         for_update: false
                                     })
                                 ))
@@ -406,6 +416,7 @@ fn nasty() {
                                 relation: Some(Box::new(SQLIdentifier{id: String::from("tThree"), parts: vec![String::from("tThree")]})),
                                 selection: None,
                                 order: None,
+                                limit: None,
                                 for_update: false
                             })
                         )),
@@ -421,6 +432,7 @@ fn nasty() {
                                     relation: Some(Box::new(SQLIdentifier{id: String::from("tFour"), parts: vec![String::from("tFour")]})),
                                     selection: None,
                                     order: None,
+                                    limit: None,
                                     for_update: false
                                 })
                             ))
@@ -506,6 +518,7 @@ fn select_comparisons() {
                 })
             })),
             order: None,
+            limit: None,
             for_update: false
         },
         parsed
@@ -777,6 +790,7 @@ fn select_function_calls() {
                     })
             ),
             order: None,
+            limit: None,
             for_update: false
         },
         parsed
@@ -812,7 +826,41 @@ fn select_for_update() {
                 right: Box::new(SQLLiteral(0))
             })),
             order: None,
+            limit: None,
             for_update: true
+        },
+        parsed
+    );
+
+    println!("{:#?}", parsed);
+
+    let ansi_writer = AnsiSQLWriter{literal_tokens: &tokens.literals};
+    let writer = SQLWriter::new(vec![&ansi_writer]);
+    let rewritten = writer.write(&parsed).unwrap();
+    assert_eq!(format_sql(&rewritten), format_sql(&sql));
+
+    println!("Rewritten: {:?}", rewritten);
+
+
+}
+
+#[test]
+fn select_limit() {
+    let dialect = AnsiSQLDialect::new();
+    let sql = String::from("SELECT id FROM users LIMIT 1");
+    let tokens = sql.tokenize(&dialect).unwrap();
+    let parsed = tokens.parse().unwrap();
+
+    assert_eq!(
+        SQLSelect {
+            expr_list: Box::new(SQLExprList(vec![
+                SQLIdentifier{id: String::from("id"), parts: vec![String::from("id")]}
+            ])),
+            relation: Some(Box::new(SQLIdentifier{id: String::from("users"), parts: vec![String::from("users")]})),
+            selection: None,
+            order: None,
+            limit: Some(Box::new(SQLLiteral(0))),
+            for_update: false
         },
         parsed
     );

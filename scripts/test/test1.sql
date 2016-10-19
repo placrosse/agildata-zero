@@ -13,4 +13,6 @@ SELECT id, first_name, last_name, ssn, age, sex FROM users;
 SELECT id, first_name, last_name, ssn, age, sex FROM users WHERE first_name = 'Barry';
 UPDATE users SET id = id + 100, first_name = 'Janis' WHERE id = 1;
 SELECT id, first_name, last_name, ssn, age, sex FROM users WHERE first_name = 'Janis';
+SELECT id, first_name, last_name, ssn, age, sex FROM users ORDER BY id DESC LIMIT 1;
+SELECT id, first_name, last_name, ssn, age, sex FROM users ORDER BY id ASC LIMIT 2;
 

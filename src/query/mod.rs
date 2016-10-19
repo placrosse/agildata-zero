@@ -286,7 +286,8 @@ pub enum ASTNode {
         relation: Option<Box<ASTNode>>,
         selection: Option<Box<ASTNode>>,
         order: Option<Box<ASTNode>>,
-        for_update: bool
+        limit: Option<Box<ASTNode>>,
+        for_update: bool,
     },
     SQLInsert {
         table: Box<ASTNode>,

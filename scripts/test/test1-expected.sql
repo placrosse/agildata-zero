@@ -13,3 +13,8 @@ id	first_name	last_name	ssn	age	sex
 5	Barry	Kripke	123452789	34	M
 id	first_name	last_name	ssn	age	sex
 101	Janis	Cobain	123456789	27	M
+id	first_name	last_name	ssn	age	sex
+101	Janis	Cobain	123456789	27	M
+id	first_name	last_name	ssn	age	sex
+2	Jenny	Jones	123356789	27	F
+3	Leonard	Hofstadder	123156789	39	M
