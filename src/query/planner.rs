@@ -500,24 +500,33 @@ impl<'a> Planner<'a> {
                     (self.default_schema, id.clone())
                 };
 
-                match self.provider.get_table_meta(&table_schema.unwrap(), &table_name)? {
-                    Some(meta) => {
-                        let tt = TupleType::new(
-                            meta.columns.iter()
-                                .map(|c| Element {
-                                    name: c.name.clone(), encryption: c.encryption.clone(), key: c.key.clone(),
-                                    data_type: c.native_type.clone(), relation: table_name.clone(),
-                                    p_name: None, p_relation: None
-                                })
-                                .collect()
-                        );
-                        Ok(Rel::TableScan { table: table_name.clone(), tt: tt })
-                    },
-                    None =>  Err(ZeroError::ParseError {
-                        message: format!("Invalid table {}.{}", table_schema.unwrap(), table_name).into(),
-                        code: "1064".into()
-                    }.into())
+                match table_schema {
+                    None => Err(ZeroError::ParseError {
+                                message: format!("Invalid table {}", table_name).into(),
+                                code: "1064".into()
+                            }.into()),
+                    Some(schema) => {
+                        match self.provider.get_table_meta(&schema, &table_name)? {
+                            Some(meta) => {
+                                let tt = TupleType::new(
+                                    meta.columns.iter()
+                                        .map(|c| Element {
+                                            name: c.name.clone(), encryption: c.encryption.clone(), key: c.key.clone(),
+                                            data_type: c.native_type.clone(), relation: table_name.clone(),
+                                            p_name: None, p_relation: None
+                                        })
+                                        .collect()
+                                );
+                                Ok(Rel::TableScan { table: table_name.clone(), tt: tt })
+                            },
+                            None => Err(ZeroError::ParseError {
+                                message: format!("Invalid table {}.{}", schema, table_name).into(),
+                                code: "1064".into()
+                            }.into())
+                        }
+                    }
                 }
+
             },
             ASTNode::MySQLDropTable{..} => Ok(Rel::MySQLDropTable),
             ASTNode::MySQLCreateTable{..} => Ok(Rel::MySQLCreateTable),

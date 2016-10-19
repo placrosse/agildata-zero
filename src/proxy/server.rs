@@ -287,18 +287,39 @@ impl PacketHandler for ZeroHandler {
             //NOTE: this code makes assumptions about what 'capabilities' are active
 
             let mut r = MySQLPacketParser::new(&p.bytes);
+
+            let capabilities = Cursor::new(&p.bytes[4..8]).read_u32::<BigEndian>().unwrap() as u32;
+
+            debug!("capabilities: raw={:?}, int={}", &p.bytes[4..8], capabilities);
+
             r.skip(4); // capability flags, CLIENT_PROTOCOL_41 always set
             r.skip(4); // max-packet size
             r.skip(1); // character set
             r.skip(23); // reserved
             let username = r.read_c_string().unwrap(); // username
             debug!("user: {}", username);
-            let auth_response = r.read_lenenc_bytes().unwrap(); // auth-response
-            debug!("auth_response: {:?}", auth_response);
 
-            if let Some(schema) = r.read_c_string() {
-                debug!("HANDSHAKE: schema={}", schema);
-                self.schema = Some(schema);
+            // read auth_response
+            if (capabilities & 0x00200000) > 0 /*CapabilityFlags::ClientPluginAuthLenEncClientData*/ {
+                debug!("auth_response length-encoded bytes");
+                let _ = r.read_lenenc_bytes().unwrap();
+
+            } else if (capabilities & 0x00008000) > 0 /*CapabilityFlags::ClientSecureConnection*/ {
+                debug!("auth_response single-byte length");
+                let auth_response_len = r.read_byte().unwrap() as usize;
+                r.skip(auth_response_len);
+
+            } else {
+                debug!("auth_response null-terminated string");
+                let _ = r.read_c_string().unwrap();
+            }
+
+            // default schema
+            if (capabilities & 0x00000008) > 0 /*CapabilityFlags::ClientConnectWithDb*/ {
+                if let Some(schema) = r.read_c_string() {
+                    debug!("HANDSHAKE: schema={}", schema);
+                    self.schema = Some(schema);
+                }
             }
 
             Action::Forward
