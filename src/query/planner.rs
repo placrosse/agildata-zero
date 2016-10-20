@@ -17,6 +17,7 @@ use encrypt::EncryptionType;
 use encrypt::NativeType;
 use error::ZeroError;
 use std::rc::Rc;
+use std::fmt;
 
 pub trait SchemaProvider {
     fn get_table_meta(&self, schema: &String, table: &String) -> Result<Option<Rc<TableMeta>>, Box<ZeroError>>;
@@ -64,7 +65,6 @@ pub struct Element {
     pub p_relation: Option<String>
 }
 
-use std::fmt;
 impl fmt::Debug for Element {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Use `self.number` to refer to each positional data point.
