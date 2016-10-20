@@ -21,7 +21,6 @@ Edit the provided `zero-config.xml` and modify the MySQL connection details:
 ``` xml
 <connection>
 	<property name="host" value="127.0.0.1"/>
-	<property name="schema" value="myschema"/>
 	<property name="user" value="myuser"/>
 	<property name="password" value="mypassword"/>
 </connection>
