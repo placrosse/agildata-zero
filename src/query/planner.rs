@@ -17,6 +17,7 @@ use encrypt::EncryptionType;
 use encrypt::NativeType;
 use error::ZeroError;
 use std::rc::Rc;
+use std::fmt;
 
 pub trait SchemaProvider {
     fn get_table_meta(&self, schema: &String, table: &String) -> Result<Option<Rc<TableMeta>>, Box<ZeroError>>;
@@ -42,12 +43,18 @@ pub struct TupleType {
 }
 
 impl TupleType {
+    pub fn contains(&self, name: &String) -> bool {
+        self.elements.iter().filter(|e| e.name.to_lowercase() == name.to_lowercase()).collect::<Vec<&Element>>().len() > 0
+    }
+}
+
+impl TupleType {
     fn new(elements: Vec<Element>) -> Self {
         TupleType{elements: elements}
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Element {
     pub name: String,
     pub encryption: EncryptionType,
@@ -56,6 +63,13 @@ pub struct Element {
     pub relation: String,
     pub p_name: Option<String>,
     pub p_relation: Option<String>
+}
+
+// More condensed and readable Debug
+impl fmt::Debug for Element {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "(Element [ name: {}, encryption: {:?}, data_type: {:?} ])", self.name, self.encryption, self.data_type)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -89,7 +103,19 @@ impl Rex {
 
     pub fn get_element(&self) -> Result<Element, Box<ZeroError>> {
         match self {
-            &Rex::Alias { box ref expr, ..} => expr.get_element(),
+            &Rex::Alias { ref name, box ref expr} => {
+                let e = expr.get_element()?;
+                Ok(Element{
+                    name: name.clone(),
+                    encryption: e.encryption,
+                    key: e.key,
+                    data_type: e.data_type,
+                    relation: e.relation,
+                    p_name: Some(e.name),
+                    p_relation: e.p_relation
+                })
+
+            },
             &Rex::Identifier{ref el, ..} => Ok(el.clone()),
             &Rex::Literal(_) => {
                 Ok(Element {
@@ -219,6 +245,7 @@ impl HasTupleType for Rel {
             Rel::Join { ref tt, ..} => tt,
             Rel::Update { ref tt, ..} => tt,
             Rel::Delete { ref tt, ..} => tt,
+            Rel::Limit { ref input, ..} => input.tt(),
             _ => panic!("No tuple type")
         }
     }
@@ -372,7 +399,7 @@ impl<'a> Planner<'a> {
 
                 let project_list = self.sql_to_rex(expr_list, &input.tt())?;
 
-                let project_list = match project_list {
+                let mut project_list = match project_list {
                     Rex::RexExprList(ref list) => {
                         let mut new_list: Vec<Rex> = vec![];
                         for rex in list {
@@ -390,21 +417,49 @@ impl<'a> Planner<'a> {
                     _ => panic!("Invalid projection expression")
                 };
 
-                let project_tt = reconcile_tt(&project_list)?;
 
-                input = Rel::Projection {
-                    project: Box::new(project_list),
-                    input: Box::new(input),
-                    tt: project_tt
-                };
+                let mut project_tt = reconcile_tt(&project_list)?;
 
                 match order {
                     &Some(box ref o) => {
+
+                        // ORDER BY can reference alias names or columns not contained in projection list
+                        // Therefore, subproject to resolve to aliasing and include any other non projected column
+                        let mut sub_project_list = match project_list {
+                            Rex::RexExprList(ref list) => list.clone(),
+                            _ => panic!("Invalid")
+                        };
+                        for e in &input.tt().elements {
+                            if !project_tt.contains(&e.name) {
+                                sub_project_list.push(Rex::Identifier{id: vec![e.name.clone()], el: e.clone()})
+                            }
+                        }
+
+                        let sub_project = Rex::RexExprList(sub_project_list);
+                        let sub_project_tt = reconcile_tt(&sub_project)?;
+
+                        // Overwrite the final projection list and tuple type now in light of the subprojection
+                        project_list = Rex::RexExprList(
+                            project_tt.elements.iter()
+                                .map(|e| Rex::Identifier{id: vec![e.name.clone()], el: e.clone()})
+                                .collect::<Vec<Rex>>());
+                        project_tt = reconcile_tt(&project_list)?;
+
+                        // Set the subproject as a rel input
+                        input = Rel::Projection {
+                            project: Box::new(sub_project),
+                            input: Box::new(input),
+                            tt: sub_project_tt
+                        };
+
+                        // Resolve and set the Rel Sort node
                         let sort_expr = Box::new(self.sql_to_rex(o, &input.tt())?);
                         input = Rel::Sort{
                             input: Box::new(input),
                             sort_expr: sort_expr
                         };
+
+
                     },
                     &None =>{}
                 }
@@ -420,7 +475,12 @@ impl<'a> Planner<'a> {
                     &None => {}
                 }
 
-                Ok(input)
+
+                Ok(Rel::Projection {
+                    project: Box::new(project_list),
+                    input: Box::new(input),
+                    tt: project_tt
+                })
 
             },
             ASTNode::SQLInsert {box ref table, box ref column_list, ref values_list, .. } => {
@@ -790,6 +850,26 @@ mod tests {
     fn plan_with_alias() {
 
         let sql = String::from("SELECT @@foo as bar, @@bar as foo");
+        let res = parse_and_plan(sql).unwrap();
+        let plan = res.1;
+
+        println!("Plan {:#?}", plan);
+    }
+
+    #[test]
+    fn plan_order_not_projected() {
+
+        let sql = String::from("SELECT first_name FROM users ORDER BY id");
+        let res = parse_and_plan(sql).unwrap();
+        let plan = res.1;
+
+        println!("Plan {:#?}", plan);
+    }
+
+    #[test]
+    fn plan_order_alias() {
+
+        let sql = String::from("SELECT id AS alia, first_name FROM users ORDER BY alia");
         let res = parse_and_plan(sql).unwrap();
         let plan = res.1;
 

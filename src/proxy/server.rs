@@ -914,6 +914,7 @@ impl ZeroHandler {
                                 match planner.sql_to_rel(&parsed) {
                                     // If plan OK, continue
                                     Ok(logical_plan) => {
+                                        debug!("Using logical plan: {:#?}", logical_plan);
                                         let phys_planner = PhysicalPlanner{};
                                         let physical_plan = phys_planner.plan(logical_plan, parsed, &tokens.literals);
 
@@ -1047,7 +1048,7 @@ impl ZeroHandler {
                 }).count() > 0;
 
                 if decrypt_result_set {
-                    debug!("Received row: tt={:?}", tt);
+                    debug!("Received row: tt={:#?}", tt);
 
                     let mut r = MySQLPacketParser::new(&p.bytes);
                     let mut w = MySQLPacketWriter::new(p.bytes[3]);
