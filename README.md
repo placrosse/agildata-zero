@@ -9,7 +9,7 @@ Even if the database server is compromised and an unauthorized user is able to l
 
 # Project Status
 
-This is a proof-of-concept project and not suitable for production use. The main limitations currently are:
+AgilData Zero is currently a proof-of-concept project. The main limitations currently are:
 
 - Subset of MySQL syntax supported (just enough to run [TPC-C](https://github.com/AgilData/tpcc) benchmarks)
 - Depends on [rust-crypto](https://github.com/DaGenix/rust-crypto) which is not recommended for production use
