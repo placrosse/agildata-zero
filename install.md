@@ -6,8 +6,6 @@ active: install
 
 # Installation
 
-WORK IN PROGRESS
-
 ## Linux
 
 A tarball is available that is compatible with all Linux distributions.
@@ -33,7 +31,7 @@ docker run --name mysql-server -e MYSQL_USER=myuser -e MYSQL_PASSWORD=mypassword
 You can now test the mysql container by connecting directly with a mysql client
 
 ```bash
-$ mysql -u myuser -pmypassword -h 127.0.0.1 -P 3306
+mysql -u myuser -pmypassword -h 127.0.0.1 -P 3306
 ```
 
 Now that the mysql container is up and running we will pull the latest agildata:zero
@@ -46,7 +44,7 @@ docker run --name agildata --link mysql-server:mysql -p 3307:3307 -d agildata/ze
 You can now test the agildata-zero container by connecting directly with a mysql client
 
 ```bash
-$ mysql -u myuser -pmypassword -h 127.0.0.1 -P 3307
+mysql -u myuser -pmypassword -h 127.0.0.1 -P 3307
 ```
 
 ## Docker on Linux
