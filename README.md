@@ -14,6 +14,7 @@ AgilData Zero is currently a proof-of-concept project. The main limitations curr
 - Subset of MySQL syntax supported (just enough to run [TPC-C](https://github.com/AgilData/tpcc) benchmarks)
 - Depends on [rust-crypto](https://github.com/DaGenix/rust-crypto) which is not recommended for production use
 - Query planner only handles subset of validation required to ensure no unencrypted data can leak to the database server
+- Encryption keys are stored in clear text in the encryption gateway configuration file
 
 # Documentation
 
