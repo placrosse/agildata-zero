@@ -16,3 +16,5 @@ SELECT id, first_name, last_name, ssn, age, sex FROM users WHERE first_name = 'J
 SELECT id, first_name, last_name, ssn, age, sex FROM users ORDER BY id DESC LIMIT 1;
 SELECT id, first_name, last_name, ssn, age, sex FROM users ORDER BY id ASC LIMIT 2;
 
+SELECT id AS alias FROM users ORDER BY alias DESC;
+SELECT first_name FROM users ORDER BY id;

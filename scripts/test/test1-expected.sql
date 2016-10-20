@@ -18,3 +18,25 @@ id	first_name	last_name	ssn	age	sex
 id	first_name	last_name	ssn	age	sex
 2	Jenny	Jones	123356789	27	F
 3	Leonard	Hofstadder	123156789	39	M
+alias
+101
+10
+9
+8
+7
+6
+5
+4
+3
+2
+first_name
+Jenny
+Leonard
+Maggie
+Barry
+Amy
+Sheldon
+Bernadette
+David "Ginsano Bianco"
+Arnold Judas
+Janis

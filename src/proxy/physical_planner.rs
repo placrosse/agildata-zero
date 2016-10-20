@@ -98,20 +98,24 @@ impl PhysicalPlanner {
     fn plan_rel(&self, rel: &Rel, builder: &mut PhysicalPlanBuilder, literals: &Vec<LiteralToken>) -> Result<(), Box<ZeroError>> {
         match *rel {
             Rel::Projection { box ref project, box ref input, ref tt } => {
+                // push projection encryption types into builder
+                // if this is the highest level projection
+                if builder.projection.len() == 0 {
+                    for el in tt.elements.iter() {
+
+                        let enc_plan = EncryptionPlan {
+                            data_type: el.data_type.clone(),
+                            encryption: el.encryption.clone(),
+                            key: Some(el.key.clone())
+                        };
+
+                        builder.push_projection(enc_plan);
+                    }
+                }
+
                 self.plan_rex(project, builder, literals)?;
                 self.plan_rel(input, builder, literals)?;
 
-                // push projection encryption types into builder
-                for el in tt.elements.iter() {
-
-                    let enc_plan = EncryptionPlan {
-                        data_type: el.data_type.clone(),
-                        encryption: el.encryption.clone(),
-                        key: Some(el.key.clone())
-                    };
-
-                    builder.push_projection(enc_plan);
-                }
             },
             Rel::Selection { box ref expr, box ref input } => {
                 self.plan_rex(expr, builder, literals)?;
