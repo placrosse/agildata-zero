@@ -65,9 +65,9 @@ pub struct Element {
     pub p_relation: Option<String>
 }
 
+// More condensed and readable Debug
 impl fmt::Debug for Element {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // Use `self.number` to refer to each positional data point.
         write!(f, "(Element [ name: {}, encryption: {:?}, data_type: {:?} ])", self.name, self.encryption, self.data_type)
     }
 }
