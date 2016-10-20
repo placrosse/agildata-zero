@@ -97,38 +97,10 @@ fn _parse_config(xml: &String, builder: &mut ConfigBuilder) {
 // parses a single xml config
 pub fn parse_config(path: &str) -> Config {
     debug!("parse_config() path: {}", path);
-    let mut rdr = match File::open(path) {
-        Ok(file) => file,
-        Err(err) => {
-            println!("Unable to open configuration file '{}': {}", path, err);
-            process::exit(1);
-        }
-    };
-
-    let mut p = xml::Parser::new();
-    let mut e = xml::ElementBuilder::new();
     let mut b = ConfigBuilder::new();
 
-    let mut string = String::new();
-    if let Err(err) = rdr.read_to_string(&mut string) {
-        error!("Reading failed: {}", err);
-        process::exit(1);
-    };
-
-    p.feed_str(&string);
-    for event in p.filter_map(|x| e.handle_event(x)) {
-        match event {
-            Ok(e) => {
-                match e {
-                    xml::Element{name: n, children: c, .. } => match &n as &str {
-                        "zero-config" => parse_client_config(&mut b, c),
-                        _ => panic!("Unrecognized parent XML element {}", n)
-                    }
-                }
-            },
-            Err(e) => error!("{}", e),
-        }
-    }
+    let mut xml = _load_xml_file(path);
+    _parse_config(&xml, &mut b);
 
     b.build()
 }
