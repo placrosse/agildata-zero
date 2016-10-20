@@ -97,7 +97,8 @@ fn main() {
 
     info!("{}", dsc);
 
-    let config = config::parse_config(&opt.cfg);
+    // TODO decide on a dirname for override configs
+    let config = config::parse_configs(&opt.cfg, "/etc/zero.d/");
     let config = Rc::new(config);
     let provider = proxy::schema_provider::MySQLBackedSchemaProvider::new(config.clone());
     let stmt_cache = proxy::statement_cache::StatementCache::new();
