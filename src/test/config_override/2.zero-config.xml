@@ -1,0 +1,7 @@
+<zero-config>
+    <!-- override the connection details from default config and 1.zero-config -->
+    <connection>
+        <property name="user" value="baruser"/>
+        <property name="password" value="barpassword"/>
+    </connection>
+</zero-config>

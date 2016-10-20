@@ -13,10 +13,11 @@
 // limitations under the License.
 
 extern crate xml;
-use std::fs::File;
-use std::io::Read;
+use std::fs::{File, read_dir};
+use std::io::{Read, Error};
 use std::collections::HashMap;
 use std::process;
+use std::path::Path;
 use self::xml::Xml;
 
 use encrypt::*;
@@ -35,8 +36,65 @@ pub enum NativeTypeQualifier {
     OTHER
 }
 
+// parses a default config and any configs contained within an override directory and reconciles to one Config
+pub fn parse_configs(default_path: &str, dir: &str) -> Config {
+    debug!("parse_configs() default: {}, override dir: {}", default_path, dir);
+    let mut b = ConfigBuilder::new();
 
+    let mut xml = _load_xml_file(default_path);
+    _parse_config(&xml, &mut b);
 
+    // If override dir exists, load any available configs
+    if Path::new(dir).exists() {
+        let paths = read_dir(dir).unwrap();
+        for p in paths {
+            xml = _load_xml_file(p.unwrap().path().to_str().unwrap());
+            _parse_config(&xml, &mut b);
+        }
+    }
+
+    b.build()
+}
+
+fn _load_xml_file(path: &str) -> String {
+    let mut rdr = match File::open(path) {
+        Ok(file) => file,
+        Err(err) => {
+            println!("Unable to open configuration file '{}': {}", path, err);
+            process::exit(1);
+        }
+    };
+
+    let mut string = String::new();
+    if let Err(err) = rdr.read_to_string(&mut string) {
+        error!("Reading failed: {}", err);
+        process::exit(1);
+    };
+
+    string
+}
+
+fn _parse_config(xml: &String, builder: &mut ConfigBuilder) {
+    let mut p = xml::Parser::new();
+    let mut e = xml::ElementBuilder::new();
+
+    p.feed_str(xml);
+    for event in p.filter_map(|x| e.handle_event(x)) {
+        match event {
+            Ok(e) => {
+                match e {
+                    xml::Element{name: n, children: c, .. } => match &n as &str {
+                        "zero-config" => parse_client_config(builder, c),
+                        _ => panic!("Unrecognized parent XML element {}", n)
+                    }
+                }
+            },
+            Err(e) => error!("{}", e),
+        }
+    }
+}
+
+// parses a single xml config
 pub fn parse_config(path: &str) -> Config {
     debug!("parse_config() path: {}", path);
     let mut rdr = match File::open(path) {
@@ -525,6 +583,7 @@ impl TTableConfig for TableConfig {
 mod tests {
     use super::*;
     use encrypt::NativeType::*;
+    use encrypt::EncryptionType::*;
 
     #[test]
     fn config_test() {
@@ -625,6 +684,35 @@ mod tests {
         assert_eq!(config.column_map.get("i").unwrap().native_type,I64);
         assert_eq!(config.column_map.get("j").unwrap().native_type,U64);
 
+    }
+
+    #[test]
+    fn config_test_override() {
+        let config = super::parse_configs("src/test/test-zero-config.xml", "src/test/config_override");
+
+        // token test sourced from the default config, i.e. not overridden anywhere
+        let c = config.get_client_config();
+        assert_eq!("127.0.0.1", c.props.get("host").unwrap());
+        assert_eq!("3307", c.props.get("port").unwrap());
+
+        // Test overrides
+        let c = config.get_connection_config();
+        assert_eq!("baruser", c.props.get("user").unwrap());
+        assert_eq!("barpassword", c.props.get("password").unwrap());
+        assert_eq!("localhost", c.props.get("host").unwrap());
+
+        let c = config.get_table_config(&"zero".into(), &"users".into()).unwrap();
+        assert_eq!(c.column_map.get("sex").unwrap().encryption, AesGcm);
+
+        let c = config.get_table_config(&"fooschema".into(), &"footable".into()).unwrap();
+        assert_eq!(c.column_map.get("bar").unwrap().encryption, NA);
+
+    }
+
+    #[test]
+    fn config_test_override_dir_doesnt_exist() {
+        let config = super::parse_configs("src/test/test-zero-config.xml", "src/foo");
+        // No assertions, just should not blow up.
     }
 
 }
