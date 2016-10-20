@@ -44,7 +44,7 @@ pub struct TupleType {
 
 impl TupleType {
     pub fn contains(&self, name: &String) -> bool {
-        self.elements.iter().filter(|e| &e.name.to_lowercase() == name).collect::<Vec<&Element>>().len() > 0
+        self.elements.iter().filter(|e| e.name.to_lowercase() == name.to_lowercase()).collect::<Vec<&Element>>().len() > 0
     }
 }
 
