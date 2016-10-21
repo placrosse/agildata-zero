@@ -96,7 +96,7 @@ One example can be to override a certain element, such as connection:
 Another can be to extend other configs, such as adding new schema configuration:
 
 ```xml
-<!-- overrides connection properties in the default config -->
+<!-- extends a schema declaration  -->
 <zero-config>
     <schema name="newschema">
         <table name="newtable">
