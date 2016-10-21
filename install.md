@@ -72,3 +72,45 @@ mysql -h$(docker inspect --format '{{ .NetworkSettings.IPAddress }}' agildata) -
 # OR with another container
 docker run -it --link agildata:mysql --rm mysql sh -c 'exec mysql -h"$MYSQL_PORT_3307_TCP_ADDR" -P"$MYSQL_PORT_3307_TCP_PORT" -umyuser -pmypassword'
 ```
+
+# Docker with custom configuration
+The agildata/zero docker image comes prepackaged with a lightweight default zero-config.xml. 
+
+In many cases, extending or overriding components of this configuration file will be necessary when launching in Docker. 
+
+The AgilData Zero executable supports extending or overriding properties with config fragments that exist in the /etc/zero.d directory. 
+
+One example can be to override a certain element, such as connection:
+```xml
+<!-- overrides connection properties in the default config -->
+<zero-config>
+    <connection>
+        <property name="host" value="176.120.90.168" />
+        <property name="user" value="somecustomuser" />
+        <property name="password" value="s0m3cust0mP@$$w0rd" />
+    </connection>
+</zero-config>
+```
+
+Another can be to extend other configs, such as adding new schema configuration:
+```xml
+<!-- overrides connection properties in the default config -->
+<zero-config>
+    <schema name="newschema">
+        <table name="newtable">
+        		<column name="id" type="INTEGER" encryption="none"/>
+        		<column name="a" type="VARCHAR(50)" encryption="AES" iv="..." key="..."/>
+        		<column name="b" type="VARCHAR(50)" encryption="AES_GCM" key="..."/>
+        	</table>
+    </connection>
+</zero-config>
+```
+
+Any number of config fragments can be added to the `/etc/zero.d` directory, though do note that configs will be loaded by filename in library order and thus those loaded last can override components of those loaded before.
+
+To use such config fragments with a docker run execution, use a run syntax similar to the below:
+```bash
+{% raw %}
+docker run --name agildata --link mysql-server:mysql -v /path/to/my/configs:/etc/zero.d agildata/zero:latest
+{% endraw %}
+```
