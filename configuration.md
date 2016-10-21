@@ -48,7 +48,7 @@ Configuration is straight forward:
                 encryption: NONE|AES|AES_GCM
                 
                 AES and AES_GCM require:
-                key: Hex string of 16 bytes
+                key: Hex string of 32 bytes
                 
                 AES requires:
                 iv: Initialization vector, Hex string of 12 bytes
