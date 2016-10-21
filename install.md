@@ -81,6 +81,7 @@ In many cases, extending or overriding components of this configuration file wil
 The AgilData Zero executable supports extending or overriding properties with config fragments that exist in the /etc/zero.d directory. 
 
 One example can be to override a certain element, such as connection:
+
 ```xml
 <!-- overrides connection properties in the default config -->
 <zero-config>
@@ -93,22 +94,24 @@ One example can be to override a certain element, such as connection:
 ```
 
 Another can be to extend other configs, such as adding new schema configuration:
+
 ```xml
 <!-- overrides connection properties in the default config -->
 <zero-config>
     <schema name="newschema">
         <table name="newtable">
-        		<column name="id" type="INTEGER" encryption="none"/>
-        		<column name="a" type="VARCHAR(50)" encryption="AES" iv="..." key="..."/>
-        		<column name="b" type="VARCHAR(50)" encryption="AES_GCM" key="..."/>
-        	</table>
-    </connection>
+            <column name="id" type="INTEGER" encryption="none"/>
+            <column name="a" type="VARCHAR(50)" encryption="AES" iv="..." key="..."/>
+            <column name="b" type="VARCHAR(50)" encryption="AES_GCM" key="..."/>
+        </table>
+    </schema>
 </zero-config>
 ```
 
 Any number of config fragments can be added to the `/etc/zero.d` directory, though do note that configs will be loaded by filename in library order and thus those loaded last can override components of those loaded before.
 
-To use such config fragments with a docker run execution, use a run syntax similar to the below:
+To use such config fragments with a docker run execution, use a run syntax similar to the below, mounting your local config fragment files into the `/etc/zero.d/` directory in the container:
+
 ```bash
 {% raw %}
 docker run --name agildata --link mysql-server:mysql -v /path/to/my/configs:/etc/zero.d agildata/zero:latest

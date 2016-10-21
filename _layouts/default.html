@@ -49,8 +49,13 @@
 										{% else %}
 											<li><a href="install.html">Installation</a></li>
 										{% endif %}
+									    {% if page.active == "configuration" %}
+									<li class="active"><a href="configuration.html">Configuration</a></li>
+										{% else %}
+										<li><a href="configuration.html">Configuration</a></li>
+										{% endif %}
 										{% if page.active == "tutorial" %}
-						        	<li class="active"><a href="tutorial.html">Tutorial</a></li>
+									<li class="active"><a href="tutorial.html">Tutorial</a></li>
 										{% else %}
 											<li><a href="tutorial.html">Tutorial</a></li>
 										{% endif %}

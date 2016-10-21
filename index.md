@@ -65,3 +65,4 @@ We use [github issues](https://github.com/AgilData/agildata-zero/issues) to trac
 - Add support for caching unencrypted index data in the gateway to support efficient range queries and sort operations
 - Improving coverage of MySQLSQL syntax
 - Develop tools to make recommendations for encryption schemes based on current query access patterns
+- Replace flat file XML configuration with key management systems, encrypted in-database configuration metadata, and UI configuration tools, to name a few
