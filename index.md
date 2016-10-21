@@ -19,10 +19,12 @@ AgilData Zero is currently a proof-of-concept. The main limitations currently ar
 - Subset of MySQL syntax supported (just enough to run TPC-C benchmarks)
 - Depends on rust-crypto which has not been verified as secure yet
 - Query planner only handles subset of validation required to ensure no unencrypted data can leak to the database server
+- Encryption keys are stored in clear text in the encryption gateway configuration file
+
 
 # Security versus Functionality
 
-One of the challenges with storing encrypted data in a database is that it reduces the databases ability to operate on that data. For example, if data is encrypted with AES-256 then it changes the sort order of that data, so it is no longer possible for the database to perform range queries or sort that data with an `ORDER BY` clause. Weaker forms of encryption exist that can preserve the sort order, but order-preserving encryption is known to leak knowledge about the data, as demonstrated in [cite that paper here].
+One of the challenges with storing encrypted data in a database is that it reduces the databases ability to operate on that data. For example, if data is encrypted with AES-256 then it changes the sort order of that data, so it is no longer possible for the database to perform range queries or sort that data with an `ORDER BY` clause. Weaker forms of encryption exist that can preserve the sort order, but order-preserving encryption is known to leak knowledge about the data.
 
 AgilData Zero takes a pragmatic approach to the problem by supporting encyrption schemes that allow for some basic operations to be performed by the database. AgilData Zero also validates queries and fails any queries that attempt to perform an operation on encrypted data, rather than just returning the wrong results.
 
@@ -30,15 +32,22 @@ AgilData Zero takes a pragmatic approach to the problem by supporting encyrption
 
 AgilData Zero currently supports the following types of encryption:
 
-## AES-256 with column-specific IV
+## Clear text
 
-A single initialization-vector (IV) and key is used to encrypt all values in the column. This type of encryption supports equality checks, meaning that simple predicates of the form `WHERE ssn = ?` can still be performed efficiently by the database. AgilData encrypts the query parameters so that the database never sees unencrypted data.
+- No encryption and preserves all database functionality
 
-If two columns share the same key and IV then `JOIN` operations can also be performed natively by the database.
+## AES-256 with unique initialization vector per column
 
-## AES-256 with unique IV per encrypted value
+- This is a form of deterministic encryption where encrypting the same input value multiple times always results in the same encrypted data
+- Supports equality operations, allowing the database to filter (WHERE ssn = ?) 
+- If two columns share the same initialization vector and key then they can be joined
+- Not suitable for low-cardinality data since this encryption is deterministic e.g. for a gender column storing M or F,  there would only be two encrypted values
 
-This form of encryption uses a unique IV per row. This is a stronger form of encryption but adds additional restrictions on functionality. Equality checks can no longer be performed.
+## AES-256 with unique initialization vector per value
+
+- Non-deterministic encryption. Encrypting the same value multiple times results in a different encrypted value each time.
+- More secure than using a fixed IV but no support for equality
+- Database can include column in projection but cannot operate on the data
 
 # Architecture
 
@@ -50,9 +59,9 @@ Performance will naturally depend greatly on the specific application and the en
 
 # Roadmap
 
-We use github issues to track the roadmap for this product. Some of major themes are:
+We use [github issues](https://github.com/AgilData/agildata-zero/issues) to track the roadmap for this product. Some of major themes are:
 
 - Add query engine in the gateway to allow for increased functionality against strongly encrypted data
 - Add support for caching unencrypted index data in the gateway to support efficient range queries and sort operations
-- Improving coverage of MySQL/MariaDB SQL syntax
+- Improving coverage of MySQLSQL syntax
 - Develop tools to make recommendations for encryption schemes based on current query access patterns
