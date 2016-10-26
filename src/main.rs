@@ -40,6 +40,9 @@ extern crate chrono;
 #[macro_use]
 extern crate decimal;
 
+extern crate toml;
+extern crate rustc_serialize;
+
 use std::str;
 use std::rc::Rc;
 use std::process;
@@ -49,6 +52,7 @@ mod config;
 mod proxy;
 mod error;
 mod query;
+mod config_new;
 
 pub const APP_NAME: &'static str = "AgilData Zero Gateway";
 pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
