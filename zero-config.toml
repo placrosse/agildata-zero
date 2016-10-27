@@ -1,0 +1,121 @@
+[client]
+host = "127.0.0.1"
+port = "3307"
+
+[connection]
+host = "127.0.0.1"
+user = "agiluser"
+password = "password"
+
+[parsing]
+mode = "STRICT"
+
+# Tpcc schema
+    [tpcc.customer.c_id]
+    type = "INTEGER"
+    encryption = "NONE"
+
+    [tpcc.customer.c_first]
+    type = "VARCHAR(16)"
+    encryption = "AES"
+    key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"
+    iv = "03F72E7479F3E34752E4DD91"
+
+    [tpcc.customer.c_middle]
+    type = "VARCHAR(2)"
+    encryption = "AES"
+    key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"
+    iv = "03F72E7479F3E34752E4DD91"
+
+    [tpcc.customer.c_last]
+    type = "VARCHAR(16)"
+    encryption = "AES"
+    key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"
+    iv = "03F72E7479F3E34752E4DD91"
+
+    [tpcc.customer.c_street_1]
+    type = "VARCHAR(20)"
+    encryption = "AES"
+    key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"
+    iv = "03F72E7479F3E34752E4DD91"
+
+    [tpcc.customer.c_street_2]
+    type = "VARCHAR(20)"
+    encryption = "AES"
+    key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"
+    iv = "03F72E7479F3E34752E4DD91"
+
+## zero.users
+    [zero.users.id]
+    type="INTEGER"
+    encryption="NONE"
+
+    [zero.users.first_name]
+    type="VARCHAR(50)"
+    encryption="AES"
+    key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"
+    iv = "03F72E7479F3E34752E4DD91"
+
+    [zero.users.last_name]
+    type="VARCHAR(50)"
+    encryption="AES"
+    key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"
+    iv = "03F72E7479F3E34752E4DD91"
+
+    [zero.users.ssn]
+    type="VARCHAR(50)"
+    encryption="AES"
+    key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"
+    iv = "03F72E7479F3E34752E4DD91"
+
+    [zero.users.age]
+    type="INTEGER"
+    encryption="AES"
+    key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"
+    iv = "03F72E7479F3E34752E4DD91"
+
+    [zero.users.sex]
+    type="VARCHAR(50)"
+    encryption="AES"
+    key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"
+    iv = "03F72E7479F3E34752E4DD91"
+
+## zero.user_purchases
+    [zero.user_purchases.id]
+    type="INTEGER"
+    encryption="NONE"
+
+    [zero.user_purchases.user_id]
+    type="INTEGER"
+    encryption="NONE"
+
+    [zero.user_purchases.item_code]
+    type="INTEGER"
+    encryption="AES"
+    key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"
+    iv = "03F72E7479F3E34752E4DD91"
+
+    [zero.user_purchases.amount]
+    type="DOUBLE"
+    encryption="AES"
+    key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"
+    iv = "03F72E7479F3E34752E4DD91"
+
+## zero.items
+    [zero.items.item_code]
+    type="INTEGER"
+    encryption="AES"
+    key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"
+    iv = "03F72E7479F3E34752E4DD91"
+
+    [zero.items.item_name]
+    type="VARCHAR(50)"
+    encryption="AES"
+    key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"
+    iv = "03F72E7479F3E34752E4DD91"
+
+    [zero.items.description]
+    type="VARCHAR(50)"
+    encryption="AES"
+    key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"
+    iv = "03F72E7479F3E34752E4DD91"
