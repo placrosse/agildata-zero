@@ -405,6 +405,36 @@ fn decode_column<D:Decoder>(d: &mut D) -> Result<ColumnConfig, D::Error> {
 }
 
 #[derive(Debug)]
+struct OptResolvedString {
+    value: Option<String>
+}
+
+impl Decodable for OptResolvedString {
+    fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
+        d.read_struct("OptResolvedString", 1, |_d| -> _ {
+            let v: Option<String> = _d.read_struct_field("value", 0, Decodable::decode)?;
+            match v {
+                Some(s) => {
+                    let resolved = if s.starts_with("${") && s.ends_with("}") {
+                        let env_var =&s[2..(s.len() - 1)];
+                        match  env::var(env_var) {
+                            Ok(v) => v,
+                            Err(e) => return Err(_d.error(&format!("Cannot resolve environment variable {}", env_var)))
+                        }
+                    } else {
+                        s
+                    };
+
+                    Ok(OptResolvedString{value: Some(resolved)})
+
+                },
+                None => Ok(OptResolvedString{value: None})
+            }
+        })
+    }
+}
+
+#[derive(Debug)]
 struct ResolvedString {
     value: String
 }
