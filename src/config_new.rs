@@ -3,22 +3,60 @@ use rustc_serialize::Decodable;
 use rustc_serialize::Decoder;
 use toml;
 use std::env;
+use std::str::FromStr;
 
 use std::collections::HashMap;
+
+#[derive(Debug, PartialEq)]
+pub struct Config {
+    client: ClientConfig,
+    connection: ConnectionConfig,
+    parsing: ParsingConfig,
+    schemas: HashMap<String, SchemaConfig>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ConnectionConfig {
+    host: String,
+    user: String,
+    password: String
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ClientConfig {
+    host: String,
+    port: String
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ParsingConfig {
+    mode: Mode
+}
+
+#[derive(Debug, PartialEq)]
+pub struct SchemaConfig {
+    name: String,
+    tables: HashMap<String, TableConfig>
+}
+
+#[derive(Debug, PartialEq)]
+pub struct TableConfig {
+    name: String,
+    columns: HashMap<String, ColumnConfig>
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ColumnConfig {
+    name: String,
+    native_type: String,
+    encryption: String
+}
 
 trait Builder {
     type Output;
     fn new() -> Self;
     fn build(self) -> Result<Self::Output, String>;
     fn merge(&mut self, b: Self);
-}
-
-#[derive(Debug, PartialEq)]
-struct Config {
-    client: ClientConfig,
-    connection: ConnectionConfig,
-    parsing: ParsingConfig,
-    schemas: HashMap<String, SchemaConfig>,
 }
 
 #[derive(Debug)]
@@ -74,13 +112,6 @@ impl Decodable for ConfigBuilder {
     }
 }
 
-#[derive(Debug, PartialEq)]
-struct ConnectionConfig {
-    host: String,
-    user: String,
-    password: String
-}
-
 #[derive(Debug)]
 struct ConnectionConfigBuilder {
     host: Option<String>,
@@ -133,12 +164,6 @@ impl Decodable for ConnectionConfigBuilder {
 }
 
 
-#[derive(Debug, PartialEq)]
-struct ClientConfig {
-    host: String,
-    port: String
-}
-
 #[derive(Debug)]
 struct ClientConfigBuilder {
     host: Option<String>,
@@ -181,14 +206,9 @@ impl Decodable for ClientConfigBuilder {
     }
 }
 
-#[derive(Debug, RustcDecodable, PartialEq)]
-struct ParsingConfig {
-    mode: Mode
-}
-
 #[derive(Debug, RustcDecodable)]
 struct ParsingConfigBuilder {
-    mode: Option<Mode>
+    mode: Option<String>
 }
 
 #[derive(Debug, PartialEq)]
@@ -197,12 +217,24 @@ enum Mode {
     PERMISSIVE
 }
 
+impl FromStr for Mode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match &s.to_lowercase() as &str {
+            "strict" => Ok(Mode::STRICT),
+            "permissive" => Ok(Mode::PERMISSIVE),
+            a => Err(format!("Unknown parsing mode {}", a))
+        }
+    }
+}
+
 impl Builder for ParsingConfigBuilder {
     type Output = ParsingConfig;
 
     fn build(self) -> Result<Self::Output, String> {
         Ok(ParsingConfig{
-            mode: self.mode.unwrap()
+            mode: Mode::from_str(&self.mode.ok_or(missing_err(&"parsing.mode"))?.resolve()?)?
         })
     }
 
@@ -217,15 +249,6 @@ impl Builder for ParsingConfigBuilder {
     }
 }
 
-impl Decodable for Mode {
-    fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
-        match &d.read_str()?.to_lowercase() as &str {
-            "strict" => Ok(Mode::STRICT),
-            "permissive" => Ok(Mode::PERMISSIVE),
-            a => Err(d.error(&format!("Unknown parsing mode {}", a)))
-        }
-    }
-}
 #[derive(Debug)]
 struct SchemaMapBuilder {
     schemas: HashMap<String, SchemaConfigBuilder>
@@ -263,7 +286,9 @@ impl SchemaMapBuilder {
         let mut schema_map: HashMap<String, SchemaConfigBuilder> = HashMap::new();
         for i in 0..l {
             let schema = d.read_map_elt_key(i, decode_key_name)?;
-            let conf: SchemaConfigBuilder = d.read_map_elt_val(i, Decodable::decode)?;
+            let mut conf: SchemaConfigBuilder = d.read_map_elt_val(i, Decodable::decode)?;
+
+            conf.name = Some(schema.clone());
 
             //conf.set_name(&schema);
             schema_map.insert(schema, conf);
@@ -273,13 +298,9 @@ impl SchemaMapBuilder {
     }
 }
 
-#[derive(Debug, PartialEq)]
-struct SchemaConfig {
-    tables: HashMap<String, TableConfig>
-}
-
 #[derive(Debug, Clone)]
 struct SchemaConfigBuilder {
+    name: Option<String>,
     tables: HashMap<String, TableConfigBuilder>
 }
 
@@ -288,6 +309,7 @@ impl Builder for SchemaConfigBuilder {
 
     fn build(self) -> Result<Self::Output, String> {
         Ok(SchemaConfig {
+            name: self.name.ok_or(String::from("Illegal: Missing Schema name"))?,
             // TODO avoid clone
             tables: self.tables.iter()
                 .map(|(k,v)| fold_tuple(k.clone(), v.clone()))
@@ -307,6 +329,7 @@ impl Builder for SchemaConfigBuilder {
 
     fn new() -> Self {
         SchemaConfigBuilder {
+            name: None,
             tables: HashMap::new()
         }
     }
@@ -318,13 +341,14 @@ impl Decodable for SchemaConfigBuilder {
         d.read_map(|_d, _l| -> _ {
             for i in 0.._l {
                 let table = _d.read_map_elt_key(i,decode_key_name)?;
-                let table_conf: TableConfigBuilder = _d.read_map_elt_val(i, Decodable::decode)?;
+                let mut table_conf: TableConfigBuilder = _d.read_map_elt_val(i, Decodable::decode)?;
 
-                // TODO tag with table name
+                table_conf.name = Some(table.clone());
 
                 table_map.insert(table.to_lowercase(), table_conf);
             }
             Ok(SchemaConfigBuilder{
+                name: None, // Not known here
                 tables: table_map
             })
         })
@@ -332,13 +356,9 @@ impl Decodable for SchemaConfigBuilder {
 }
 
 
-#[derive(Debug, PartialEq)]
-struct TableConfig {
-    columns: HashMap<String, ColumnConfig>
-}
-
 #[derive(Debug, Clone)]
 struct TableConfigBuilder {
+    name: Option<String>,
     columns: HashMap<String, ColumnConfigBuilder>
 }
 
@@ -347,6 +367,7 @@ impl Builder for TableConfigBuilder {
 
     fn build(self) -> Result<Self::Output, String> {
         Ok(TableConfig {
+            name: self.name.ok_or(String::from("Illegal: missing table name"))?,
             // TODO avoid clone
             columns: self.columns.iter()
                 .map(|(k,v)| fold_tuple(k.clone(), v.clone()))
@@ -366,6 +387,7 @@ impl Builder for TableConfigBuilder {
 
     fn new() -> Self {
         TableConfigBuilder {
+            name: None,
             columns: HashMap::new()
         }
     }
@@ -379,25 +401,21 @@ impl Decodable for TableConfigBuilder {
         d.read_map(|_d, _l| -> _ {
             for i in 0.._l {
                 let column = _d.read_map_elt_key(i,decode_key_name)?;
-                let column_conf: ColumnConfigBuilder = _d.read_map_elt_val(i, Decodable::decode)?;
+                let mut column_conf: ColumnConfigBuilder = _d.read_map_elt_val(i, Decodable::decode)?;
 
-                // TODO tag name
+                column_conf.name = Some(column.clone());
+
                 column_map.insert(column.to_lowercase(), column_conf);
             }
 
-            Ok(TableConfigBuilder{columns: column_map})
+            Ok(TableConfigBuilder{name: None, columns: column_map})
         })
     }
 }
 
-#[derive(Debug, PartialEq)]
-struct ColumnConfig {
-    native_type: String,
-    encryption: String
-}
-
 #[derive(Debug, Clone)]
 struct ColumnConfigBuilder {
+    name: Option<String>,
     native_type: Option<String>,
     encryption: Option<String>
 }
@@ -407,6 +425,7 @@ impl Builder for ColumnConfigBuilder {
 
     fn build(self) -> Result<Self::Output, String> {
         Ok(ColumnConfig {
+            name: self.name.ok_or(String::from("Illegal: missing table name"))?,
             native_type: self.native_type.unwrap(),
             encryption: self.encryption.unwrap()
         })
@@ -419,6 +438,7 @@ impl Builder for ColumnConfigBuilder {
 
     fn new() -> Self {
         ColumnConfigBuilder {
+            name: None,
             native_type: None,
             encryption: None
         }
@@ -431,6 +451,7 @@ impl Decodable for ColumnConfigBuilder {
         d.read_struct("ColumnConfigBuilder", 1, |_d| -> _ {
             Ok(
                 ColumnConfigBuilder {
+                    name: None, // not known here
                     native_type: _d.read_struct_field("type", 0, Decodable::decode)?,
                     encryption: _d.read_struct_field("encryption", 0, Decodable::decode)?,
                 }
@@ -553,19 +574,20 @@ mod test {
         });
 
         let expected_column = ColumnConfig {
+            name: "id".into(),
             native_type: "INTEGER".into(),
             encryption: "NONE".into()
         };
 
         let mut expected_column_map: HashMap<String, ColumnConfig> = HashMap::new();
         expected_column_map.insert("id".into(), expected_column);
-        let expected_table_conf = TableConfig{columns: expected_column_map};
+        let expected_table_conf = TableConfig{name: "users".into(), columns: expected_column_map};
 
         let mut expected_table_map: HashMap<String, TableConfig> = HashMap::new();
         expected_table_map.insert("users".into(), expected_table_conf);
 
         let mut expected_schema: HashMap<String, SchemaConfig> = HashMap::new();
-        expected_schema.insert("zero".into(), SchemaConfig{tables: expected_table_map});
+        expected_schema.insert("zero".into(), SchemaConfig{name: "zero".into(), tables: expected_table_map});
 
         assert_eq!(config.schemas, expected_schema);
 
