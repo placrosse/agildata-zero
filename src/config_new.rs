@@ -32,7 +32,7 @@ use query::dialects::mysqlsql::*;
 use error::ZeroError;
 use std::process;
 
-// parses a default config and any configs contained within an override directory and reconciles to one Config
+/// parses a default config and any configs contained within an override directory and reconciles to one Config
 pub fn parse_configs(default_path: &str, dir: &str) -> Config {
     debug!("parse_configs() default: {}, override dir: {}", default_path, dir);
     let mut toml_str = _load_toml_file(default_path);
@@ -61,6 +61,7 @@ pub fn parse_configs(default_path: &str, dir: &str) -> Config {
     decoded.build().unwrap() // TODO
 }
 
+// read from file to string
 fn _load_toml_file(path: &str) -> String {
     let mut rdr = match File::open(path) {
         Ok(file) => file,
@@ -133,6 +134,7 @@ pub enum NativeTypeQualifier {
     OTHER
 }
 
+/// trait to access properties with a Config
 pub trait TConfig {
     fn get_column_config(&self, schema: &String, table: &String, column: &String) -> Option<&ColumnConfig>;
     fn get_table_config(&self, schema: &String, table: &String) -> Option<&TableConfig>;
@@ -198,10 +200,17 @@ impl TTableConfig for TableConfig {
 
 
 // Private methods
+
+// generic builder trait
 trait Builder {
     type Output;
+
     fn new() -> Self;
+    // builds and validates
     fn build(self) -> Result<Self::Output, String>;
+
+    // merges this builder with another
+    // the other overrides this
     fn merge(&mut self, b: Self);
 }
 
@@ -264,6 +273,7 @@ impl Builder for ConfigBuilder {
     }
 }
 
+// Decodable implementation for toml-rs
 impl Decodable for ConfigBuilder {
     fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
         d.read_struct("ConfigBuilder", 4, |_d| -> _ {
@@ -284,10 +294,6 @@ struct ConnectionConfigBuilder {
     host: Option<String>,
     user: Option<String>,
     password: Option<String>
-}
-
-fn missing_err(prop: &str) -> String {
-    format!("Missing required property {}", prop)
 }
 
 impl Builder for ConnectionConfigBuilder {
@@ -316,6 +322,8 @@ impl Builder for ConnectionConfigBuilder {
     }
 }
 
+
+// Decodable impl for toml-rs
 impl Decodable for ConnectionConfigBuilder {
     fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
         d.read_struct("ConnectionConfig", 3, |_d| -> _ {
@@ -360,6 +368,8 @@ impl Builder for ClientConfigBuilder {
     }
 }
 
+
+// Decodable impl for toml-rs
 impl Decodable for ClientConfigBuilder {
     fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
         d.read_struct("ClientConfigBuilder", 2, |_d| -> _ {
@@ -449,6 +459,10 @@ impl Builder for SchemaMapBuilder {
 }
 
 impl SchemaMapBuilder {
+
+    // requires custom decode function for read_map
+    // this is due to use of arbitrary table names in the toml
+    // [somechema.sometable.somecolumn]
     fn decode<D:Decoder>(d: &mut D, l: usize) -> Result<SchemaMapBuilder, D::Error> {
         let mut schema_map: HashMap<String, SchemaConfigBuilder> = HashMap::new();
         for i in 0..l {
@@ -502,6 +516,7 @@ impl Builder for SchemaConfigBuilder {
     }
 }
 
+// Decodable impl for toml-rs
 impl Decodable for SchemaConfigBuilder {
     fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
         let mut table_map: HashMap<String, TableConfigBuilder> = HashMap::new();
@@ -560,7 +575,7 @@ impl Builder for TableConfigBuilder {
     }
 }
 
-
+// Decodable impl for toml-rs
 impl Decodable for TableConfigBuilder {
     fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
         let mut column_map: HashMap<String, ColumnConfigBuilder> = HashMap::new();
@@ -645,6 +660,7 @@ impl Builder for ColumnConfigBuilder {
     }
 }
 
+// Decodable impl for toml-rs
 impl Decodable for ColumnConfigBuilder {
 
     fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
@@ -667,8 +683,14 @@ fn fold_tuple<V: Builder>(k: String, v: V) -> Result<(String, V::Output), String
     Ok((k, v.build()?))
 }
 
+// read key string as part of decode
 fn decode_key_name<D:Decoder>(d: &mut D) -> Result<String, D::Error> {
     d.read_str()
+}
+
+// shorthand helper method for err msg
+fn missing_err(prop: &str) -> String {
+    format!("Missing required property {}", prop)
 }
 
 // TODO errors
@@ -687,6 +709,7 @@ fn determine_encryption(encryption: &String, iv: Option<[u8;12]>) -> Result<Encr
 
 }
 
+// reconcile parsed type AST to encrypt::NativeType
 pub fn reconcile_native_type(data_type: &ASTNode, qualifiers: &Vec<NativeTypeQualifier>) -> Result<NativeType, Box<ZeroError>> {
     Ok(match data_type {
         &ASTNode::MySQLDataType(ref dt) => match dt {
@@ -765,11 +788,15 @@ fn determine_native_type(native_type: &String) -> Result<NativeType, Box<ZeroErr
     reconcile_native_type(&data_type, &qualifiers)
 }
 
+
 trait Resolvable {
     type Output;
     fn resolve(self) -> Result<Self::Output, String>;
 }
 
+
+// Resolves a possible variable string to env value
+// i.e. ${ENV_VAR}
 impl Resolvable for String {
     type Output = String;
 
@@ -785,28 +812,6 @@ impl Resolvable for String {
         };
 
         Ok(resolved)
-    }
-}
-
-#[derive(Debug)]
-struct ResolvedString {
-    value: String
-}
-
-impl Decodable for ResolvedString {
-    fn decode<D: Decoder>(d: &mut D) -> Result<ResolvedString, D::Error> {
-        let val = d.read_str()?;
-        let resolved = if val.starts_with("${") && val.ends_with("}") {
-            let env_var =&val[2..(val.len() - 1)];
-            match  env::var(env_var) {
-                Ok(v) => v,
-                Err(e) => return Err(d.error(&format!("Cannot resolve environment variable {}", env_var)))
-            }
-        } else {
-            val
-        };
-
-        Ok(ResolvedString {value: resolved})
     }
 }
 
