@@ -6,6 +6,13 @@ use std::env;
 
 use std::collections::HashMap;
 
+trait Builder {
+    type Output;
+    fn new() -> Self;
+    fn build(self) -> Result<Self::Output, String>;
+    fn merge(&mut self, b: Self);
+}
+
 #[derive(Debug, PartialEq)]
 struct Config {
     client: ClientConfig,
@@ -13,6 +20,57 @@ struct Config {
     parsing: ParsingConfig,
     schemas: HashMap<String, SchemaConfig>,
 }
+
+#[derive(Debug)]
+struct ConfigBuilder {
+    client: ClientConfigBuilder,
+    connection: ConnectionConfigBuilder,
+    parsing: ParsingConfigBuilder,
+    schemas: HashMap<String, SchemaConfigBuilder>
+}
+
+fn fold_tuple<V: Builder>(k: String, v: V) -> Result<(String, V::Output), String> {
+    Ok((k, v.build()?))
+}
+
+impl Builder for ConfigBuilder {
+    type Output = Config;
+
+    fn build(self) -> Result<Self::Output, String> {
+        Ok(Config{
+            client: self.client.build()?,
+            connection: self.connection.build()?,
+            parsing: self.parsing.build()?,
+            // TODO avoid clone
+            schemas: self.schemas.iter()
+                .map(|(k, v)| fold_tuple(k.clone(), v.clone()))
+                .collect::<Result<HashMap<String, SchemaConfig>, String>>()?
+        })
+    }
+
+    fn merge(&mut self, b: ConfigBuilder) {
+        self.client.merge(b.client);
+        self.connection.merge(b.connection);
+        self.parsing.merge(b.parsing);
+        for (k, v) in b.schemas {
+            if self.schemas.contains_key(&k) {
+                self.schemas.get_mut(&k).unwrap().merge(v)
+            } else {
+                self.schemas.insert(k, v);
+            }
+        }
+    }
+
+    fn new() -> Self {
+        ConfigBuilder {
+            client: ClientConfigBuilder::new(),
+            connection: ConnectionConfigBuilder::new(),
+            parsing: ParsingConfigBuilder::new(),
+            schemas: HashMap::new()
+        }
+    }
+}
+
 
 impl Decodable for Config {
     fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
@@ -32,6 +90,38 @@ struct ConnectionConfig {
     host: String,
     user: String,
     password: String
+}
+
+#[derive(Debug)]
+struct ConnectionConfigBuilder {
+    host: Option<String>,
+    user: Option<String>,
+    password: Option<String>
+}
+
+impl Builder for ConnectionConfigBuilder {
+    type Output = ConnectionConfig;
+    fn build(self) -> Result<Self::Output, String> {
+        Ok(ConnectionConfig {
+            host: self.host.unwrap(),
+            user: self.user.unwrap(),
+            password: self.password.unwrap()
+        })
+    }
+
+    fn merge(&mut self, b: ConnectionConfigBuilder) {
+        if b.host.is_some() {self.host = b.host}
+        if b.user.is_some() {self.user = b.user}
+        if b.password.is_some() {self.password = b.password}
+    }
+
+    fn new() -> Self {
+        ConnectionConfigBuilder {
+            host: None,
+            user: None,
+            password: None
+        }
+    }
 }
 
 impl Decodable for ConnectionConfig {
@@ -55,6 +145,35 @@ struct ClientConfig {
     port: String
 }
 
+#[derive(Debug)]
+struct ClientConfigBuilder {
+    host: Option<String>,
+    port: Option<String>
+}
+
+impl Builder for ClientConfigBuilder {
+    type Output = ClientConfig;
+
+    fn build(self) -> Result<Self::Output, String> {
+        Ok(ClientConfig {
+            host: self.host.unwrap(),
+            port: self.port.unwrap()
+        })
+    }
+
+    fn merge(&mut self, b: ClientConfigBuilder) {
+        if b.host.is_some() {self.host = b.host}
+        if b.port.is_some() {self.port = b.port}
+    }
+
+    fn new() -> Self {
+        ClientConfigBuilder {
+            host: None,
+            port: None
+        }
+    }
+}
+
 impl Decodable for ClientConfig {
     fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
         d.read_struct("ClientConfig", 3, |_d| -> _ {
@@ -73,10 +192,35 @@ struct ParsingConfig {
     mode: Mode
 }
 
+#[derive(Debug)]
+struct ParsingConfigBuilder {
+    mode: Option<Mode>
+}
+
 #[derive(Debug, PartialEq)]
 enum Mode {
     STRICT,
     PERMISSIVE
+}
+
+impl Builder for ParsingConfigBuilder {
+    type Output = ParsingConfig;
+
+    fn build(self) -> Result<Self::Output, String> {
+        Ok(ParsingConfig{
+            mode: self.mode.unwrap()
+        })
+    }
+
+    fn merge(&mut self, b: Self) {
+        if b.mode.is_some() {self.mode = b.mode}
+    }
+
+    fn new() -> Self {
+        ParsingConfigBuilder {
+            mode: None
+        }
+    }
 }
 
 impl Decodable for Mode {
@@ -94,16 +238,113 @@ struct SchemaConfig {
     tables: HashMap<String, TableConfig>
 }
 
+#[derive(Debug, Clone)]
+struct SchemaConfigBuilder {
+    tables: HashMap<String, TableConfigBuilder>
+}
+
+impl Builder for SchemaConfigBuilder {
+    type Output = SchemaConfig;
+
+    fn build(self) -> Result<Self::Output, String> {
+        Ok(SchemaConfig {
+            // TODO avoid clone
+            tables: self.tables.iter()
+                .map(|(k,v)| fold_tuple(k.clone(), v.clone()))
+                .collect::<Result<HashMap<String, TableConfig>, String>>()?
+        })
+    }
+
+    fn merge(&mut self, b: Self) {
+        for (k, v) in b.tables {
+            if self.tables.contains_key(&k) {
+                self.tables.get_mut(&k).unwrap().merge(v)
+            } else {
+                self.tables.insert(k, v);
+            }
+        }
+    }
+
+    fn new() -> Self {
+        SchemaConfigBuilder {
+            tables: HashMap::new()
+        }
+    }
+}
+
 
 #[derive(Debug, PartialEq)]
 struct TableConfig {
     columns: HashMap<String, ColumnConfig>
 }
 
+#[derive(Debug, Clone)]
+struct TableConfigBuilder {
+    columns: HashMap<String, ColumnConfigBuilder>
+}
+
+impl Builder for TableConfigBuilder {
+    type Output = TableConfig;
+
+    fn build(self) -> Result<Self::Output, String> {
+        Ok(TableConfig {
+            // TODO avoid clone
+            columns: self.columns.iter()
+                .map(|(k,v)| fold_tuple(k.clone(), v.clone()))
+                .collect::<Result<HashMap<String, ColumnConfig>, String>>()?
+        })
+    }
+
+    fn merge(&mut self, b: Self) {
+        for (k, v) in b.columns {
+            if self.columns.contains_key(&k) {
+                self.columns.get_mut(&k).unwrap().merge(v)
+            } else {
+                self.columns.insert(k, v);
+            }
+        }
+    }
+
+    fn new() -> Self {
+        TableConfigBuilder {
+            columns: HashMap::new()
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 struct ColumnConfig {
     native_type: String,
     encryption: String
+}
+
+#[derive(Debug, Clone)]
+struct ColumnConfigBuilder {
+    native_type: Option<String>,
+    encryption: Option<String>
+}
+
+impl Builder for ColumnConfigBuilder {
+    type Output = ColumnConfig;
+
+    fn build(self) -> Result<Self::Output, String> {
+        Ok(ColumnConfig {
+            native_type: self.native_type.unwrap(),
+            encryption: self.encryption.unwrap()
+        })
+    }
+
+    fn merge(&mut self, b: Self) {
+        if b.native_type.is_some() {self.native_type = b.native_type}
+        if b.encryption.is_some() {self.encryption = b.encryption}
+    }
+
+    fn new() -> Self {
+        ColumnConfigBuilder {
+            native_type: None,
+            encryption: None
+        }
+    }
 }
 
 
