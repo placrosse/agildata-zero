@@ -48,8 +48,12 @@ pub fn parse_configs(default_path: &str, dir: &str) -> Config {
     if Path::new(dir).exists() {
         let paths = read_dir(dir).unwrap();
         for p in paths {
-            xml = _load_xml_file(p.unwrap().path().to_str().unwrap());
-            _parse_config(&xml, &mut b);
+            let _p = p.unwrap().path();
+            let path = _p.to_str().unwrap();
+            if path.ends_with(".xml") {
+                xml = _load_xml_file(path);
+                _parse_config(&xml, &mut b);
+            }
         }
     }
 

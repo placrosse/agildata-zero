@@ -1,9 +1,24 @@
-
+// Copyright 2016 AgilData
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http:// www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 use rustc_serialize::Decodable;
 use rustc_serialize::Decoder;
 use toml;
 use std::env;
 use std::str::FromStr;
+use std::path::Path;
+use std::fs::{File, read_dir};
+use std::io::{Read, Error};
 
 use std::collections::HashMap;
 
@@ -15,6 +30,54 @@ use query::dialects::ansisql::*;
 use query::dialects::mysqlsql::*;
 
 use error::ZeroError;
+use std::process;
+
+// parses a default config and any configs contained within an override directory and reconciles to one Config
+pub fn parse_configs(default_path: &str, dir: &str) -> Config {
+    debug!("parse_configs() default: {}, override dir: {}", default_path, dir);
+    let mut toml_str = _load_toml_file(default_path);
+
+    let mut toml = toml::Parser::new(&toml_str).parse().unwrap();
+
+    let mut decoder = toml::Decoder::new(toml::Value::Table(toml));
+    let mut decoded: ConfigBuilder = ::rustc_serialize::Decodable::decode(&mut decoder).unwrap();
+
+    // If override dir exists, load any available configs
+    if Path::new(dir).exists() {
+        let paths = read_dir(dir).unwrap();
+        for p in paths {
+            let _p = p.unwrap().path();
+            let path = _p.to_str().unwrap();
+            if path.ends_with(".toml") {
+                toml_str = _load_toml_file(path);
+                toml = toml::Parser::new(&toml_str).parse().unwrap();
+                decoder = toml::Decoder::new(toml::Value::Table(toml));
+                let d: ConfigBuilder = ::rustc_serialize::Decodable::decode(&mut decoder).unwrap();
+                decoded.merge(d)
+            }
+        }
+    }
+
+    decoded.build().unwrap() // TODO
+}
+
+fn _load_toml_file(path: &str) -> String {
+    let mut rdr = match File::open(path) {
+        Ok(file) => file,
+        Err(err) => {
+            println!("Unable to open configuration file '{}': {}", path, err);
+            process::exit(1);
+        }
+    };
+
+    let mut string = String::new();
+    if let Err(err) = rdr.read_to_string(&mut string) {
+        error!("Reading failed: {}", err);
+        process::exit(1);
+    };
+
+    string
+}
 
 #[derive(Debug, PartialEq)]
 pub struct Config {
@@ -70,6 +133,71 @@ pub enum NativeTypeQualifier {
     OTHER
 }
 
+pub trait TConfig {
+    fn get_column_config(&self, schema: &String, table: &String, column: &String) -> Option<&ColumnConfig>;
+    fn get_table_config(&self, schema: &String, table: &String) -> Option<&TableConfig>;
+    fn get_schema_config(&self, schema: &String) -> Option<&SchemaConfig>;
+    fn get_parsing_config(&self) -> &ParsingConfig;
+    fn get_connection_config(&self) -> &ConnectionConfig;
+    fn get_client_config(&self) -> &ClientConfig;
+}
+
+impl TConfig for Config {
+
+    fn get_column_config(&self, schema: &String, table: &String, column: &String) -> Option<&ColumnConfig> {
+        match self.get_table_config(schema, table) {
+            Some(t) => t.get_column_config(column),
+            None => None
+        }
+    }
+
+    fn get_table_config(&self, schema: &String, table: &String) -> Option<&TableConfig> {
+        match self.get_schema_config(schema) {
+            Some(s) => s.get_table_config(table),
+            None => None
+        }
+    }
+
+    fn get_schema_config(&self, schema: &String) -> Option<&SchemaConfig> {
+        self.schemas.get(schema)
+    }
+
+    fn get_connection_config(&self) -> &ConnectionConfig {
+        &self.connection
+    }
+
+    fn get_client_config(&self) -> &ClientConfig {
+        &self.client
+    }
+
+    fn get_parsing_config(&self) -> &ParsingConfig {
+        &self.parsing
+    }
+
+}
+
+pub trait TSchemaConfig {
+    fn get_table_config(&self, table: &String) -> Option<&TableConfig>;
+}
+
+impl TSchemaConfig for SchemaConfig {
+    fn get_table_config(&self, table: &String) -> Option<&TableConfig> {
+        self.tables.get(table)
+    }
+}
+
+pub trait TTableConfig {
+    fn get_column_config(&self, column: &String) -> Option<&ColumnConfig>;
+}
+
+impl TTableConfig for TableConfig {
+    fn get_column_config(&self, column: &String) -> Option<&ColumnConfig> {
+        self.columns.get(column)
+    }
+}
+
+
+// Private methods
 trait Builder {
     type Output;
     fn new() -> Self;
@@ -79,9 +207,9 @@ trait Builder {
 
 #[derive(Debug)]
 struct ConfigBuilder {
-    client: ClientConfigBuilder,
-    connection: ConnectionConfigBuilder,
-    parsing: ParsingConfigBuilder,
+    client: Option<ClientConfigBuilder>,
+    connection: Option<ConnectionConfigBuilder>,
+    parsing: Option<ParsingConfigBuilder>,
     schemas: SchemaMapBuilder
 }
 
@@ -91,25 +219,46 @@ impl Builder for ConfigBuilder {
 
     fn build(self) -> Result<Self::Output, String> {
         Ok(Config{
-            client: self.client.build()?,
-            connection: self.connection.build()?,
-            parsing: self.parsing.build()?,
+            client: self.client.ok_or(missing_err("client"))?.build()?,
+            connection: self.connection.ok_or(missing_err("connection"))?.build()?,
+            parsing: self.parsing.ok_or(missing_err("parsing"))?.build()?,
             schemas: self.schemas.build()?
         })
     }
 
     fn merge(&mut self, b: ConfigBuilder) {
-        self.client.merge(b.client);
-        self.connection.merge(b.connection);
-        self.parsing.merge(b.parsing);
+        if let Some(ref mut s) = self.client {
+            if let Some(o) = b.client {
+                s.merge(o)
+            }
+        } else {
+            self.client = b.client
+        }
+
+        if let Some(ref mut s) = self.connection {
+            if let Some(o) = b.connection {
+                s.merge(o)
+            }
+        } else {
+            self.connection = b.connection
+        }
+
+        if let Some(ref mut s) = self.parsing {
+            if let Some(o) = b.parsing {
+                s.merge(o)
+            }
+        } else {
+            self.parsing = b.parsing
+        }
+
         self.schemas.merge(b.schemas);
     }
 
     fn new() -> Self {
         ConfigBuilder {
-            client: ClientConfigBuilder::new(),
-            connection: ConnectionConfigBuilder::new(),
-            parsing: ParsingConfigBuilder::new(),
+            client: Some(ClientConfigBuilder::new()),
+            connection: Some(ConnectionConfigBuilder::new()),
+            parsing: Some(ParsingConfigBuilder::new()),
             schemas: SchemaMapBuilder::new()
         }
     }
@@ -664,7 +813,8 @@ impl Decodable for ResolvedString {
 #[cfg(test)]
 mod test {
 
-    use super::{Config, ClientConfig, SchemaConfig, ConnectionConfig, ParsingConfig, TableConfig, ColumnConfig, Mode, ConfigBuilder, Builder};
+    use super::{Config, ClientConfig, SchemaConfig, ConnectionConfig, ParsingConfig,
+        TableConfig, ColumnConfig, Mode, ConfigBuilder, Builder, TConfig};
     use toml;
 
     use std::collections::HashMap;
@@ -672,6 +822,8 @@ mod test {
     use std::env;
 
     use encrypt::*;
+    use encrypt::NativeType::*;
+    use encrypt::EncryptionType::*;
 
     #[test]
     fn test_builder_toml() {
@@ -760,6 +912,135 @@ mod test {
 
         assert_eq!(config.schemas, expected_schema);
 
+    }
+
+    #[test]
+    fn test_config_data_types() {
+        env::set_var("TEST_SHARED_KEY", "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
+        env::set_var("TEST_SHARED_IV", "03F72E7479F3E34752E4DD91");
+
+        let s_config = super::parse_configs("src/test/test-zero-config.toml", "/etc/zero.d");
+        let test_schema = "zero".into();
+        // Numerics
+
+        let mut config = s_config.get_table_config(&test_schema, &"numerics".into()).unwrap();
+        assert_eq!(config.columns.get("a").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("b").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("c").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("d").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("e").unwrap().native_type,BOOL);
+        assert_eq!(config.columns.get("f").unwrap().native_type,BOOL);
+        assert_eq!(config.columns.get("g").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("h").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("i").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("j").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("k").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("l").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("m").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("n").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("o").unwrap().native_type,D128);
+        assert_eq!(config.columns.get("p").unwrap().native_type,D128);
+        assert_eq!(config.columns.get("q").unwrap().native_type,D128);
+        assert_eq!(config.columns.get("r").unwrap().native_type,D128);
+        assert_eq!(config.columns.get("s").unwrap().native_type,D128);
+        assert_eq!(config.columns.get("t").unwrap().native_type,D128);
+        assert_eq!(config.columns.get("u").unwrap().native_type,F64);
+        assert_eq!(config.columns.get("v").unwrap().native_type,F64);
+        assert_eq!(config.columns.get("w").unwrap().native_type,F64);
+        assert_eq!(config.columns.get("x").unwrap().native_type,F64);
+        assert_eq!(config.columns.get("y").unwrap().native_type,F64);
+        assert_eq!(config.columns.get("z").unwrap().native_type,F64);
+        assert_eq!(config.columns.get("aa").unwrap().native_type,F64);
+        assert_eq!(config.columns.get("ab").unwrap().native_type,F64);
+        assert_eq!(config.columns.get("ac").unwrap().native_type,F64);
+
+        config = s_config.get_table_config(&test_schema, &"characters".into()).unwrap();
+        assert_eq!(config.columns.get("a").unwrap().native_type,Char(1));
+        assert_eq!(config.columns.get("b").unwrap().native_type,Char(1));
+        assert_eq!(config.columns.get("c").unwrap().native_type,Char(255));
+        assert_eq!(config.columns.get("d").unwrap().native_type,Char(1));
+        assert_eq!(config.columns.get("e").unwrap().native_type,Char(255));
+        assert_eq!(config.columns.get("f").unwrap().native_type,Char(1));
+        assert_eq!(config.columns.get("g").unwrap().native_type,Char(1));
+        assert_eq!(config.columns.get("h").unwrap().native_type,Char(255));
+        assert_eq!(config.columns.get("i").unwrap().native_type,Char(50));
+        assert_eq!(config.columns.get("j").unwrap().native_type,Varchar(50));
+        assert_eq!(config.columns.get("k").unwrap().native_type,Varchar(50));
+        assert_eq!(config.columns.get("l").unwrap().native_type,Varchar(50));
+
+
+        config = s_config.get_table_config(&test_schema, &"temporal".into()).unwrap();
+        assert_eq!(config.columns.get("a").unwrap().native_type,DATE);
+        assert_eq!(config.columns.get("b").unwrap().native_type,DATETIME(0));
+        assert_eq!(config.columns.get("c").unwrap().native_type,DATETIME(6));
+        assert_eq!(config.columns.get("d").unwrap().native_type,TIME(0));
+        assert_eq!(config.columns.get("e").unwrap().native_type,TIME(6));
+        assert_eq!(config.columns.get("f").unwrap().native_type,TIMESTAMP(0));
+        assert_eq!(config.columns.get("g").unwrap().native_type,TIMESTAMP(6));
+        assert_eq!(config.columns.get("h").unwrap().native_type,YEAR(4));
+        assert_eq!(config.columns.get("i").unwrap().native_type,YEAR(4));
+
+        config = s_config.get_table_config(&test_schema, &"binary".into()).unwrap();
+        assert_eq!(config.columns.get("a").unwrap().native_type,FIXEDBINARY(1));
+        assert_eq!(config.columns.get("b").unwrap().native_type,FIXEDBINARY(50));
+        assert_eq!(config.columns.get("c").unwrap().native_type,VARBINARY(50));
+        assert_eq!(config.columns.get("d").unwrap().native_type,VARBINARY(2_u32.pow(8)));
+        assert_eq!(config.columns.get("e").unwrap().native_type,Varchar(2_u32.pow(8)));
+        assert_eq!(config.columns.get("f").unwrap().native_type,VARBINARY(2_u32.pow(16)));
+        assert_eq!(config.columns.get("g").unwrap().native_type,VARBINARY(50));
+        assert_eq!(config.columns.get("h").unwrap().native_type,Varchar(2_u32.pow(16)));
+        assert_eq!(config.columns.get("i").unwrap().native_type,Varchar(100));
+        assert_eq!(config.columns.get("j").unwrap().native_type,LONGBLOB(2_u64.pow(24)));
+        assert_eq!(config.columns.get("k").unwrap().native_type,LONGTEXT(2_u64.pow(24)));
+        assert_eq!(config.columns.get("l").unwrap().native_type,LONGBLOB(2_u64.pow(32)));
+        assert_eq!(config.columns.get("m").unwrap().native_type,LONGTEXT(2_u64.pow(32)));
+        assert_eq!(config.columns.get("n").unwrap().native_type,FIXEDBINARY(1));
+        assert_eq!(config.columns.get("o").unwrap().native_type,FIXEDBINARY(50));
+
+        config = s_config.get_table_config(&test_schema, &"numerics_signed".into()).unwrap();
+        assert_eq!(config.columns.get("a").unwrap().native_type,I64);
+        assert_eq!(config.columns.get("b").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("c").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("d").unwrap().native_type,I64);
+        assert_eq!(config.columns.get("e").unwrap().native_type,I64);
+        assert_eq!(config.columns.get("f").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("g").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("h").unwrap().native_type,I64);
+        assert_eq!(config.columns.get("i").unwrap().native_type,I64);
+        assert_eq!(config.columns.get("j").unwrap().native_type,U64);
+
+    }
+
+    #[test]
+    fn config_test_override() {
+        env::set_var("TEST_SHARED_KEY", "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
+        env::set_var("TEST_SHARED_IV", "03F72E7479F3E34752E4DD91");
+
+        let config = super::parse_configs("src/test/test-zero-config.toml", "src/test/config_override");
+
+        // token test sourced from the default config, i.e. not overridden anywhere
+        let c = config.get_client_config();
+        assert_eq!("127.0.0.1", c.host);
+        assert_eq!("3307", c.port);
+
+        // Test overrides
+        let c = config.get_connection_config();
+        assert_eq!("baruser", c.user);
+        assert_eq!("barpassword", c.password);
+        assert_eq!("localhost", c.host);
+
+        let c = config.get_table_config(&"zero".into(), &"users".into()).unwrap();
+        assert_eq!(c.columns.get("sex").unwrap().encryption, AesGcm);
+
+        let c = config.get_table_config(&"fooschema".into(), &"footable".into()).unwrap();
+        assert_eq!(c.columns.get("bar").unwrap().encryption, NA);
+
+    }
+
+    #[test]
+    fn config_test_override_dir_doesnt_exist() {
+        let config = super::parse_configs("src/test/test-zero-config.toml", "src/foo");
+        // No assertions, just should not blow up.
     }
 
 }

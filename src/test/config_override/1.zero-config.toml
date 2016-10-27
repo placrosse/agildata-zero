@@ -1,0 +1,14 @@
+# override the connection details from default config
+[connection]
+host = "localhost"
+user = "foouser"
+password = "password"
+
+# override a column in the users table from the default config
+[zero.users.sex]
+encryption="AES_GCM"
+
+# add a new schema config
+[fooschema.footable.bar]
+type="INTEGER"
+encryption="NONE"

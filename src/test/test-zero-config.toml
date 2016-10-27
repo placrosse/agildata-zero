@@ -1,0 +1,747 @@
+[client]
+host = "127.0.0.1"
+port = "3307"
+
+[connection]
+host = "127.0.0.1"
+user = "agiluser"
+password = "password123"
+
+[parsing]
+mode = "strict"
+
+
+## zero.users
+    [zero.users.id]
+    type="INTEGER"
+    encryption="NONE"
+
+    [zero.users.first_name]
+    type="VARCHAR(50)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.users.last_name]
+    type="VARCHAR(50)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.users.ssn]
+    type="VARCHAR(50)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.users.age]
+    type="INTEGER"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.users.sex]
+    type="VARCHAR(50)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+## zero.user_purchases
+    [zero.user_purchases.id]
+    type="INTEGER"
+    encryption="NONE"
+
+    [zero.user_purchases.user_id]
+    type="INTEGER"
+    encryption="NONE"
+
+    [zero.user_purchases.item_code]
+    type="INTEGER"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.user_purchases.amount]
+    type="DOUBLE"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+## zero.items
+    [zero.items.item_code]
+    type="INTEGER"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.items.item_name]
+    type="VARCHAR(50)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.items.description]
+    type="VARCHAR(50)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+## zero.numerics
+    [zero.numerics.a]
+    type="BIT"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.b]
+    type="BIT(2)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.c]
+    type="TINYINT"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.d]
+    type="TINYINT(10)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.e]
+    type="BOOL"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.f]
+    type="BOOLEAN"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.g]
+    type="SMALLINT"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.h]
+    type="SMALLINT(100)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.i]
+    type="INT"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.j]
+    type="INT(64)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.k]
+    type="INTEGER"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.l]
+    type="INTEGER(64)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.m]
+    type="BIGINT"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.n]
+    type="BIGINT(100)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.o]
+    type="DECIMAL"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.p]
+    type="DECIMAL(10)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.q]
+    type="DECIMAL(10,2)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.r]
+    type="DEC"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.s]
+    type="DEC(10)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.t]
+    type="DEC(10,2)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.u]
+    type="FLOAT"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.v]
+    type="FLOAT(10)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.w]
+    type="FLOAT(10,2)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.x]
+    type="DOUBLE"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.y]
+    type="DOUBLE(10)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.z]
+    type="DOUBLE(10,2)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.aa]
+    type="DOUBLE PRECISION"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.ab]
+    type="DOUBLE PRECISION (10)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics.ac]
+    type="DOUBLE PRECISION (10,2)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+## zero.characters
+    [zero.characters.a]
+    type="NATIONAL CHAR"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.characters.b]
+    type="CHAR"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.characters.c]
+    type="CHAR(255)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.characters.d]
+    type="NCHAR"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.characters.e]
+    type="NCHAR(255)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.characters.f]
+    type="NATIONAL CHARACTER"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.characters.g]
+    type="CHARACTER"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.characters.h]
+    type="CHARACTER(255)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.characters.i]
+    type="NATIONAL CHARACTER(50)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.characters.j]
+    type="VARCHAR(50)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.characters.k]
+    type="NVARCHAR(50)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.characters.l]
+    type="CHARACTER VARYING(50)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+## zero.temporal
+    [zero.temporal.a]
+    type="DATE"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.temporal.b]
+    type="DATETIME"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.temporal.c]
+    type="DATETIME(6)"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.temporal.d]
+    type="TIME"
+    encryption="NONE"
+
+    [zero.temporal.e]
+    type="TIME(6)"
+    encryption="NONE"
+
+    [zero.temporal.f]
+    type="TIMESTAMP"
+    encryption="NONE"
+
+    [zero.temporal.g]
+    type="TIMESTAMP(6)"
+    encryption="NONE"
+
+    [zero.temporal.h]
+    type="YEAR"
+    encryption="NONE"
+
+    [zero.temporal.i]
+    type="YEAR(4)"
+    encryption="NONE"
+
+## zero.binary
+    [zero.binary.a]
+    type="BINARY"
+    encryption="NONE"
+
+    [zero.binary.b]
+    type="BINARY(50)"
+    encryption="NONE"
+
+    [zero.binary.c]
+    type="VARBINARY(50)"
+    encryption="NONE"
+
+    [zero.binary.d]
+    type="TINYBLOB"
+    encryption="NONE"
+
+    [zero.binary.e]
+    type="TINYTEXT"
+    encryption="NONE"
+
+    [zero.binary.f]
+    type="BLOB"
+    encryption="NONE"
+
+    [zero.binary.g]
+    type="BLOB(50)"
+    encryption="NONE"
+
+    [zero.binary.h]
+    type="TEXT"
+    encryption="NONE"
+
+    [zero.binary.i]
+    type="TEXT(100)"
+    encryption="NONE"
+
+    [zero.binary.j]
+    type="MEDIUMBLOB"
+    encryption="NONE"
+
+    [zero.binary.k]
+    type="MEDIUMTEXT"
+    encryption="NONE"
+
+    [zero.binary.l]
+    type="LONGBLOB"
+    encryption="NONE"
+
+    [zero.binary.m]
+    type="LONGTEXT"
+    encryption="NONE"
+
+    [zero.binary.n]
+    type="CHAR BYTE"
+    encryption="NONE"
+
+    [zero.binary.o]
+    type="CHAR(50) BYTE"
+    encryption="NONE"
+
+## zero.numerics_signed
+    [zero.numerics_signed.a]
+    type="TINYINT SIGNED"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics_signed.b]
+    type="TINYINT(10) UNSIGNED"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics_signed.c]
+    type="SMALLINT UNSIGNED"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics_signed.d]
+    type="SMALLINT(100) SIGNED"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics_signed.e]
+    type="INT SIGNED"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics_signed.f]
+    type="INT(64) UNSIGNED"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics_signed.g]
+    type="INTEGER UNSIGNED"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics_signed.h]
+    type="INTEGER(64) SIGNED"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics_signed.i]
+    type="BIGINT SIGNED"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+    [zero.numerics_signed.j]
+    type="BIGINT(100) UNSIGNED"
+    encryption="AES"
+    key="${TEST_SHARED_KEY}"
+    iv="${TEST_SHARED_IV}"
+
+## zero.numerics_gcm
+    [zero.numerics_gcm.a]
+    type="BIT"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.b]
+    type="BIT(2)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.c]
+    type="TINYINT"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.d]
+    type="TINYINT(10)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.e]
+    type="BOOL"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.f]
+    type="BOOLEAN"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.g]
+    type="SMALLINT"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.h]
+    type="SMALLINT(100)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.i]
+    type="INT"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.j]
+    type="INT(64)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.k]
+    type="INTEGER"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.l]
+    type="INTEGER(64)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.m]
+    type="BIGINT"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.n]
+    type="BIGINT(100)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.o]
+    type="DECIMAL"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.p]
+    type="DECIMAL(10)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.q]
+    type="DECIMAL(10,2)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.r]
+    type="DEC"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.s]
+    type="DEC(10)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.t]
+    type="DEC(10,2)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.u]
+    type="FLOAT"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.v]
+    type="FLOAT(10)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.w]
+    type="FLOAT(10,2)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.x]
+    type="DOUBLE"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.y]
+    type="DOUBLE(10)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.z]
+    type="DOUBLE(10,2)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+    
+    [zero.numerics_gcm.aa]
+    type="DOUBLE PRECISION"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.numerics_gcm.ab]
+    type="DOUBLE PRECISION (10)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+    
+    [zero.numerics_gcm.ac]
+    type="DOUBLE PRECISION (10,2)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+## zero.characters_gcm
+    [zero.characters_gcm.a]
+    type="NATIONAL CHAR"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.characters_gcm.b]
+    type="CHAR"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.characters_gcm.c]
+    type="CHAR(255)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+    
+    [zero.characters_gcm.d]
+    type="NCHAR"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.characters_gcm.e]
+    type="NCHAR(255)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.characters_gcm.f]
+    type="NATIONAL CHARACTER"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.characters_gcm.g]
+    type="CHARACTER"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.characters_gcm.h]
+    type="CHARACTER(255)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.characters_gcm.i]
+    type="NATIONAL CHARACTER(50)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.characters_gcm.j]
+    type="VARCHAR(50)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.characters_gcm.k]
+    type="NVARCHAR(50)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.characters_gcm.l]
+    type="CHARACTER VARYING(50)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+## zero.temporal_gcm
+    [zero.temporal_gcm.a]
+    type="DATE"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.temporal_gcm.b]
+    type="DATETIME"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.temporal_gcm.c]
+    type="DATETIME(6)"
+    encryption="AES_GCM"
+    key="${TEST_SHARED_KEY}"
+
+    [zero.temporal_gcm.d]
+    type="TIME"
+    encryption="NONE"
+
+    [zero.temporal_gcm.e]
+    type="TIME(6)"
+    encryption="NONE"
+
+    [zero.temporal_gcm.f]
+    type="TIMESTAMP"
+    encryption="NONE"
+
+    [zero.temporal_gcm.g]
+    type="TIMESTAMP(6)"
+    encryption="NONE"
+
+    [zero.temporal_gcm.h]
+    type="YEAR"
+    encryption="NONE"
+
+    [zero.temporal_gcm.i]
+    type="YEAR(4)"
+    encryption="NONE"
