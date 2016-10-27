@@ -53,6 +53,7 @@ mod proxy;
 mod error;
 mod query;
 mod config_new;
+//mod test_toml;
 
 pub const APP_NAME: &'static str = "AgilData Zero Gateway";
 pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");

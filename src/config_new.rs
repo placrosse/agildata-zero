@@ -26,12 +26,9 @@ struct ConfigBuilder {
     client: ClientConfigBuilder,
     connection: ConnectionConfigBuilder,
     parsing: ParsingConfigBuilder,
-    schemas: HashMap<String, SchemaConfigBuilder>
+    schemas: SchemaMapBuilder
 }
 
-fn fold_tuple<V: Builder>(k: String, v: V) -> Result<(String, V::Output), String> {
-    Ok((k, v.build()?))
-}
 
 impl Builder for ConfigBuilder {
     type Output = Config;
@@ -41,10 +38,7 @@ impl Builder for ConfigBuilder {
             client: self.client.build()?,
             connection: self.connection.build()?,
             parsing: self.parsing.build()?,
-            // TODO avoid clone
-            schemas: self.schemas.iter()
-                .map(|(k, v)| fold_tuple(k.clone(), v.clone()))
-                .collect::<Result<HashMap<String, SchemaConfig>, String>>()?
+            schemas: self.schemas.build()?
         })
     }
 
@@ -52,13 +46,7 @@ impl Builder for ConfigBuilder {
         self.client.merge(b.client);
         self.connection.merge(b.connection);
         self.parsing.merge(b.parsing);
-        for (k, v) in b.schemas {
-            if self.schemas.contains_key(&k) {
-                self.schemas.get_mut(&k).unwrap().merge(v)
-            } else {
-                self.schemas.insert(k, v);
-            }
-        }
+        self.schemas.merge(b.schemas);
     }
 
     fn new() -> Self {
@@ -66,22 +54,23 @@ impl Builder for ConfigBuilder {
             client: ClientConfigBuilder::new(),
             connection: ConnectionConfigBuilder::new(),
             parsing: ParsingConfigBuilder::new(),
-            schemas: HashMap::new()
+            schemas: SchemaMapBuilder::new()
         }
     }
 }
 
-
-impl Decodable for Config {
+impl Decodable for ConfigBuilder {
     fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
-        Ok(
-            Config {
-                client: d.read_struct_field("client", 2, ClientConfig::decode)?,
-                connection: d.read_struct_field("connection", 3, ConnectionConfig::decode)?,
-                parsing: d.read_struct_field("parsing", 1, ParsingConfig::decode)?,
-                schemas: d.read_map(decode_schema_config)?
-            }
-        )
+        d.read_struct("ConfigBuilder", 4, |_d| -> _ {
+            Ok(
+                ConfigBuilder {
+                    client: _d.read_struct_field("client", 2, Decodable::decode)?,
+                    connection: _d.read_struct_field("connection", 3, Decodable::decode)?,
+                    parsing: _d.read_struct_field("parsing", 1, Decodable::decode)?,
+                    schemas: _d.read_map(SchemaMapBuilder::decode)?
+                }
+            )
+        })
     }
 }
 
@@ -99,13 +88,18 @@ struct ConnectionConfigBuilder {
     password: Option<String>
 }
 
+fn missing_err(prop: &str) -> String {
+    format!("Missing required property {}", prop)
+}
+
 impl Builder for ConnectionConfigBuilder {
     type Output = ConnectionConfig;
     fn build(self) -> Result<Self::Output, String> {
+
         Ok(ConnectionConfig {
-            host: self.host.unwrap(),
-            user: self.user.unwrap(),
-            password: self.password.unwrap()
+            host: self.host.ok_or(missing_err(&"connection.host"))?.resolve()?,
+            user: self.user.ok_or(missing_err(&"connection.user"))?.resolve()?,
+            password: self.password.ok_or(missing_err(&"connection.password"))?.resolve()?
         })
     }
 
@@ -124,14 +118,14 @@ impl Builder for ConnectionConfigBuilder {
     }
 }
 
-impl Decodable for ConnectionConfig {
+impl Decodable for ConnectionConfigBuilder {
     fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
         d.read_struct("ConnectionConfig", 3, |_d| -> _ {
             Ok(
-                ConnectionConfig {
-                    host: resolve_field_str_or_env("host", 0, _d)?,
-                    user: resolve_field_str_or_env("user", 1, _d)?,
-                    password: resolve_field_str_or_env("password", 2, _d)?
+                ConnectionConfigBuilder {
+                    host: _d.read_struct_field("host", 0, Decodable::decode)?,
+                    user: _d.read_struct_field("user", 1, Decodable::decode)?,
+                    password: _d.read_struct_field("password", 0, Decodable::decode)?
                 }
             )
         })
@@ -156,8 +150,8 @@ impl Builder for ClientConfigBuilder {
 
     fn build(self) -> Result<Self::Output, String> {
         Ok(ClientConfig {
-            host: self.host.unwrap(),
-            port: self.port.unwrap()
+            host: self.host.ok_or(missing_err(&"client.host"))?.resolve()?,
+            port: self.port.ok_or(missing_err(&"client.port"))?.resolve()?
         })
     }
 
@@ -174,13 +168,13 @@ impl Builder for ClientConfigBuilder {
     }
 }
 
-impl Decodable for ClientConfig {
+impl Decodable for ClientConfigBuilder {
     fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
-        d.read_struct("ClientConfig", 3, |_d| -> _ {
+        d.read_struct("ClientConfigBuilder", 2, |_d| -> _ {
             Ok(
-                ClientConfig {
-                    host: resolve_field_str_or_env("host", 0, _d)?,
-                    port: resolve_field_str_or_env("port", 1, _d)?,
+                ClientConfigBuilder {
+                    host: _d.read_struct_field("host", 0, Decodable::decode)?,
+                    port: _d.read_struct_field("port", 1, Decodable::decode)?,
                 }
             )
         })
@@ -192,7 +186,7 @@ struct ParsingConfig {
     mode: Mode
 }
 
-#[derive(Debug)]
+#[derive(Debug, RustcDecodable)]
 struct ParsingConfigBuilder {
     mode: Option<Mode>
 }
@@ -232,6 +226,52 @@ impl Decodable for Mode {
         }
     }
 }
+#[derive(Debug)]
+struct SchemaMapBuilder {
+    schemas: HashMap<String, SchemaConfigBuilder>
+}
+
+impl Builder for SchemaMapBuilder {
+    type Output = HashMap<String, SchemaConfig>;
+
+    fn new() -> Self {
+        SchemaMapBuilder{
+            schemas: HashMap::new()
+        }
+    }
+
+    fn build(self) -> Result<Self::Output, String> {
+        // TODO avoid clone
+        self.schemas.iter()
+        .map(|(k, v)| fold_tuple(k.clone(), v.clone()))
+        .collect::<Result<HashMap<String, SchemaConfig>, String>>()
+    }
+
+    fn merge(&mut self, b: Self) {
+        for (k, v) in b.schemas {
+            if self.schemas.contains_key(&k) {
+                self.schemas.get_mut(&k).unwrap().merge(v)
+            } else {
+                self.schemas.insert(k, v);
+            }
+        }
+    }
+}
+
+impl SchemaMapBuilder {
+    fn decode<D:Decoder>(d: &mut D, l: usize) -> Result<SchemaMapBuilder, D::Error> {
+        let mut schema_map: HashMap<String, SchemaConfigBuilder> = HashMap::new();
+        for i in 0..l {
+            let schema = d.read_map_elt_key(i, decode_key_name)?;
+            let conf: SchemaConfigBuilder = d.read_map_elt_val(i, Decodable::decode)?;
+
+            //conf.set_name(&schema);
+            schema_map.insert(schema, conf);
+        }
+
+        Ok(SchemaMapBuilder{schemas: schema_map})
+    }
+}
 
 #[derive(Debug, PartialEq)]
 struct SchemaConfig {
@@ -269,6 +309,25 @@ impl Builder for SchemaConfigBuilder {
         SchemaConfigBuilder {
             tables: HashMap::new()
         }
+    }
+}
+
+impl Decodable for SchemaConfigBuilder {
+    fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
+        let mut table_map: HashMap<String, TableConfigBuilder> = HashMap::new();
+        d.read_map(|_d, _l| -> _ {
+            for i in 0.._l {
+                let table = _d.read_map_elt_key(i,decode_key_name)?;
+                let table_conf: TableConfigBuilder = _d.read_map_elt_val(i, Decodable::decode)?;
+
+                // TODO tag with table name
+
+                table_map.insert(table.to_lowercase(), table_conf);
+            }
+            Ok(SchemaConfigBuilder{
+                tables: table_map
+            })
+        })
     }
 }
 
@@ -312,6 +371,25 @@ impl Builder for TableConfigBuilder {
     }
 }
 
+
+impl Decodable for TableConfigBuilder {
+    fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
+        let mut column_map: HashMap<String, ColumnConfigBuilder> = HashMap::new();
+
+        d.read_map(|_d, _l| -> _ {
+            for i in 0.._l {
+                let column = _d.read_map_elt_key(i,decode_key_name)?;
+                let column_conf: ColumnConfigBuilder = _d.read_map_elt_val(i, Decodable::decode)?;
+
+                // TODO tag name
+                column_map.insert(column.to_lowercase(), column_conf);
+            }
+
+            Ok(TableConfigBuilder{columns: column_map})
+        })
+    }
+}
+
 #[derive(Debug, PartialEq)]
 struct ColumnConfig {
     native_type: String,
@@ -347,90 +425,49 @@ impl Builder for ColumnConfigBuilder {
     }
 }
 
+impl Decodable for ColumnConfigBuilder {
 
-fn decode_schema_config<D:Decoder>(d: &mut D, l: usize) -> Result<HashMap<String, SchemaConfig>, D::Error> {
-    println!("decode_schema_config() len {}", l);
-    let mut schema_map: HashMap<String, SchemaConfig> = HashMap::new();
-    for i in 0..l {
-        let schema =  d.read_map_elt_key(i,decode_key_name)?;
-        let t = d.read_map_elt_val(i, decode_schema)?;
-        schema_map.insert(schema, t);
+    fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
+        d.read_struct("ColumnConfigBuilder", 1, |_d| -> _ {
+            Ok(
+                ColumnConfigBuilder {
+                    native_type: _d.read_struct_field("type", 0, Decodable::decode)?,
+                    encryption: _d.read_struct_field("encryption", 0, Decodable::decode)?,
+                }
+            )
+        })
     }
+}
 
-    Ok(schema_map)
+// For use in map Hashmap to produce correct result structure
+fn fold_tuple<V: Builder>(k: String, v: V) -> Result<(String, V::Output), String> {
+    Ok((k, v.build()?))
 }
 
 fn decode_key_name<D:Decoder>(d: &mut D) -> Result<String, D::Error> {
     d.read_str()
 }
 
-fn decode_schema<D:Decoder>(d: &mut D) -> Result<SchemaConfig, D::Error> {
-    let mut table_map: HashMap<String, TableConfig> = HashMap::new();
-
-    d.read_map(|_d, _l| -> _ {
-        for i in 0.._l {
-            let table = _d.read_map_elt_key(i,decode_key_name)?;
-            let cs = _d.read_map_elt_val(i, decode_table)?;
-            table_map.insert(table.to_lowercase(), cs);
-        }
-
-        Ok(SchemaConfig{tables: table_map})
-    })
-
+trait Resolvable {
+    type Output;
+    fn resolve(self) -> Result<Self::Output, String>;
 }
 
-fn decode_table<D:Decoder>(d: &mut D) -> Result<TableConfig, D::Error> {
-    let mut column_map: HashMap<String, ColumnConfig> = HashMap::new();
+impl Resolvable for String {
+    type Output = String;
 
-    d.read_map(|_d, _l| -> _ {
-        for i in 0.._l {
-            let column = _d.read_map_elt_key(i,decode_key_name)?;
-            let cs = _d.read_map_elt_val(i, decode_column)?;
-            column_map.insert(column.to_lowercase(), cs);
-        }
-
-        Ok(TableConfig{columns: column_map})
-    })
-}
-
-fn decode_column<D:Decoder>(d: &mut D) -> Result<ColumnConfig, D::Error> {
-    d.read_struct("ColumnConfig", 1, |_d| -> _ {
-        Ok(
-            ColumnConfig {
-                native_type: resolve_field_str_or_env("type", 0, _d)?,
-                encryption: resolve_field_str_or_env("encryption", 0, _d)?,
+    fn resolve(self) -> Result<Self::Output, String> {
+        let resolved = if self.starts_with("${") && self.ends_with("}") {
+            let env_var =&self[2..(self.len() - 1)];
+            match  env::var(env_var) {
+                Ok(v) => v,
+                Err(e) => return Err(format!("Cannot resolve environment variable {}", env_var))
             }
-        )
-    })
-}
+        } else {
+            self
+        };
 
-#[derive(Debug)]
-struct OptResolvedString {
-    value: Option<String>
-}
-
-impl Decodable for OptResolvedString {
-    fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
-        d.read_struct("OptResolvedString", 1, |_d| -> _ {
-            let v: Option<String> = _d.read_struct_field("value", 0, Decodable::decode)?;
-            match v {
-                Some(s) => {
-                    let resolved = if s.starts_with("${") && s.ends_with("}") {
-                        let env_var =&s[2..(s.len() - 1)];
-                        match  env::var(env_var) {
-                            Ok(v) => v,
-                            Err(e) => return Err(_d.error(&format!("Cannot resolve environment variable {}", env_var)))
-                        }
-                    } else {
-                        s
-                    };
-
-                    Ok(OptResolvedString{value: Some(resolved)})
-
-                },
-                None => Ok(OptResolvedString{value: None})
-            }
-        })
+        Ok(resolved)
     }
 }
 
@@ -456,18 +493,10 @@ impl Decodable for ResolvedString {
     }
 }
 
-/// optionally resolve env variable to string value, else string value
-fn resolve_field_str_or_env<D: Decoder>(s: &str, index: usize, d: &mut D) -> Result<String, D::Error> {
-    match d.read_struct_field(s, index, ResolvedString::decode) {
-        Ok(v) => Ok(v.value),
-        Err(e) => Err(e)
-    }
-}
-
 #[cfg(test)]
 mod test {
 
-    use super::{Config, ClientConfig, SchemaConfig, ConnectionConfig, ParsingConfig, TableConfig, ColumnConfig, Mode};
+    use super::{Config, ClientConfig, SchemaConfig, ConnectionConfig, ParsingConfig, TableConfig, ColumnConfig, Mode, ConfigBuilder, Builder};
     use toml;
 
     use std::collections::HashMap;
@@ -475,7 +504,7 @@ mod test {
     use std::env;
 
     #[test]
-    fn test_toml() {
+    fn test_builder_toml() {
         let toml_str = r#"
         [client]
         host = "${ENV_VAR}"
@@ -502,23 +531,24 @@ mod test {
         let toml = toml::Parser::new(toml_str).parse().unwrap();
 
         let mut decoder = toml::Decoder::new(toml::Value::Table(toml));
-        let decoded: Config = ::rustc_serialize::Decodable::decode(&mut decoder).unwrap();
+        let decoded: ConfigBuilder = ::rustc_serialize::Decodable::decode(&mut decoder).unwrap();
         println!("{:#?}", decoded);
 
         println!("#{:#?}", decoder.toml);
 
-        assert_eq!(decoded.client, ClientConfig {
+        let config = decoded.build().unwrap();
+        assert_eq!(config.client, ClientConfig {
                     host: "127.0.0.1".into(),
                     port: "3307".into()
         });
 
-        assert_eq!(decoded.connection, ConnectionConfig {
+        assert_eq!(config.connection, ConnectionConfig {
                     host: "127.0.0.1".into(),
                     user: "agiluser".into(),
                     password: "password123".into()
         });
 
-        assert_eq!(decoded.parsing, ParsingConfig {
+        assert_eq!(config.parsing, ParsingConfig {
                     mode: Mode::PERMISSIVE
         });
 
@@ -537,7 +567,7 @@ mod test {
         let mut expected_schema: HashMap<String, SchemaConfig> = HashMap::new();
         expected_schema.insert("zero".into(), SchemaConfig{tables: expected_table_map});
 
-        assert_eq!(decoded.schemas, expected_schema);
+        assert_eq!(config.schemas, expected_schema);
 
     }
 
