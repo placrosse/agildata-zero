@@ -7,6 +7,15 @@ use std::str::FromStr;
 
 use std::collections::HashMap;
 
+use encrypt::*;
+
+use query::{Tokenizer, ASTNode, MySQLColumnQualifier};
+use query::MySQLDataType::*;
+use query::dialects::ansisql::*;
+use query::dialects::mysqlsql::*;
+
+use error::ZeroError;
+
 #[derive(Debug, PartialEq)]
 pub struct Config {
     client: ClientConfig,
@@ -48,8 +57,17 @@ pub struct TableConfig {
 #[derive(Debug, PartialEq)]
 pub struct ColumnConfig {
     name: String,
-    native_type: String,
-    encryption: String
+    native_type: NativeType,
+    encryption: EncryptionType,
+    pub key: [u8; 32]
+}
+
+// Supported qualifiers
+#[derive(Debug, PartialEq)]
+pub enum NativeTypeQualifier {
+    SIGNED,
+    UNSIGNED,
+    OTHER
 }
 
 trait Builder {
@@ -417,17 +435,48 @@ impl Decodable for TableConfigBuilder {
 struct ColumnConfigBuilder {
     name: Option<String>,
     native_type: Option<String>,
-    encryption: Option<String>
+    encryption: Option<String>,
+    key: Option<String>,
+    iv: Option<String>
 }
 
+// TODO errors
 impl Builder for ColumnConfigBuilder {
     type Output = ColumnConfig;
 
     fn build(self) -> Result<Self::Output, String> {
+        // Build and validate
+        let name = self.name.ok_or(String::from("Illegal: missing table name"))?;
+        let native_type = determine_native_type(
+            &self.native_type.ok_or(
+                missing_err(&format!("{}.native_type", name))
+            )?
+        ).map_err(|e| String::from("TODO"))?;
+
+        let iv = match self.iv {
+            Some(hex) => Some(hex_to_iv(&hex.resolve()?)),
+            None => None
+        };
+        let encryption = determine_encryption(
+            &self.encryption.unwrap_or(String::from("NONE")),
+            iv
+        ).map_err(|e| String::from("TODO"))?;
+
+        let key = if self.key.is_some() {
+            hex_key(&self.key.unwrap().resolve()?)
+        } else {
+            if encryption == EncryptionType::NA {
+                [0u8;32]
+            } else {
+                return Err(format!("Column {}, encryption: {:?}, requires key property", name, encryption))
+            }
+        };
+
         Ok(ColumnConfig {
-            name: self.name.ok_or(String::from("Illegal: missing table name"))?,
-            native_type: self.native_type.unwrap(),
-            encryption: self.encryption.unwrap()
+            name: name,
+            native_type: native_type,
+            encryption: encryption,
+            key: key
         })
     }
 
@@ -440,7 +489,9 @@ impl Builder for ColumnConfigBuilder {
         ColumnConfigBuilder {
             name: None,
             native_type: None,
-            encryption: None
+            encryption: None,
+            key: None,
+            iv: None
         }
     }
 }
@@ -448,12 +499,14 @@ impl Builder for ColumnConfigBuilder {
 impl Decodable for ColumnConfigBuilder {
 
     fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
-        d.read_struct("ColumnConfigBuilder", 1, |_d| -> _ {
+        d.read_struct("ColumnConfigBuilder", 4, |_d| -> _ {
             Ok(
                 ColumnConfigBuilder {
                     name: None, // not known here
                     native_type: _d.read_struct_field("type", 0, Decodable::decode)?,
-                    encryption: _d.read_struct_field("encryption", 0, Decodable::decode)?,
+                    encryption: _d.read_struct_field("encryption", 1, Decodable::decode)?,
+                    key: _d.read_struct_field("key", 2, Decodable::decode)?,
+                    iv: _d.read_struct_field("iv", 3, Decodable::decode)?
                 }
             )
         })
@@ -467,6 +520,100 @@ fn fold_tuple<V: Builder>(k: String, v: V) -> Result<(String, V::Output), String
 
 fn decode_key_name<D:Decoder>(d: &mut D) -> Result<String, D::Error> {
     d.read_str()
+}
+
+// TODO errors
+fn determine_encryption(encryption: &String, iv: Option<[u8;12]>) -> Result<EncryptionType, Box<ZeroError>> {
+    match &encryption.to_uppercase() as &str {
+        "AES" => {
+            match iv {
+                Some(nonce)=> Ok(EncryptionType::Aes(nonce)),
+                None => panic!("iv attribute required for AES encryption")
+            }
+        },
+        "AES_GCM" => Ok(EncryptionType::AesGcm),
+        "NONE" => Ok(EncryptionType::NA),
+        _ => panic!("Unsupported encryption type {}", encryption)
+    }
+
+}
+
+pub fn reconcile_native_type(data_type: &ASTNode, qualifiers: &Vec<NativeTypeQualifier>) -> Result<NativeType, Box<ZeroError>> {
+    Ok(match data_type {
+        &ASTNode::MySQLDataType(ref dt) => match dt {
+            &Bit{..} | &TinyInt{..} |
+            &SmallInt{..} | &MediumInt{..} |
+            &Int{..} | &BigInt{..} => {
+                if qualifiers.contains(&NativeTypeQualifier::SIGNED) {
+                    NativeType::I64
+                } else {
+                    NativeType::U64
+                }
+            },
+
+            &Double{..} | &Float{..} => NativeType::F64,
+            &Decimal{..} => NativeType::D128,
+            &Bool => NativeType::BOOL,
+            &Char{ref length} | &NChar{ref length}  => NativeType::Char(length.unwrap_or(1)),
+            &Varchar{ref length} | &NVarchar{ref length} => NativeType::Varchar(match length {
+                &Some(l) => l,
+                &None => return Err(ZeroError::SchemaError{message: "CHARACTER VARYING datatype requires length".into(), code: "123".into()}.into())
+            }),
+            &Date => NativeType::DATE,
+            &DateTime{ref fsp} => NativeType::DATETIME(fsp.unwrap_or(0)),
+            &Time{ref fsp} => NativeType::TIME(fsp.unwrap_or(0)),
+            &Timestamp{ref fsp} => NativeType::TIMESTAMP(fsp.unwrap_or(0)),
+            &Year{ref display} => NativeType::YEAR(display.unwrap_or(4)),
+            &Binary{ref length} | &CharByte{ref length} => NativeType::FIXEDBINARY(length.unwrap_or(1)),
+            &VarBinary{ref length} => NativeType::VARBINARY(match length {
+                &Some(l) => l,
+                &None => return Err(ZeroError::SchemaError{message: "VARBINARY requires length argument".into(), code: "123".into()}.into())
+            }),
+            &Blob{ref length} => NativeType::VARBINARY(length.unwrap_or(2_u32.pow(16))),
+            &TinyBlob => NativeType::VARBINARY(2_u32.pow(8)),
+            &MediumBlob => NativeType::LONGBLOB(2_u64.pow(24)),
+            &LongBlob => NativeType::LONGBLOB(2_u64.pow(32)),
+            &Text{ref length} => NativeType::Varchar(length.unwrap_or(2_u32.pow(16))),
+            &TinyText => NativeType::Varchar(2_u32.pow(8)),
+            &MediumText => NativeType::LONGTEXT(2_u64.pow(24)),
+            &LongText => NativeType::LONGTEXT(2_u64.pow(32)),
+
+            _ => return Err(ZeroError::SchemaError{message: format!("Unsupported data type {:?}", dt), code: "123".into()}.into())
+        },
+        _ => return Err(ZeroError::SchemaError{message: format!("Unexpected native type expression {:?}", data_type), code: "123".into()}.into())
+
+    })
+}
+
+// Should fail in config parse, but not as part of get table meta
+pub fn reconcile_column_qualifiers(qualifiers: &Vec<ASTNode>, fail: bool) -> Result<Vec<NativeTypeQualifier>, Box<ZeroError>> {
+    // Iterate over qualifiers and propagate error on unsupported
+    // potential support could be DEFAULT, [NOT] NULL, etc
+    qualifiers
+        .iter().map(|o| {
+        match o {
+            &ASTNode::MySQLColumnQualifier(ref q) => match q {
+                &MySQLColumnQualifier::Signed => Ok(NativeTypeQualifier::SIGNED),
+                &MySQLColumnQualifier::Unsigned => Ok(NativeTypeQualifier::UNSIGNED),
+                _ => if fail {
+                    Err(ZeroError::SchemaError{message: format!("Unsupported data type qualifier {:?}", q), code: "123".into()}.into())
+                } else {
+                    Ok(NativeTypeQualifier::OTHER)
+                }
+            },
+            _ => Err(ZeroError::SchemaError{message: format!("Unsupported option {:?}", o), code: "123".into()}.into())
+        }
+    }).collect::<Result<Vec<NativeTypeQualifier>, Box<ZeroError>>>()
+}
+
+fn determine_native_type(native_type: &String) -> Result<NativeType, Box<ZeroError>> {
+    let ansi = AnsiSQLDialect::new();
+    let dialect = MySQLDialect::new(&ansi);
+    let tokens = native_type.tokenize(&dialect).unwrap();
+    let data_type = dialect.parse_data_type(&tokens)?;
+    let parsed_qs = dialect.parse_column_qualifiers(&tokens)?.unwrap_or(vec![]);
+    let qualifiers = reconcile_column_qualifiers(&parsed_qs, true)?;
+    reconcile_native_type(&data_type, &qualifiers)
 }
 
 trait Resolvable {
@@ -524,6 +671,8 @@ mod test {
 
     use std::env;
 
+    use encrypt::*;
+
     #[test]
     fn test_builder_toml() {
         let toml_str = r#"
@@ -543,11 +692,21 @@ mod test {
         type="INTEGER"
         encryption="NONE"
 
+        [zero.users.first_name]
+        type="VARCHAR(50)"
+        encryption="AES"
+        key="${ZERO_USERS_FIRST_NAME_KEY}"
+        iv="${ZERO_USERS_FIRST_NAME_IV}"
+
         "#;
 
         env::set_var("ENV_VAR", "127.0.0.1");
         env::set_var("MY_USER", "agiluser");
         env::set_var("MY_PASS", "password123");
+        let zero_users_first_name_key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985";
+        env::set_var("ZERO_USERS_FIRST_NAME_KEY", zero_users_first_name_key);
+        let zero_user_first_name_iv = "03F72E7479F3E34752E4DD91";
+        env::set_var("ZERO_USERS_FIRST_NAME_IV", zero_user_first_name_iv);
 
         let toml = toml::Parser::new(toml_str).parse().unwrap();
 
@@ -575,12 +734,22 @@ mod test {
 
         let expected_column = ColumnConfig {
             name: "id".into(),
-            native_type: "INTEGER".into(),
-            encryption: "NONE".into()
+            native_type: NativeType::U64,
+            encryption: EncryptionType::NA,
+            key: [0_u8; 32]
         };
 
         let mut expected_column_map: HashMap<String, ColumnConfig> = HashMap::new();
         expected_column_map.insert("id".into(), expected_column);
+
+        let expected_column = ColumnConfig {
+            name: "first_name".into(),
+            native_type: NativeType::Varchar(50),
+            encryption: EncryptionType::Aes(hex_to_iv(&zero_user_first_name_iv)),
+            key: hex_key(zero_users_first_name_key)
+        };
+        expected_column_map.insert("first_name".into(), expected_column);
+
         let expected_table_conf = TableConfig{name: "users".into(), columns: expected_column_map};
 
         let mut expected_table_map: HashMap<String, TableConfig> = HashMap::new();
