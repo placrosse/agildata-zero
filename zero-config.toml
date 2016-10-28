@@ -45,36 +45,36 @@ mode = "STRICT"
     key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"
     iv = "03F72E7479F3E34752E4DD91"
 
-## zero.users
-    [zero.users.id]
+## zero.user
+    [zero.user.id]
     type="INTEGER"
     encryption="NONE"
 
-    [zero.users.first_name]
+    [zero.user.first_name]
     type="VARCHAR(50)"
     encryption="AES"
     key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"
     iv = "03F72E7479F3E34752E4DD91"
 
-    [zero.users.last_name]
+    [zero.user.last_name]
     type="VARCHAR(50)"
     encryption="AES"
     key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"
     iv = "03F72E7479F3E34752E4DD91"
 
-    [zero.users.ssn]
+    [zero.user.ssn]
     type="VARCHAR(50)"
     encryption="AES"
     key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"
     iv = "03F72E7479F3E34752E4DD91"
 
-    [zero.users.age]
+    [zero.user.age]
     type="INTEGER"
     encryption="AES"
     key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"
     iv = "03F72E7479F3E34752E4DD91"
 
-    [zero.users.sex]
+    [zero.user.sex]
     type="VARCHAR(50)"
     encryption="AES"
     key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985"

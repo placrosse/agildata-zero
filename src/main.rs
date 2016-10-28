@@ -70,7 +70,7 @@ fn main() {
 
     let mut opt = Opts {
         ver: false,
-        cfg: String::from("zero-config.xml"),
+        cfg: String::from("zero-config.toml"),
         log_cfg: String::from("log.toml"),
     };
 
@@ -83,7 +83,7 @@ fn main() {
             "show version number and exit");
         ap.refer(&mut opt.cfg)
             .add_option(&["-C", "--config"], Store,
-            "path to configuration file defaults to ./zero-config.xml");
+            "path to configuration file defaults to ./zero-config.toml");
         ap.refer(&mut opt.log_cfg)
             .add_option(&["-L", "--logconfig"], Store,
             "path to logging configuration file defaults to ./log.toml");

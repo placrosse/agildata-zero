@@ -45,6 +45,8 @@ use chrono::{DateTime};
 
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use std::str::FromStr;
+
 pub struct Proxy {
 //    server: TcpListener,
 //    config: &'a Config,
@@ -62,18 +64,18 @@ impl Proxy {
 
         // determine address for the proxy to bind to
         let conn = temp.get_client_config();
-        let conn_host = conn.props.get("host").unwrap();
+        let conn_host = conn.host.clone();
+        // TODO
         let default_port = &String::from("3307");
-        let conn_port = conn.props.get("port").unwrap_or(default_port);
+        let conn_port = conn.port.clone();
         let conn_addr = format!("{}:{}",conn_host,conn_port);
         let bind_addr = conn_addr.parse::<SocketAddr>().unwrap();
         info!("Binding to {}", bind_addr);
 
         // determine address of the MySQL instance we are proxying for
         let conn = temp.get_connection_config();
-        let conn_host = conn.props.get("host").unwrap();
-        let default_port = &String::from("3306");
-        let conn_port = conn.props.get("port").unwrap_or(default_port);
+        let conn_host = conn.host.clone();
+        let conn_port = conn.port.clone();
         let conn_addr = format!("{}:{}",conn_host,conn_port);
         let mysql_addr = conn_addr.parse::<SocketAddr>().unwrap();
         info!("MySQL server: {}", mysql_addr);
@@ -238,7 +240,8 @@ impl ZeroHandler {
 
     fn new(config: Rc<Config>, provider: Rc<MySQLBackedSchemaProvider>, stmt_cache: Rc<StatementCache>) -> Self {
 
-        let parsing_mode = determine_parsing_mode(&config.get_parsing_config().props.get("mode").unwrap());
+        let parsing_mode = config.get_parsing_config().mode.clone();
+//        let parsing_mode = determine_parsing_mode(&config.get_parsing_config().props.get("mode").unwrap());
 
         ZeroHandler {
             config: config.clone(),
@@ -266,6 +269,18 @@ fn determine_parsing_mode(mode: &String) -> ParsingMode {
 pub enum ParsingMode {
     Strict,
     Permissive
+}
+
+impl FromStr for ParsingMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match &s.to_lowercase() as &str {
+            "strict" => Ok(ParsingMode::Strict),
+            "permissive" => Ok(ParsingMode::Permissive),
+            a => Err(format!("Unknown parsing mode {}", a))
+        }
+    }
 }
 
 //TODO: add this to MySQLPacketReader in mysql-proxy-rs

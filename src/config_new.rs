@@ -82,9 +82,9 @@ fn _load_toml_file(path: &str) -> String {
 
 #[derive(Debug, PartialEq)]
 pub struct Config {
-    client: ClientConfig,
-    connection: ConnectionConfig,
-    parsing: ParsingConfig,
+    pub client: ClientConfig,
+    pub connection: ConnectionConfig,
+    pub parsing: ParsingConfig,
     schemas: HashMap<String, SchemaConfig>,
 }
 
@@ -120,9 +120,9 @@ pub struct TableConfig {
 
 #[derive(Debug, PartialEq)]
 pub struct ColumnConfig {
-    name: String,
-    native_type: NativeType,
-    encryption: EncryptionType,
+    pub name: String,
+    pub native_type: NativeType,
+    pub encryption: EncryptionType,
     pub key: [u8; 32]
 }
 

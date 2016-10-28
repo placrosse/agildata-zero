@@ -38,11 +38,10 @@ impl MySQLBackedSchemaProvider {
 
     pub fn new(config: Rc<Config>) -> Self {
         let conn = config.get_connection_config();
-        let conn_host = conn.props.get("host").unwrap().clone();
-        let default_port = &String::from("3306");
-        let conn_port = u16::from_str(conn.props.get("port").unwrap_or(default_port)).unwrap();
-        let user = conn.props.get("user").unwrap().clone();
-        let pw = conn.props.get("password").unwrap().clone();
+        let conn_host = conn.host.clone();
+        let conn_port = u16::from_str(&conn.port).unwrap();
+        let user = conn.user.clone();
+        let pw = conn.password.clone();
         //
         let mut builder = mysql::conn::OptsBuilder::default();
 

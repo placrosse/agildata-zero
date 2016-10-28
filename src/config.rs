@@ -11,38 +11,38 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-extern crate xml;
+use rustc_serialize::Decodable;
+use rustc_serialize::Decoder;
+use toml;
+use std::env;
+use std::str::FromStr;
+use std::path::Path;
 use std::fs::{File, read_dir};
 use std::io::{Read, Error};
+
 use std::collections::HashMap;
-use std::process;
-use std::path::Path;
-use self::xml::Xml;
 
 use encrypt::*;
+use proxy::server::ParsingMode;
 
 use query::{Tokenizer, ASTNode, MySQLColumnQualifier};
 use query::MySQLDataType::*;
 use query::dialects::ansisql::*;
 use query::dialects::mysqlsql::*;
+
 use error::ZeroError;
+use std::process;
 
-// Supported qualifiers
-#[derive(Debug, PartialEq)]
-pub enum NativeTypeQualifier {
-    SIGNED,
-    UNSIGNED,
-    OTHER
-}
 
-// parses a default config and any configs contained within an override directory and reconciles to one Config
+/// parses a default config and any configs contained within an override directory and reconciles to one Config
 pub fn parse_configs(default_path: &str, dir: &str) -> Config {
     debug!("parse_configs() default: {}, override dir: {}", default_path, dir);
-    let mut b = ConfigBuilder::new();
+    let mut toml_str = _load_toml_file(default_path);
 
-    let mut xml = _load_xml_file(default_path);
-    _parse_config(&xml, &mut b);
+    let mut toml = toml::Parser::new(&toml_str).parse().unwrap();
+
+    let mut decoder = toml::Decoder::new(toml::Value::Table(toml));
+    let mut decoded: ConfigBuilder = ::rustc_serialize::Decodable::decode(&mut decoder).unwrap();
 
     // If override dir exists, load any available configs
     if Path::new(dir).exists() {
@@ -50,17 +50,21 @@ pub fn parse_configs(default_path: &str, dir: &str) -> Config {
         for p in paths {
             let _p = p.unwrap().path();
             let path = _p.to_str().unwrap();
-            if path.ends_with(".xml") {
-                xml = _load_xml_file(path);
-                _parse_config(&xml, &mut b);
+            if path.ends_with(".toml") {
+                toml_str = _load_toml_file(path);
+                toml = toml::Parser::new(&toml_str).parse().unwrap();
+                decoder = toml::Decoder::new(toml::Value::Table(toml));
+                let d: ConfigBuilder = ::rustc_serialize::Decodable::decode(&mut decoder).unwrap();
+                decoded.merge(d)
             }
         }
     }
 
-    b.build()
+    decoded.build().unwrap() // TODO
 }
 
-fn _load_xml_file(path: &str) -> String {
+// read from file to string
+fn _load_toml_file(path: &str) -> String {
     let mut rdr = match File::open(path) {
         Ok(file) => file,
         Err(err) => {
@@ -78,177 +82,627 @@ fn _load_xml_file(path: &str) -> String {
     string
 }
 
-fn _parse_config(xml: &String, builder: &mut ConfigBuilder) {
-    let mut p = xml::Parser::new();
-    let mut e = xml::ElementBuilder::new();
+#[derive(Debug, PartialEq)]
+pub struct Config {
+    pub client: ClientConfig,
+    pub connection: ConnectionConfig,
+    pub parsing: ParsingConfig,
+    schemas: HashMap<String, SchemaConfig>,
+}
 
-    p.feed_str(xml);
-    for event in p.filter_map(|x| e.handle_event(x)) {
-        match event {
-            Ok(e) => {
-                match e {
-                    xml::Element{name: n, children: c, .. } => match &n as &str {
-                        "zero-config" => parse_client_config(builder, c),
-                        _ => panic!("Unrecognized parent XML element {}", n)
-                    }
+#[derive(Debug, PartialEq)]
+pub struct ConnectionConfig {
+    pub host: String,
+    pub user: String,
+    pub password: String,
+    // optional properties
+    // defaults set in build phase
+    pub port: String,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ClientConfig {
+    pub host: String,
+    pub port: String
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ParsingConfig {
+    pub mode: ParsingMode
+}
+
+#[derive(Debug, PartialEq)]
+pub struct SchemaConfig {
+    pub name: String,
+    tables: HashMap<String, TableConfig>
+}
+
+#[derive(Debug, PartialEq)]
+pub struct TableConfig {
+    pub name: String,
+    columns: HashMap<String, ColumnConfig>
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ColumnConfig {
+    pub name: String,
+    pub native_type: NativeType,
+    pub encryption: EncryptionType,
+    pub key: [u8; 32]
+}
+
+// Supported qualifiers
+#[derive(Debug, PartialEq)]
+pub enum NativeTypeQualifier {
+    SIGNED,
+    UNSIGNED,
+    OTHER
+}
+
+/// trait to access properties with a Config
+pub trait TConfig {
+    fn get_column_config(&self, schema: &String, table: &String, column: &String) -> Option<&ColumnConfig>;
+    fn get_table_config(&self, schema: &String, table: &String) -> Option<&TableConfig>;
+    fn get_schema_config(&self, schema: &String) -> Option<&SchemaConfig>;
+    fn get_parsing_config(&self) -> &ParsingConfig;
+    fn get_connection_config(&self) -> &ConnectionConfig;
+    fn get_client_config(&self) -> &ClientConfig;
+}
+
+impl TConfig for Config {
+
+    fn get_column_config(&self, schema: &String, table: &String, column: &String) -> Option<&ColumnConfig> {
+        match self.get_table_config(schema, table) {
+            Some(t) => t.get_column_config(column),
+            None => None
+        }
+    }
+
+    fn get_table_config(&self, schema: &String, table: &String) -> Option<&TableConfig> {
+        match self.get_schema_config(schema) {
+            Some(s) => s.get_table_config(table),
+            None => None
+        }
+    }
+
+    fn get_schema_config(&self, schema: &String) -> Option<&SchemaConfig> {
+        self.schemas.get(schema)
+    }
+
+    fn get_connection_config(&self) -> &ConnectionConfig {
+        &self.connection
+    }
+
+    fn get_client_config(&self) -> &ClientConfig {
+        &self.client
+    }
+
+    fn get_parsing_config(&self) -> &ParsingConfig {
+        &self.parsing
+    }
+
+}
+
+pub trait TSchemaConfig {
+    fn get_table_config(&self, table: &String) -> Option<&TableConfig>;
+}
+
+impl TSchemaConfig for SchemaConfig {
+    fn get_table_config(&self, table: &String) -> Option<&TableConfig> {
+        self.tables.get(table)
+    }
+}
+
+pub trait TTableConfig {
+    fn get_column_config(&self, column: &String) -> Option<&ColumnConfig>;
+}
+
+impl TTableConfig for TableConfig {
+    fn get_column_config(&self, column: &String) -> Option<&ColumnConfig> {
+        self.columns.get(column)
+    }
+}
+
+
+// Private methods
+
+// generic builder trait
+trait Builder {
+    type Output;
+
+    fn new() -> Self;
+    // builds and validates
+    fn build(self) -> Result<Self::Output, String>;
+
+    // merges this builder with another
+    // the other overrides this
+    fn merge(&mut self, b: Self);
+}
+
+#[derive(Debug)]
+struct ConfigBuilder {
+    client: Option<ClientConfigBuilder>,
+    connection: Option<ConnectionConfigBuilder>,
+    parsing: Option<ParsingConfigBuilder>,
+    schemas: SchemaMapBuilder
+}
+
+
+impl Builder for ConfigBuilder {
+    type Output = Config;
+
+    fn build(self) -> Result<Self::Output, String> {
+        Ok(Config{
+            client: self.client.ok_or(missing_err("client"))?.build()?,
+            connection: self.connection.ok_or(missing_err("connection"))?.build()?,
+            parsing: self.parsing.ok_or(missing_err("parsing"))?.build()?,
+            schemas: self.schemas.build()?
+        })
+    }
+
+    fn merge(&mut self, b: ConfigBuilder) {
+        if let Some(ref mut s) = self.client {
+            if let Some(o) = b.client {
+                s.merge(o)
+            }
+        } else {
+            self.client = b.client
+        }
+
+        if let Some(ref mut s) = self.connection {
+            if let Some(o) = b.connection {
+                s.merge(o)
+            }
+        } else {
+            self.connection = b.connection
+        }
+
+        if let Some(ref mut s) = self.parsing {
+            if let Some(o) = b.parsing {
+                s.merge(o)
+            }
+        } else {
+            self.parsing = b.parsing
+        }
+
+        self.schemas.merge(b.schemas);
+    }
+
+    fn new() -> Self {
+        ConfigBuilder {
+            client: Some(ClientConfigBuilder::new()),
+            connection: Some(ConnectionConfigBuilder::new()),
+            parsing: Some(ParsingConfigBuilder::new()),
+            schemas: SchemaMapBuilder::new()
+        }
+    }
+}
+
+// Decodable implementation for toml-rs
+impl Decodable for ConfigBuilder {
+    fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
+        d.read_struct("ConfigBuilder", 4, |_d| -> _ {
+            Ok(
+                ConfigBuilder {
+                    client: _d.read_struct_field("client", 2, Decodable::decode)?,
+                    connection: _d.read_struct_field("connection", 3, Decodable::decode)?,
+                    parsing: _d.read_struct_field("parsing", 1, Decodable::decode)?,
+                    schemas: _d.read_map(SchemaMapBuilder::decode)?
                 }
-            },
-            Err(e) => error!("{}", e),
+            )
+        })
+    }
+}
+
+#[derive(Debug)]
+struct ConnectionConfigBuilder {
+    host: Option<String>,
+    user: Option<String>,
+    password: Option<String>,
+    port: Option<String>
+}
+
+impl Builder for ConnectionConfigBuilder {
+    type Output = ConnectionConfig;
+    fn build(self) -> Result<Self::Output, String> {
+
+        Ok(ConnectionConfig {
+            host: self.host.ok_or(missing_err(&"connection.host"))?.resolve()?,
+            user: self.user.ok_or(missing_err(&"connection.user"))?.resolve()?,
+            password: self.password.ok_or(missing_err(&"connection.password"))?.resolve()?,
+            port: self.port.unwrap_or("3306".into()).resolve()?
+        })
+    }
+
+    fn merge(&mut self, b: ConnectionConfigBuilder) {
+        if b.host.is_some() {self.host = b.host}
+        if b.user.is_some() {self.user = b.user}
+        if b.password.is_some() {self.password = b.password}
+        if b.port.is_some() {self.port = b.port}
+    }
+
+    fn new() -> Self {
+        ConnectionConfigBuilder {
+            host: None,
+            user: None,
+            password: None,
+            port: None
         }
     }
 }
 
-// parses a single xml config
-pub fn parse_config(path: &str) -> Config {
-    debug!("parse_config() path: {}", path);
-    let mut b = ConfigBuilder::new();
 
-    let mut xml = _load_xml_file(path);
-    _parse_config(&xml, &mut b);
-
-    b.build()
-}
-
-fn parse_client_config(builder: &mut ConfigBuilder, children: Vec<Xml>) {
-
-    for node in children {
-        match node {
-            Xml::ElementNode(e) => {
-                match &e.name as &str {
-                    "schema" => {
-                        let mut sb = SchemaConfigBuilder::new();
-                        sb.set_name(get_attr_or_fail("name", &e));
-                        parse_schema_config(&mut sb, e.children);
-                        builder.add_schema(sb.build());
-                    },
-                    "connection" => {
-                        for prop in e.children {
-                            match prop {
-                                Xml::ElementNode(n) => match &n.name as &str {
-                                    "property" => {
-                                        let key = get_attr_or_fail("name", &n);
-                                        let val = get_attr_or_fail("value", &n);
-                                        builder.add_conn_prop(key, val)
-                                    },
-                                    _ => panic!("expected property, received {}", n.name)
-                                },
-                                _ => {} // dont care yet
-                            }
-                        }
-                    },
-                    "client" => {
-                        for prop in e.children {
-                            match prop {
-                                Xml::ElementNode(n) => match &n.name as &str {
-                                    "property" => {
-                                        let key = get_attr_or_fail("name", &n);
-                                        let val = get_attr_or_fail("value", &n);
-                                        builder.add_client_prop(key, val)
-                                    },
-                                    _ => panic!("expected property, received {}", n.name)
-                                },
-                                _ => {} // dont care yet
-                            }
-                        }
-                    },
-                    "parsing" => {
-                        for prop in e.children {
-                            match prop {
-                                Xml::ElementNode(n) => match &n.name as &str {
-                                    "property" => {
-                                        let key = get_attr_or_fail("name", &n);
-                                        let val = get_attr_or_fail("value", &n);
-                                        builder.add_parsing_prop(key, val)
-                                    },
-                                    _ => panic!("expected property, received {}", n.name)
-                                },
-                                _ => {} // dont care yet
-                            }
-                        }
-                    },
-                    _ => panic!("Unexpected element tag {}", e.name)
+// Decodable impl for toml-rs
+impl Decodable for ConnectionConfigBuilder {
+    fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
+        d.read_struct("ConnectionConfig", 3, |_d| -> _ {
+            Ok(
+                ConnectionConfigBuilder {
+                    host: _d.read_struct_field("host", 0, Decodable::decode)?,
+                    user: _d.read_struct_field("user", 1, Decodable::decode)?,
+                    password: _d.read_struct_field("password", 2, Decodable::decode)?,
+                    port: _d.read_struct_field("port", 3, Decodable::decode)?,
                 }
-            },
-            _ => {} // dont care
+            )
+        })
+    }
+}
+
+
+#[derive(Debug)]
+struct ClientConfigBuilder {
+    host: Option<String>,
+    port: Option<String>
+}
+
+impl Builder for ClientConfigBuilder {
+    type Output = ClientConfig;
+
+    fn build(self) -> Result<Self::Output, String> {
+        Ok(ClientConfig {
+            host: self.host.ok_or(missing_err(&"client.host"))?.resolve()?,
+            port: self.port.ok_or(missing_err(&"client.port"))?.resolve()?
+        })
+    }
+
+    fn merge(&mut self, b: ClientConfigBuilder) {
+        if b.host.is_some() {self.host = b.host}
+        if b.port.is_some() {self.port = b.port}
+    }
+
+    fn new() -> Self {
+        ClientConfigBuilder {
+            host: None,
+            port: None
         }
     }
 }
 
-fn parse_schema_config(builder: &mut SchemaConfigBuilder, children: Vec<Xml>) {
-    for node in children {
-        match node {
-            Xml::ElementNode(e) => match &e.name as &str {
-                "table" => {
-                    let mut tb = TableConfigBuilder::new();
-                    tb.set_name(get_attr_or_fail("name", &e));
-                    parse_table_config(&mut tb, e.children);
-                    builder.add_table(tb.build());
 
-                },
-                _ => panic!("Unexpected element tag {}", e.name)
-            },
-            _ => {} // dont' care yet
+// Decodable impl for toml-rs
+impl Decodable for ClientConfigBuilder {
+    fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
+        d.read_struct("ClientConfigBuilder", 2, |_d| -> _ {
+            Ok(
+                ClientConfigBuilder {
+                    host: _d.read_struct_field("host", 0, Decodable::decode)?,
+                    port: _d.read_struct_field("port", 1, Decodable::decode)?,
+                }
+            )
+        })
+    }
+}
+
+#[derive(Debug, RustcDecodable)]
+struct ParsingConfigBuilder {
+    mode: Option<String>
+}
+
+
+impl Builder for ParsingConfigBuilder {
+    type Output = ParsingConfig;
+
+    fn build(self) -> Result<Self::Output, String> {
+        Ok(ParsingConfig{
+            mode: ParsingMode::from_str(&self.mode.ok_or(missing_err(&"parsing.mode"))?.resolve()?)?
+        })
+    }
+
+    fn merge(&mut self, b: Self) {
+        if b.mode.is_some() {self.mode = b.mode}
+    }
+
+    fn new() -> Self {
+        ParsingConfigBuilder {
+            mode: None
         }
     }
 }
 
-fn parse_table_config(builder: &mut TableConfigBuilder, children: Vec<Xml>) {
-    use std::env;
-    let tbl_name: String = builder.name.clone().unwrap().to_uppercase();  // TODO do we need the schema name as well?
+#[derive(Debug)]
+struct SchemaMapBuilder {
+    schemas: HashMap<String, SchemaConfigBuilder>
+}
 
-    for node in children {
-        match node {
-            Xml::ElementNode(e) => match &e.name as &str {
-                "column" => {
-                    let name = get_attr_or_fail("name", &e);
-                    let native_type = get_attr_or_fail("type", &e);
-                    let encryption = get_attr_or_fail("encryption", &e);
-                    let key = if encryption.to_uppercase() != "NONE" {
-                                  determine_key(&
-                                      env::var(format!("ZERO_{}_{}", &tbl_name, &name.to_uppercase()))
-                                        .ok()
-                                        .unwrap_or_else(|| get_attr_or_fail("key", &e))
-                                  )
-                              } else {
-                                  [0u8; 32]
-                              };
-                    let dt = match determine_native_type(&native_type) {
-                        Ok(t) => t,
-                        Err(e) => panic!("Failed to determine data type for {}.{} : {}", tbl_name, name, e)
-                    };
+impl Builder for SchemaMapBuilder {
+    type Output = HashMap<String, SchemaConfig>;
 
-                    let iv = match e.get_attribute("iv", None) {
-                        Some(hex) => Some(iv_from_hex(hex)),
-                        None => None
-                    };
-                    let encrypt_type = determine_encryption(&encryption, iv);
-                    if encrypt_type != EncryptionType::NA && !dt.is_supported() {
-                        panic!("Column: {}.{} Native Type {:?} is not supported for encryption {:?}",
-                            tbl_name, name, native_type, encrypt_type
-                        )
-                    }
+    fn new() -> Self {
+        SchemaMapBuilder{
+            schemas: HashMap::new()
+        }
+    }
 
-                    builder.add_column(ColumnConfig{
-                        name: name,
-                        native_type: dt,
-                        encryption: encrypt_type,
-                        key: key,
-                    });
-                },
-                _ => panic!("Unexpected element tag {}", e.name)
-            },
-            _ => {} // dont' care yet
+    fn build(self) -> Result<Self::Output, String> {
+        // TODO avoid clone
+        self.schemas.iter()
+            .map(|(k, v)| fold_tuple(k.clone(), v.clone()))
+            .collect::<Result<HashMap<String, SchemaConfig>, String>>()
+    }
+
+    fn merge(&mut self, b: Self) {
+        for (k, v) in b.schemas {
+            if self.schemas.contains_key(&k) {
+                self.schemas.get_mut(&k).unwrap().merge(v)
+            } else {
+                self.schemas.insert(k, v);
+            }
         }
     }
 }
 
-fn get_attr_or_fail(name: &str, element: &xml::Element) -> String {
-    match element.get_attribute(name, None) {
-        Some(v) => v.to_string(),
-        None => panic!("Missing attribute {}", name)
+impl SchemaMapBuilder {
+
+    // requires custom decode function for read_map
+    // this is due to use of arbitrary table names in the toml
+    // [somechema.sometable.somecolumn]
+    fn decode<D:Decoder>(d: &mut D, l: usize) -> Result<SchemaMapBuilder, D::Error> {
+        let mut schema_map: HashMap<String, SchemaConfigBuilder> = HashMap::new();
+        for i in 0..l {
+            let schema = d.read_map_elt_key(i, decode_key_name)?;
+            let mut conf: SchemaConfigBuilder = d.read_map_elt_val(i, Decodable::decode)?;
+
+            conf.name = Some(schema.clone());
+
+            //conf.set_name(&schema);
+            schema_map.insert(schema, conf);
+        }
+
+        Ok(SchemaMapBuilder{schemas: schema_map})
     }
 }
 
+#[derive(Debug, Clone)]
+struct SchemaConfigBuilder {
+    name: Option<String>,
+    tables: HashMap<String, TableConfigBuilder>
+}
+
+impl Builder for SchemaConfigBuilder {
+    type Output = SchemaConfig;
+
+    fn build(self) -> Result<Self::Output, String> {
+        Ok(SchemaConfig {
+            name: self.name.ok_or(String::from("Illegal: Missing Schema name"))?,
+            // TODO avoid clone
+            tables: self.tables.iter()
+                .map(|(k,v)| fold_tuple(k.clone(), v.clone()))
+                .collect::<Result<HashMap<String, TableConfig>, String>>()?
+        })
+    }
+
+    fn merge(&mut self, b: Self) {
+        for (k, v) in b.tables {
+            if self.tables.contains_key(&k) {
+                self.tables.get_mut(&k).unwrap().merge(v)
+            } else {
+                self.tables.insert(k, v);
+            }
+        }
+    }
+
+    fn new() -> Self {
+        SchemaConfigBuilder {
+            name: None,
+            tables: HashMap::new()
+        }
+    }
+}
+
+// Decodable impl for toml-rs
+impl Decodable for SchemaConfigBuilder {
+    fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
+        let mut table_map: HashMap<String, TableConfigBuilder> = HashMap::new();
+        d.read_map(|_d, _l| -> _ {
+            for i in 0.._l {
+                let table = _d.read_map_elt_key(i,decode_key_name)?;
+                let mut table_conf: TableConfigBuilder = _d.read_map_elt_val(i, Decodable::decode)?;
+
+                table_conf.name = Some(table.clone());
+
+                table_map.insert(table.to_lowercase(), table_conf);
+            }
+            Ok(SchemaConfigBuilder{
+                name: None, // Not known here
+                tables: table_map
+            })
+        })
+    }
+}
+
+
+#[derive(Debug, Clone)]
+struct TableConfigBuilder {
+    name: Option<String>,
+    columns: HashMap<String, ColumnConfigBuilder>
+}
+
+impl Builder for TableConfigBuilder {
+    type Output = TableConfig;
+
+    fn build(self) -> Result<Self::Output, String> {
+        Ok(TableConfig {
+            name: self.name.ok_or(String::from("Illegal: missing table name"))?,
+            // TODO avoid clone
+            columns: self.columns.iter()
+                .map(|(k,v)| fold_tuple(k.clone(), v.clone()))
+                .collect::<Result<HashMap<String, ColumnConfig>, String>>()?
+        })
+    }
+
+    fn merge(&mut self, b: Self) {
+        for (k, v) in b.columns {
+            if self.columns.contains_key(&k) {
+                self.columns.get_mut(&k).unwrap().merge(v)
+            } else {
+                self.columns.insert(k, v);
+            }
+        }
+    }
+
+    fn new() -> Self {
+        TableConfigBuilder {
+            name: None,
+            columns: HashMap::new()
+        }
+    }
+}
+
+// Decodable impl for toml-rs
+impl Decodable for TableConfigBuilder {
+    fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
+        let mut column_map: HashMap<String, ColumnConfigBuilder> = HashMap::new();
+
+        d.read_map(|_d, _l| -> _ {
+            for i in 0.._l {
+                let column = _d.read_map_elt_key(i,decode_key_name)?;
+                let mut column_conf: ColumnConfigBuilder = _d.read_map_elt_val(i, Decodable::decode)?;
+
+                column_conf.name = Some(column.clone());
+
+                column_map.insert(column.to_lowercase(), column_conf);
+            }
+
+            Ok(TableConfigBuilder{name: None, columns: column_map})
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ColumnConfigBuilder {
+    name: Option<String>,
+    native_type: Option<String>,
+    encryption: Option<String>,
+    key: Option<String>,
+    iv: Option<String>
+}
+
+// TODO errors
+impl Builder for ColumnConfigBuilder {
+    type Output = ColumnConfig;
+
+    fn build(self) -> Result<Self::Output, String> {
+        // Build and validate
+        let name = self.name.ok_or(String::from("Illegal: missing table name"))?;
+        let native_type = determine_native_type(
+            &self.native_type.ok_or(
+                missing_err(&format!("{}.native_type", name))
+            )?
+        ).map_err(|e| String::from("TODO"))?;
+
+        let iv = match self.iv {
+            Some(hex) => Some(hex_to_iv(&hex.resolve()?)),
+            None => None
+        };
+        let encryption = determine_encryption(
+            &self.encryption.unwrap_or(String::from("NONE")),
+            iv
+        ).map_err(|e| String::from("TODO"))?;
+
+        let key = if self.key.is_some() {
+            hex_key(&self.key.unwrap().resolve()?)
+        } else {
+            if encryption == EncryptionType::NA {
+                [0u8;32]
+            } else {
+                return Err(format!("Column {}, encryption: {:?}, requires key property", name, encryption))
+            }
+        };
+
+        Ok(ColumnConfig {
+            name: name,
+            native_type: native_type,
+            encryption: encryption,
+            key: key
+        })
+    }
+
+    fn merge(&mut self, b: Self) {
+        if b.native_type.is_some() {self.native_type = b.native_type}
+        if b.encryption.is_some() {self.encryption = b.encryption}
+    }
+
+    fn new() -> Self {
+        ColumnConfigBuilder {
+            name: None,
+            native_type: None,
+            encryption: None,
+            key: None,
+            iv: None
+        }
+    }
+}
+
+// Decodable impl for toml-rs
+impl Decodable for ColumnConfigBuilder {
+
+    fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
+        d.read_struct("ColumnConfigBuilder", 4, |_d| -> _ {
+            Ok(
+                ColumnConfigBuilder {
+                    name: None, // not known here
+                    native_type: _d.read_struct_field("type", 0, Decodable::decode)?,
+                    encryption: _d.read_struct_field("encryption", 1, Decodable::decode)?,
+                    key: _d.read_struct_field("key", 2, Decodable::decode)?,
+                    iv: _d.read_struct_field("iv", 3, Decodable::decode)?
+                }
+            )
+        })
+    }
+}
+
+// For use in map Hashmap to produce correct result structure
+fn fold_tuple<V: Builder>(k: String, v: V) -> Result<(String, V::Output), String> {
+    Ok((k, v.build()?))
+}
+
+// read key string as part of decode
+fn decode_key_name<D:Decoder>(d: &mut D) -> Result<String, D::Error> {
+    d.read_str()
+}
+
+// shorthand helper method for err msg
+fn missing_err(prop: &str) -> String {
+    format!("Missing required property {}", prop)
+}
+
+// TODO errors
+fn determine_encryption(encryption: &String, iv: Option<[u8;12]>) -> Result<EncryptionType, Box<ZeroError>> {
+    match &encryption.to_uppercase() as &str {
+        "AES" => {
+            match iv {
+                Some(nonce)=> Ok(EncryptionType::Aes(nonce)),
+                None => panic!("iv attribute required for AES encryption")
+            }
+        },
+        "AES_GCM" => Ok(EncryptionType::AesGcm),
+        "NONE" => Ok(EncryptionType::NA),
+        _ => panic!("Unsupported encryption type {}", encryption)
+    }
+
+}
+
+// reconcile parsed type AST to encrypt::NativeType
 pub fn reconcile_native_type(data_type: &ASTNode, qualifiers: &Vec<NativeTypeQualifier>) -> Result<NativeType, Box<ZeroError>> {
     Ok(match data_type {
         &ASTNode::MySQLDataType(ref dt) => match dt {
@@ -321,373 +775,271 @@ fn determine_native_type(native_type: &String) -> Result<NativeType, Box<ZeroErr
     let ansi = AnsiSQLDialect::new();
     let dialect = MySQLDialect::new(&ansi);
     let tokens = native_type.tokenize(&dialect).unwrap();
-
     let data_type = dialect.parse_data_type(&tokens)?;
-
     let parsed_qs = dialect.parse_column_qualifiers(&tokens)?.unwrap_or(vec![]);
-
-
     let qualifiers = reconcile_column_qualifiers(&parsed_qs, true)?;
-
     reconcile_native_type(&data_type, &qualifiers)
 }
 
-fn determine_encryption(encryption: &String, iv: Option<[u8;12]>) -> EncryptionType {
-    match &encryption.to_uppercase() as &str {
-        "AES" => {
-            match iv {
-                Some(nonce)=> EncryptionType::Aes(nonce),
-                None => panic!("iv attribute required for AES encryption")
+
+trait Resolvable {
+    type Output;
+    fn resolve(self) -> Result<Self::Output, String>;
+}
+
+
+// Resolves a possible variable string to env value
+// i.e. ${ENV_VAR}
+impl Resolvable for String {
+    type Output = String;
+
+    fn resolve(self) -> Result<Self::Output, String> {
+        let resolved = if self.starts_with("${") && self.ends_with("}") {
+            let env_var =&self[2..(self.len() - 1)];
+            match  env::var(env_var) {
+                Ok(v) => v,
+                Err(e) => return Err(format!("Cannot resolve environment variable {}", env_var))
             }
-        },
-        // "AES-SALTED" => EncryptionType::AES_SALT,
-        "AES_GCM" => EncryptionType::AesGcm,
-        "NONE" => EncryptionType::NA,
-        _ => panic!("Unsupported encryption type {}", encryption)
-    }
+        } else {
+            self
+        };
 
-}
-
-fn determine_key(key: &str) -> [u8; 32] {
-    hex_key(key)
-}
-
-fn iv_from_hex(hex: &str) -> [u8; 12] {
-    hex_to_iv(hex)
-}
-
-#[derive(Debug, PartialEq)]
-pub struct ColumnConfig {
-    pub name: String,
-    pub encryption: EncryptionType,
-    pub key: [u8; 32],
-    pub native_type: NativeType
-}
-
-#[derive(Debug, PartialEq)]
-pub struct TableConfig {
-    pub name: String,
-    pub column_map: HashMap<String, ColumnConfig>
-}
-
-struct TableConfigBuilder {
-    column_map: HashMap<String, ColumnConfig>,
-    name: Option<String>
-}
-
-impl TableConfigBuilder {
-    fn new() -> TableConfigBuilder {
-        TableConfigBuilder{column_map: HashMap::new(), name: None}
-    }
-
-    fn set_name(&mut self, name: String) {
-        self.name = Some(name);
-    }
-
-    fn add_column(&mut self, column: ColumnConfig) {
-        let key = column.name.clone(); // TODO downcase
-        self.column_map.insert(key, column);
-    }
-
-    fn build(self) -> TableConfig {
-        TableConfig {name: self.name.unwrap(), column_map: self.column_map}
-    }
-}
-
-#[derive(Debug)]
-pub struct SchemaConfig {
-    name: String,
-    table_map: HashMap<String, TableConfig>
-}
-
-struct SchemaConfigBuilder {
-    name: Option<String>,
-    table_map: HashMap<String, TableConfig>
-}
-
-impl SchemaConfigBuilder {
-    fn new() -> SchemaConfigBuilder {
-        SchemaConfigBuilder{name: None, table_map: HashMap::new()}
-    }
-
-    fn set_name(&mut self, name: String)  {
-        self.name = Some(name);
-    }
-
-    fn add_table(&mut self, table: TableConfig) {
-        let key = table.name.clone(); // TODO downcase
-        self.table_map.insert(key, table);
-    }
-
-    fn build(self) -> SchemaConfig {
-        SchemaConfig{name: self.name.unwrap(), table_map: self.table_map}
-    }
-}
-
-#[derive(Debug)]
-pub struct ConnectionConfig {
-    pub props: HashMap<String, String>
-}
-
-#[derive(Debug)]
-pub struct ClientConfig {
-    pub props: HashMap<String, String>
-}
-
-#[derive(Debug)]
-pub struct ParsingConfig {
-    pub props: HashMap<String, String>
-}
-
-
-#[derive(Debug)]
-pub struct Config {
-    schema_map: HashMap<String, SchemaConfig>,
-    connection_config : ConnectionConfig,
-    client_config: ClientConfig,
-    parsing_config: ParsingConfig
-}
-
-struct ConfigBuilder {
-    schema_map : HashMap<String, SchemaConfig>,
-    conn_props : HashMap<String, String>,
-    client_props : HashMap<String,String>,
-    parsing_props : HashMap<String, String>
-}
-
-impl ConfigBuilder {
-    fn new() -> ConfigBuilder {
-        ConfigBuilder{
-            schema_map: HashMap::new(),
-            conn_props: HashMap::new(),
-            client_props: HashMap::new(),
-            parsing_props: HashMap::new()
-        }
-    }
-
-    fn add_schema(&mut self, schema: SchemaConfig) {
-        let key = schema.name.clone(); // TODO downcase
-        self.schema_map.insert(key, schema);
-    }
-
-    fn add_client_prop(&mut self, key: String, value: String) {
-        self.client_props.insert(key, value);
-    }
-
-    fn add_conn_prop(&mut self, key: String, value: String) {
-        self.conn_props.insert(key, value);
-    }
-
-    fn add_parsing_prop(&mut self, key: String, value: String) {
-        self.parsing_props.insert(key, value);
-    }
-
-    fn build(self) -> Config {
-        Config {
-            schema_map: self.schema_map,
-            connection_config : ConnectionConfig {props: self.conn_props},
-            client_config: ClientConfig {props: self.client_props},
-            parsing_config: ParsingConfig{props: self.parsing_props}
-        }
-    }
-}
-
-pub trait TConfig {
-    fn get_column_config(&self, schema: &String, table: &String, column: &String) -> Option<&ColumnConfig>;
-    fn get_table_config(&self, schema: &String, table: &String) -> Option<&TableConfig>;
-    fn get_schema_config(&self, schema: &String) -> Option<&SchemaConfig>;
-    fn get_parsing_config(&self) -> &ParsingConfig;
-    fn get_connection_config(&self) -> &ConnectionConfig;
-    fn get_client_config(&self) -> &ClientConfig;
-}
-
-impl TConfig for Config {
-
-    fn get_column_config(&self, schema: &String, table: &String, column: &String) -> Option<&ColumnConfig> {
-        match self.get_table_config(schema, table) {
-            Some(t) => t.get_column_config(column),
-            None => None
-        }
-    }
-
-    fn get_table_config(&self, schema: &String, table: &String) -> Option<&TableConfig> {
-        match self.get_schema_config(schema) {
-            Some(s) => s.get_table_config(table),
-            None => None
-        }
-    }
-
-    fn get_schema_config(&self, schema: &String) -> Option<&SchemaConfig> {
-        self.schema_map.get(schema)
-    }
-
-    fn get_connection_config(&self) -> &ConnectionConfig {
-        &self.connection_config
-    }
-
-    fn get_client_config(&self) -> &ClientConfig {
-        &self.client_config
-    }
-
-    fn get_parsing_config(&self) -> &ParsingConfig {
-        &self.parsing_config
-    }
-
-}
-
-pub trait TSchemaConfig {
-    fn get_table_config(&self, table: &String) -> Option<&TableConfig>;
-}
-
-impl TSchemaConfig for SchemaConfig {
-    fn get_table_config(&self, table: &String) -> Option<&TableConfig> {
-        self.table_map.get(table)
-    }
-}
-
-pub trait TTableConfig {
-    fn get_column_config(&self, column: &String) -> Option<&ColumnConfig>;
-}
-
-impl TTableConfig for TableConfig {
-    fn get_column_config(&self, column: &String) -> Option<&ColumnConfig> {
-        self.column_map.get(column)
+        Ok(resolved)
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod test {
+
+    use super::{Config, ClientConfig, SchemaConfig, ConnectionConfig, ParsingConfig,
+        TableConfig, ColumnConfig, ConfigBuilder, Builder, TConfig};
+    use proxy::server::ParsingMode;
+    use toml;
+
+    use std::collections::HashMap;
+
+    use std::env;
+
+    use encrypt::*;
     use encrypt::NativeType::*;
     use encrypt::EncryptionType::*;
 
     #[test]
-    fn config_test() {
-        let config = super::parse_config("zero-config.xml");
-        debug!("CONFIG {:#?}", config);
-        debug!("HERE {:#?}", config.get_column_config(&String::from("zero"), &String::from("users"), &String::from("age")))
+    fn test_builder_toml() {
+        let toml_str = r#"
+        [client]
+        host = "${ENV_VAR}"
+        port = "3307"
+
+        [connection]
+        user = "${MY_USER}"
+        password = "${MY_PASS}"
+        host = "127.0.0.1"
+
+        [parsing]
+        mode = "permissive"
+
+        [zero.users.id]
+        type="INTEGER"
+        encryption="NONE"
+
+        [zero.users.first_name]
+        type="VARCHAR(50)"
+        encryption="AES"
+        key="${ZERO_USERS_FIRST_NAME_KEY}"
+        iv="${ZERO_USERS_FIRST_NAME_IV}"
+
+        "#;
+
+        env::set_var("ENV_VAR", "127.0.0.1");
+        env::set_var("MY_USER", "agiluser");
+        env::set_var("MY_PASS", "password123");
+        let zero_users_first_name_key = "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985";
+        env::set_var("ZERO_USERS_FIRST_NAME_KEY", zero_users_first_name_key);
+        let zero_user_first_name_iv = "03F72E7479F3E34752E4DD91";
+        env::set_var("ZERO_USERS_FIRST_NAME_IV", zero_user_first_name_iv);
+
+        let toml = toml::Parser::new(toml_str).parse().unwrap();
+
+        let mut decoder = toml::Decoder::new(toml::Value::Table(toml));
+        let decoded: ConfigBuilder = ::rustc_serialize::Decodable::decode(&mut decoder).unwrap();
+        println!("{:#?}", decoded);
+
+        println!("#{:#?}", decoder.toml);
+
+        let config = decoded.build().unwrap();
+        assert_eq!(config.client, ClientConfig {
+                    host: "127.0.0.1".into(),
+                    port: "3307".into()
+        });
+
+        assert_eq!(config.connection, ConnectionConfig {
+                    host: "127.0.0.1".into(),
+                    user: "agiluser".into(),
+                    password: "password123".into(),
+                    port: "3306".into() // default
+        });
+
+        assert_eq!(config.parsing, ParsingConfig {
+                    mode: ParsingMode::Permissive
+        });
+
+        let expected_column = ColumnConfig {
+            name: "id".into(),
+            native_type: NativeType::U64,
+            encryption: EncryptionType::NA,
+            key: [0_u8; 32]
+        };
+
+        let mut expected_column_map: HashMap<String, ColumnConfig> = HashMap::new();
+        expected_column_map.insert("id".into(), expected_column);
+
+        let expected_column = ColumnConfig {
+            name: "first_name".into(),
+            native_type: NativeType::Varchar(50),
+            encryption: EncryptionType::Aes(hex_to_iv(&zero_user_first_name_iv)),
+            key: hex_key(zero_users_first_name_key)
+        };
+        expected_column_map.insert("first_name".into(), expected_column);
+
+        let expected_table_conf = TableConfig{name: "users".into(), columns: expected_column_map};
+
+        let mut expected_table_map: HashMap<String, TableConfig> = HashMap::new();
+        expected_table_map.insert("users".into(), expected_table_conf);
+
+        let mut expected_schema: HashMap<String, SchemaConfig> = HashMap::new();
+        expected_schema.insert("zero".into(), SchemaConfig{name: "zero".into(), tables: expected_table_map});
+
+        assert_eq!(config.schemas, expected_schema);
+
     }
 
     #[test]
     fn test_config_data_types() {
-        let s_config = super::parse_config("src/test/test-zero-config.xml");
+        env::set_var("TEST_SHARED_KEY", "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
+        env::set_var("TEST_SHARED_IV", "03F72E7479F3E34752E4DD91");
+
+        let s_config = super::parse_configs("src/test/test-zero-config.toml", "/etc/zero.d");
         let test_schema = "zero".into();
         // Numerics
 
         let mut config = s_config.get_table_config(&test_schema, &"numerics".into()).unwrap();
-        assert_eq!(config.column_map.get("a").unwrap().native_type,U64);
-        assert_eq!(config.column_map.get("b").unwrap().native_type,U64);
-        assert_eq!(config.column_map.get("c").unwrap().native_type,U64);
-        assert_eq!(config.column_map.get("d").unwrap().native_type,U64);
-        assert_eq!(config.column_map.get("e").unwrap().native_type,BOOL);
-        assert_eq!(config.column_map.get("f").unwrap().native_type,BOOL);
-        assert_eq!(config.column_map.get("g").unwrap().native_type,U64);
-        assert_eq!(config.column_map.get("h").unwrap().native_type,U64);
-        assert_eq!(config.column_map.get("i").unwrap().native_type,U64);
-        assert_eq!(config.column_map.get("j").unwrap().native_type,U64);
-        assert_eq!(config.column_map.get("k").unwrap().native_type,U64);
-        assert_eq!(config.column_map.get("l").unwrap().native_type,U64);
-        assert_eq!(config.column_map.get("m").unwrap().native_type,U64);
-        assert_eq!(config.column_map.get("n").unwrap().native_type,U64);
-        assert_eq!(config.column_map.get("o").unwrap().native_type,D128);
-        assert_eq!(config.column_map.get("p").unwrap().native_type,D128);
-        assert_eq!(config.column_map.get("q").unwrap().native_type,D128);
-        assert_eq!(config.column_map.get("r").unwrap().native_type,D128);
-        assert_eq!(config.column_map.get("s").unwrap().native_type,D128);
-        assert_eq!(config.column_map.get("t").unwrap().native_type,D128);
-        assert_eq!(config.column_map.get("u").unwrap().native_type,F64);
-        assert_eq!(config.column_map.get("v").unwrap().native_type,F64);
-        assert_eq!(config.column_map.get("w").unwrap().native_type,F64);
-        assert_eq!(config.column_map.get("x").unwrap().native_type,F64);
-        assert_eq!(config.column_map.get("y").unwrap().native_type,F64);
-        assert_eq!(config.column_map.get("z").unwrap().native_type,F64);
-        assert_eq!(config.column_map.get("aa").unwrap().native_type,F64);
-        assert_eq!(config.column_map.get("ab").unwrap().native_type,F64);
-        assert_eq!(config.column_map.get("ac").unwrap().native_type,F64);
+        assert_eq!(config.columns.get("a").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("b").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("c").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("d").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("e").unwrap().native_type,BOOL);
+        assert_eq!(config.columns.get("f").unwrap().native_type,BOOL);
+        assert_eq!(config.columns.get("g").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("h").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("i").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("j").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("k").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("l").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("m").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("n").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("o").unwrap().native_type,D128);
+        assert_eq!(config.columns.get("p").unwrap().native_type,D128);
+        assert_eq!(config.columns.get("q").unwrap().native_type,D128);
+        assert_eq!(config.columns.get("r").unwrap().native_type,D128);
+        assert_eq!(config.columns.get("s").unwrap().native_type,D128);
+        assert_eq!(config.columns.get("t").unwrap().native_type,D128);
+        assert_eq!(config.columns.get("u").unwrap().native_type,F64);
+        assert_eq!(config.columns.get("v").unwrap().native_type,F64);
+        assert_eq!(config.columns.get("w").unwrap().native_type,F64);
+        assert_eq!(config.columns.get("x").unwrap().native_type,F64);
+        assert_eq!(config.columns.get("y").unwrap().native_type,F64);
+        assert_eq!(config.columns.get("z").unwrap().native_type,F64);
+        assert_eq!(config.columns.get("aa").unwrap().native_type,F64);
+        assert_eq!(config.columns.get("ab").unwrap().native_type,F64);
+        assert_eq!(config.columns.get("ac").unwrap().native_type,F64);
 
         config = s_config.get_table_config(&test_schema, &"characters".into()).unwrap();
-        assert_eq!(config.column_map.get("a").unwrap().native_type,Char(1));
-        assert_eq!(config.column_map.get("b").unwrap().native_type,Char(1));
-        assert_eq!(config.column_map.get("c").unwrap().native_type,Char(255));
-        assert_eq!(config.column_map.get("d").unwrap().native_type,Char(1));
-        assert_eq!(config.column_map.get("e").unwrap().native_type,Char(255));
-        assert_eq!(config.column_map.get("f").unwrap().native_type,Char(1));
-        assert_eq!(config.column_map.get("g").unwrap().native_type,Char(1));
-        assert_eq!(config.column_map.get("h").unwrap().native_type,Char(255));
-        assert_eq!(config.column_map.get("i").unwrap().native_type,Char(50));
-        assert_eq!(config.column_map.get("j").unwrap().native_type,Varchar(50));
-        assert_eq!(config.column_map.get("k").unwrap().native_type,Varchar(50));
-        assert_eq!(config.column_map.get("l").unwrap().native_type,Varchar(50));
+        assert_eq!(config.columns.get("a").unwrap().native_type,Char(1));
+        assert_eq!(config.columns.get("b").unwrap().native_type,Char(1));
+        assert_eq!(config.columns.get("c").unwrap().native_type,Char(255));
+        assert_eq!(config.columns.get("d").unwrap().native_type,Char(1));
+        assert_eq!(config.columns.get("e").unwrap().native_type,Char(255));
+        assert_eq!(config.columns.get("f").unwrap().native_type,Char(1));
+        assert_eq!(config.columns.get("g").unwrap().native_type,Char(1));
+        assert_eq!(config.columns.get("h").unwrap().native_type,Char(255));
+        assert_eq!(config.columns.get("i").unwrap().native_type,Char(50));
+        assert_eq!(config.columns.get("j").unwrap().native_type,Varchar(50));
+        assert_eq!(config.columns.get("k").unwrap().native_type,Varchar(50));
+        assert_eq!(config.columns.get("l").unwrap().native_type,Varchar(50));
 
 
         config = s_config.get_table_config(&test_schema, &"temporal".into()).unwrap();
-        assert_eq!(config.column_map.get("a").unwrap().native_type,DATE);
-        assert_eq!(config.column_map.get("b").unwrap().native_type,DATETIME(0));
-        assert_eq!(config.column_map.get("c").unwrap().native_type,DATETIME(6));
-        assert_eq!(config.column_map.get("d").unwrap().native_type,TIME(0));
-        assert_eq!(config.column_map.get("e").unwrap().native_type,TIME(6));
-        assert_eq!(config.column_map.get("f").unwrap().native_type,TIMESTAMP(0));
-        assert_eq!(config.column_map.get("g").unwrap().native_type,TIMESTAMP(6));
-        assert_eq!(config.column_map.get("h").unwrap().native_type,YEAR(4));
-        assert_eq!(config.column_map.get("i").unwrap().native_type,YEAR(4));
+        assert_eq!(config.columns.get("a").unwrap().native_type,DATE);
+        assert_eq!(config.columns.get("b").unwrap().native_type,DATETIME(0));
+        assert_eq!(config.columns.get("c").unwrap().native_type,DATETIME(6));
+        assert_eq!(config.columns.get("d").unwrap().native_type,TIME(0));
+        assert_eq!(config.columns.get("e").unwrap().native_type,TIME(6));
+        assert_eq!(config.columns.get("f").unwrap().native_type,TIMESTAMP(0));
+        assert_eq!(config.columns.get("g").unwrap().native_type,TIMESTAMP(6));
+        assert_eq!(config.columns.get("h").unwrap().native_type,YEAR(4));
+        assert_eq!(config.columns.get("i").unwrap().native_type,YEAR(4));
 
         config = s_config.get_table_config(&test_schema, &"binary".into()).unwrap();
-        assert_eq!(config.column_map.get("a").unwrap().native_type,FIXEDBINARY(1));
-        assert_eq!(config.column_map.get("b").unwrap().native_type,FIXEDBINARY(50));
-        assert_eq!(config.column_map.get("c").unwrap().native_type,VARBINARY(50));
-        assert_eq!(config.column_map.get("d").unwrap().native_type,VARBINARY(2_u32.pow(8)));
-        assert_eq!(config.column_map.get("e").unwrap().native_type,Varchar(2_u32.pow(8)));
-        assert_eq!(config.column_map.get("f").unwrap().native_type,VARBINARY(2_u32.pow(16)));
-        assert_eq!(config.column_map.get("g").unwrap().native_type,VARBINARY(50));
-        assert_eq!(config.column_map.get("h").unwrap().native_type,Varchar(2_u32.pow(16)));
-        assert_eq!(config.column_map.get("i").unwrap().native_type,Varchar(100));
-        assert_eq!(config.column_map.get("j").unwrap().native_type,LONGBLOB(2_u64.pow(24)));
-        assert_eq!(config.column_map.get("k").unwrap().native_type,LONGTEXT(2_u64.pow(24)));
-        assert_eq!(config.column_map.get("l").unwrap().native_type,LONGBLOB(2_u64.pow(32)));
-        assert_eq!(config.column_map.get("m").unwrap().native_type,LONGTEXT(2_u64.pow(32)));
-        assert_eq!(config.column_map.get("n").unwrap().native_type,FIXEDBINARY(1));
-        assert_eq!(config.column_map.get("o").unwrap().native_type,FIXEDBINARY(50));
+        assert_eq!(config.columns.get("a").unwrap().native_type,FIXEDBINARY(1));
+        assert_eq!(config.columns.get("b").unwrap().native_type,FIXEDBINARY(50));
+        assert_eq!(config.columns.get("c").unwrap().native_type,VARBINARY(50));
+        assert_eq!(config.columns.get("d").unwrap().native_type,VARBINARY(2_u32.pow(8)));
+        assert_eq!(config.columns.get("e").unwrap().native_type,Varchar(2_u32.pow(8)));
+        assert_eq!(config.columns.get("f").unwrap().native_type,VARBINARY(2_u32.pow(16)));
+        assert_eq!(config.columns.get("g").unwrap().native_type,VARBINARY(50));
+        assert_eq!(config.columns.get("h").unwrap().native_type,Varchar(2_u32.pow(16)));
+        assert_eq!(config.columns.get("i").unwrap().native_type,Varchar(100));
+        assert_eq!(config.columns.get("j").unwrap().native_type,LONGBLOB(2_u64.pow(24)));
+        assert_eq!(config.columns.get("k").unwrap().native_type,LONGTEXT(2_u64.pow(24)));
+        assert_eq!(config.columns.get("l").unwrap().native_type,LONGBLOB(2_u64.pow(32)));
+        assert_eq!(config.columns.get("m").unwrap().native_type,LONGTEXT(2_u64.pow(32)));
+        assert_eq!(config.columns.get("n").unwrap().native_type,FIXEDBINARY(1));
+        assert_eq!(config.columns.get("o").unwrap().native_type,FIXEDBINARY(50));
 
         config = s_config.get_table_config(&test_schema, &"numerics_signed".into()).unwrap();
-        assert_eq!(config.column_map.get("a").unwrap().native_type,I64);
-        assert_eq!(config.column_map.get("b").unwrap().native_type,U64);
-        assert_eq!(config.column_map.get("c").unwrap().native_type,U64);
-        assert_eq!(config.column_map.get("d").unwrap().native_type,I64);
-        assert_eq!(config.column_map.get("e").unwrap().native_type,I64);
-        assert_eq!(config.column_map.get("f").unwrap().native_type,U64);
-        assert_eq!(config.column_map.get("g").unwrap().native_type,U64);
-        assert_eq!(config.column_map.get("h").unwrap().native_type,I64);
-        assert_eq!(config.column_map.get("i").unwrap().native_type,I64);
-        assert_eq!(config.column_map.get("j").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("a").unwrap().native_type,I64);
+        assert_eq!(config.columns.get("b").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("c").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("d").unwrap().native_type,I64);
+        assert_eq!(config.columns.get("e").unwrap().native_type,I64);
+        assert_eq!(config.columns.get("f").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("g").unwrap().native_type,U64);
+        assert_eq!(config.columns.get("h").unwrap().native_type,I64);
+        assert_eq!(config.columns.get("i").unwrap().native_type,I64);
+        assert_eq!(config.columns.get("j").unwrap().native_type,U64);
 
     }
 
     #[test]
     fn config_test_override() {
-        let config = super::parse_configs("src/test/test-zero-config.xml", "src/test/config_override");
+        env::set_var("TEST_SHARED_KEY", "44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985");
+        env::set_var("TEST_SHARED_IV", "03F72E7479F3E34752E4DD91");
+
+        let config = super::parse_configs("src/test/test-zero-config.toml", "src/test/config_override");
 
         // token test sourced from the default config, i.e. not overridden anywhere
         let c = config.get_client_config();
-        assert_eq!("127.0.0.1", c.props.get("host").unwrap());
-        assert_eq!("3307", c.props.get("port").unwrap());
+        assert_eq!("127.0.0.1", c.host);
+        assert_eq!("3307", c.port);
 
         // Test overrides
         let c = config.get_connection_config();
-        assert_eq!("baruser", c.props.get("user").unwrap());
-        assert_eq!("barpassword", c.props.get("password").unwrap());
-        assert_eq!("localhost", c.props.get("host").unwrap());
+        assert_eq!("baruser", c.user);
+        assert_eq!("barpassword", c.password);
+        assert_eq!("localhost", c.host);
 
         let c = config.get_table_config(&"zero".into(), &"users".into()).unwrap();
-        assert_eq!(c.column_map.get("sex").unwrap().encryption, AesGcm);
+        assert_eq!(c.columns.get("sex").unwrap().encryption, AesGcm);
 
         let c = config.get_table_config(&"fooschema".into(), &"footable".into()).unwrap();
-        assert_eq!(c.column_map.get("bar").unwrap().encryption, NA);
+        assert_eq!(c.columns.get("bar").unwrap().encryption, NA);
 
     }
 
     #[test]
     fn config_test_override_dir_doesnt_exist() {
-        let config = super::parse_configs("src/test/test-zero-config.xml", "src/foo");
+        let config = super::parse_configs("src/test/test-zero-config.toml", "src/foo");
         // No assertions, just should not blow up.
     }
 
