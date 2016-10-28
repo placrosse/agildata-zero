@@ -65,8 +65,6 @@ impl Proxy {
         // determine address for the proxy to bind to
         let conn = temp.get_client_config();
         let conn_host = conn.host.clone();
-        // TODO
-        let default_port = &String::from("3307");
         let conn_port = conn.port.clone();
         let conn_addr = format!("{}:{}",conn_host,conn_port);
         let bind_addr = conn_addr.parse::<SocketAddr>().unwrap();

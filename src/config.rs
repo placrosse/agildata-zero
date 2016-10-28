@@ -60,7 +60,10 @@ pub fn parse_configs(default_path: &str, dir: &str) -> Config {
         }
     }
 
-    decoded.build().unwrap() // TODO
+    match decoded.build() {
+        Ok(config) => config,
+        Err(e) => panic!("Failed to load config file(s) due to: {}", e)
+    }
 }
 
 // read from file to string
@@ -434,7 +437,6 @@ impl Builder for SchemaMapBuilder {
     }
 
     fn build(self) -> Result<Self::Output, String> {
-        // TODO avoid clone
         self.schemas.iter()
             .map(|(k, v)| fold_tuple(k.clone(), v.clone()))
             .collect::<Result<HashMap<String, SchemaConfig>, String>>()
@@ -484,7 +486,6 @@ impl Builder for SchemaConfigBuilder {
     fn build(self) -> Result<Self::Output, String> {
         Ok(SchemaConfig {
             name: self.name.ok_or(String::from("Illegal: Missing Schema name"))?,
-            // TODO avoid clone
             tables: self.tables.iter()
                 .map(|(k,v)| fold_tuple(k.clone(), v.clone()))
                 .collect::<Result<HashMap<String, TableConfig>, String>>()?
@@ -543,7 +544,6 @@ impl Builder for TableConfigBuilder {
     fn build(self) -> Result<Self::Output, String> {
         Ok(TableConfig {
             name: self.name.ok_or(String::from("Illegal: missing table name"))?,
-            // TODO avoid clone
             columns: self.columns.iter()
                 .map(|(k,v)| fold_tuple(k.clone(), v.clone()))
                 .collect::<Result<HashMap<String, ColumnConfig>, String>>()?
@@ -597,7 +597,6 @@ struct ColumnConfigBuilder {
     iv: Option<String>
 }
 
-// TODO errors
 impl Builder for ColumnConfigBuilder {
     type Output = ColumnConfig;
 
@@ -608,7 +607,7 @@ impl Builder for ColumnConfigBuilder {
             &self.native_type.ok_or(
                 missing_err(&format!("{}.native_type", name))
             )?
-        ).map_err(|e| String::from("TODO"))?;
+        ).map_err(|e| format!("Failed to determine type for column {}, due to: {}", name, e))?;
 
         let iv = match self.iv {
             Some(hex) => Some(hex_to_iv(&hex.resolve()?)),
@@ -617,7 +616,7 @@ impl Builder for ColumnConfigBuilder {
         let encryption = determine_encryption(
             &self.encryption.unwrap_or(String::from("NONE")),
             iv
-        ).map_err(|e| String::from("TODO"))?;
+        ).map_err(|e| format!("Failed to determine encryption for column {}, due to: {}", name, e))?;
 
         let key = if self.key.is_some() {
             hex_key(&self.key.unwrap().resolve()?)
@@ -686,18 +685,23 @@ fn missing_err(prop: &str) -> String {
     format!("Missing required property {}", prop)
 }
 
-// TODO errors
 fn determine_encryption(encryption: &String, iv: Option<[u8;12]>) -> Result<EncryptionType, Box<ZeroError>> {
     match &encryption.to_uppercase() as &str {
         "AES" => {
             match iv {
                 Some(nonce)=> Ok(EncryptionType::Aes(nonce)),
-                None => panic!("iv attribute required for AES encryption")
+                None => Box::new(ZeroError::EncryptionError{
+                    code: 1067,
+                    message: "iv attribute required for AES encryption".into()
+                })
             }
         },
         "AES_GCM" => Ok(EncryptionType::AesGcm),
         "NONE" => Ok(EncryptionType::NA),
-        _ => panic!("Unsupported encryption type {}", encryption)
+        _ => Box::new(ZeroError::EncryptionError{
+            code: 1067,
+            message: format!("Unsupported encryption type {}", encryption)
+        })
     }
 
 }
