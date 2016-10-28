@@ -28,6 +28,8 @@ ls -al target/debug
 echo
 
 # Launch AgilData Zero
+export TEST_SHARED_KEY='44E6884D78AA18FA690917F84145AA4415FC3CD560915C7AE346673B1FDA5985'
+export TEST_SHARED_IV='03F72E7479F3E34752E4DD91'
 echo
 echo "Launching AgilData-Zero proxy..."
 target/debug/agildata-zero --config src/test/test-zero-config.toml &
