@@ -30,7 +30,7 @@ echo
 # Launch AgilData Zero
 echo
 echo "Launching AgilData-Zero proxy..."
-target/debug/agildata-zero --config src/test/test-zero-config.xml &
+target/debug/agildata-zero --config src/test/test-zero-config.toml &
 echo
 echo "Waiting for AgilData-Zero proxy to initialize."
 sleep 5

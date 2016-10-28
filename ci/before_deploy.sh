@@ -21,7 +21,7 @@ mk_tarball() {
   # NOTE All Cargo build artifacts will be under the 'target/$TARGET/{debug,release}'
   mkdir -p $temp_dir/agildata-zero
   cp target/$TARGET/release/agildata-zero $temp_dir/agildata-zero
-  cp dist/zero-config.xml $temp_dir/agildata-zero
+  cp dist/zero-config.toml $temp_dir/agildata-zero
   cp dist/log.toml $temp_dir/agildata-zero
   cp dist/README.md $temp_dir/agildata-zero
 

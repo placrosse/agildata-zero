@@ -24,7 +24,7 @@ rm $app-*.tgz
 rm -Rf dist
 mkdir dist
 cp ./doc/README.md dist/
-cp zero-config.xml dist/
+cp zero-config.toml dist/
 cp $exe dist/
 tar -vczf $out -C dist .
 echo $out packaging completed
