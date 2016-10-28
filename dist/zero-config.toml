@@ -4,8 +4,8 @@ port = "3307"
 
 [connection]
 host = "127.0.0.1"
-user = "agiluser"
-password = "password123"
+user = "myuser"
+password = "mypassword"
 
 [parsing]
 mode = "STRICT"

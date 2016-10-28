@@ -18,7 +18,7 @@ use std::env;
 use std::str::FromStr;
 use std::path::Path;
 use std::fs::{File, read_dir};
-use std::io::{Read, Error};
+use std::io::{Read};
 
 use std::collections::HashMap;
 
@@ -71,7 +71,7 @@ fn _load_toml_file(path: &str) -> String {
     let mut rdr = match File::open(path) {
         Ok(file) => file,
         Err(err) => {
-            println!("Unable to open configuration file '{}': {}", path, err);
+            error!("Unable to open configuration file '{}': {}", path, err);
             process::exit(1);
         }
     };
@@ -618,6 +618,12 @@ impl Builder for ColumnConfigBuilder {
             iv
         ).map_err(|e| format!("Failed to determine encryption for column {}, due to: {}", name, e))?;
 
+        if encryption != EncryptionType::NA && !native_type.is_supported() {
+            panic!("Column: {} Native Type {:?} is not supported for encryption {:?}",
+                            name, native_type, encryption
+                        )
+        }
+
         let key = if self.key.is_some() {
             hex_key(&self.key.unwrap().resolve()?)
         } else {
@@ -690,18 +696,18 @@ fn determine_encryption(encryption: &String, iv: Option<[u8;12]>) -> Result<Encr
         "AES" => {
             match iv {
                 Some(nonce)=> Ok(EncryptionType::Aes(nonce)),
-                None => Box::new(ZeroError::EncryptionError{
-                    code: 1067,
+                None => Err(Box::new(ZeroError::EncryptionError{
+                    code: "1067".into(),
                     message: "iv attribute required for AES encryption".into()
-                })
+                }))
             }
         },
         "AES_GCM" => Ok(EncryptionType::AesGcm),
         "NONE" => Ok(EncryptionType::NA),
-        _ => Box::new(ZeroError::EncryptionError{
-            code: 1067,
+        _ => Err(Box::new(ZeroError::EncryptionError{
+            code: "1067".into(),
             message: format!("Unsupported encryption type {}", encryption)
-        })
+        }))
     }
 
 }
@@ -802,7 +808,7 @@ impl Resolvable for String {
             let env_var =&self[2..(self.len() - 1)];
             match  env::var(env_var) {
                 Ok(v) => v,
-                Err(e) => return Err(format!("Cannot resolve environment variable {}", env_var))
+                Err(_) => return Err(format!("Cannot resolve environment variable {}", env_var))
             }
         } else {
             self

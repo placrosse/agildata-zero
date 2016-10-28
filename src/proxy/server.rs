@@ -239,7 +239,6 @@ impl ZeroHandler {
     fn new(config: Rc<Config>, provider: Rc<MySQLBackedSchemaProvider>, stmt_cache: Rc<StatementCache>) -> Self {
 
         let parsing_mode = config.get_parsing_config().mode.clone();
-//        let parsing_mode = determine_parsing_mode(&config.get_parsing_config().props.get("mode").unwrap());
 
         ZeroHandler {
             config: config.clone(),
@@ -252,14 +251,6 @@ impl ZeroHandler {
             stmt_cache: stmt_cache,
             server_version: MySQLVersion::Unknown
         }
-    }
-}
-
-fn determine_parsing_mode(mode: &String) -> ParsingMode {
-    match &mode.to_uppercase() as &str {
-        "STRICT" => ParsingMode::Strict,
-        "PERMISSIVE" => ParsingMode::Permissive,
-        _ => panic!("Unsupported parsing mode {}", mode)
     }
 }
 
